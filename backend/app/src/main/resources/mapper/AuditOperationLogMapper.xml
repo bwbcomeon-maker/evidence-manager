@@ -4,7 +4,7 @@
 
     <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuditOperationLog">
         <id column="id" property="id" jdbcType="BIGINT"/>
-        <result column="actor_user_id" property="actorUserId" jdbcType="OTHER" typeHandler="org.apache.ibatis.type.UUIDTypeHandler"/>
+        <result column="actor_user_id" property="actorUserId" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
         <result column="action" property="action" jdbcType="VARCHAR"/>
         <result column="target_type" property="targetType" jdbcType="VARCHAR"/>
         <result column="target_id" property="targetId" jdbcType="VARCHAR"/>
@@ -58,7 +58,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuditOperationLog" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO audit_operation_log (actor_user_id, action, target_type, target_id, detail, created_at)
         VALUES (
-            #{actorUserId}::uuid,
+            #{actorUserId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
             #{action},
             #{targetType},
             #{targetId},

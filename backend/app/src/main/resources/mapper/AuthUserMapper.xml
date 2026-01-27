@@ -3,7 +3,7 @@
 <mapper namespace="com.bwbcomeon.evidence.mapper.AuthUserMapper">
 
     <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuthUser">
-        <id column="id" property="id" jdbcType="OTHER" typeHandler="org.apache.ibatis.type.UUIDTypeHandler"/>
+        <id column="id" property="id" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
         <result column="username" property="username" jdbcType="VARCHAR"/>
         <result column="display_name" property="displayName" jdbcType="VARCHAR"/>
         <result column="email" property="email" jdbcType="VARCHAR"/>
@@ -19,7 +19,7 @@
         SELECT
         <include refid="Base_Column_List"/>
         FROM auth_user
-        WHERE id = #{id}::uuid
+        WHERE id = #{id, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
     </select>
 
     <select id="selectByUsername" resultMap="BaseResultMap">
@@ -39,7 +39,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuthUser">
         INSERT INTO auth_user (id, username, display_name, email, is_active, created_at)
         VALUES (
-            COALESCE(#{id}::uuid, gen_random_uuid()),
+            COALESCE(#{id, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}, gen_random_uuid()),
             #{username},
             #{displayName},
             #{email},
@@ -56,12 +56,12 @@
             <if test="email != null">email = #{email},</if>
             <if test="isActive != null">is_active = #{isActive},</if>
         </set>
-        WHERE id = #{id}::uuid
+        WHERE id = #{id, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
     </update>
 
     <delete id="deleteById">
         DELETE FROM auth_user
-        WHERE id = #{id}::uuid
+        WHERE id = #{id, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
     </delete>
 
 </mapper>

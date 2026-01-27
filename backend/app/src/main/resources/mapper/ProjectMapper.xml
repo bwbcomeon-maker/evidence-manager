@@ -8,7 +8,7 @@
         <result column="name" property="name" jdbcType="VARCHAR"/>
         <result column="description" property="description" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
-        <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="org.apache.ibatis.type.UUIDTypeHandler"/>
+        <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
     </resultMap>
@@ -35,7 +35,7 @@
         SELECT
         <include refid="Base_Column_List"/>
         FROM project
-        WHERE created_by = #{createdBy}::uuid
+        WHERE created_by = #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
         ORDER BY created_at DESC
     </select>
 
@@ -53,7 +53,7 @@
             #{name},
             #{description},
             COALESCE(#{status}, 'active'),
-            #{createdBy}::uuid,
+            #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
             COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
         )

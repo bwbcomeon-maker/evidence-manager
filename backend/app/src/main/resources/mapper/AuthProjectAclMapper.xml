@@ -5,7 +5,7 @@
     <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuthProjectAcl">
         <id column="id" property="id" jdbcType="BIGINT"/>
         <result column="project_id" property="projectId" jdbcType="BIGINT"/>
-        <result column="user_id" property="userId" jdbcType="OTHER" typeHandler="org.apache.ibatis.type.UUIDTypeHandler"/>
+        <result column="user_id" property="userId" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
         <result column="role" property="role" jdbcType="VARCHAR"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
     </resultMap>
@@ -33,7 +33,7 @@
         SELECT
         <include refid="Base_Column_List"/>
         FROM auth_project_acl
-        WHERE user_id = #{userId}::uuid
+        WHERE user_id = #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
         ORDER BY created_at DESC
     </select>
 
@@ -42,14 +42,14 @@
         <include refid="Base_Column_List"/>
         FROM auth_project_acl
         WHERE project_id = #{projectId}
-        AND user_id = #{userId}::uuid
+        AND user_id = #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
     </select>
 
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuthProjectAcl" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO auth_project_acl (project_id, user_id, role, created_at)
         VALUES (
             #{projectId},
-            #{userId}::uuid,
+            #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
             #{role},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
         )
@@ -71,7 +71,7 @@
     <delete id="deleteByProjectIdAndUserId">
         DELETE FROM auth_project_acl
         WHERE project_id = #{projectId}
-        AND user_id = #{userId}::uuid
+        AND user_id = #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
     </delete>
 
 </mapper>
