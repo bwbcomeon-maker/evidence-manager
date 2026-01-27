@@ -5,12 +5,12 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * 项目权限表实体类
+ * 项目权限表
  */
 @Data
 public class AuthProjectAcl {
     /**
-     * 记录ID (BIGSERIAL, 主键)
+     * 记录ID
      */
     private Long id;
 
@@ -25,7 +25,7 @@ public class AuthProjectAcl {
     private UUID userId;
 
     /**
-     * 项目角色（owner / editor / viewer）
+     * 项目角色：owner / editor / viewer
      */
     private String role;
 

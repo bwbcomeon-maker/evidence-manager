@@ -5,12 +5,12 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * 项目表实体类
+ * 项目表
  */
 @Data
 public class Project {
     /**
-     * 项目ID (BIGSERIAL, 主键)
+     * 项目ID
      */
     private Long id;
 
@@ -25,17 +25,17 @@ public class Project {
     private String name;
 
     /**
-     * 项目说明
+     * 项目描述
      */
     private String description;
 
     /**
-     * 项目状态（active / archived）
+     * 项目状态：active / archived
      */
     private String status;
 
     /**
-     * 创建用户
+     * 创建人
      */
     private UUID createdBy;
 

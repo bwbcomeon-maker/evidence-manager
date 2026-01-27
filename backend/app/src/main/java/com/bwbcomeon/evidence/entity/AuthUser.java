@@ -5,22 +5,22 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * 系统用户表实体类
+ * 系统用户表
  */
 @Data
 public class AuthUser {
     /**
-     * 用户ID (UUID, 主键)
+     * 用户ID
      */
     private UUID id;
 
     /**
-     * 登录名（唯一登录账号）
+     * 登录名
      */
     private String username;
 
     /**
-     * 显示名称（用户姓名或昵称）
+     * 显示名称
      */
     private String displayName;
 

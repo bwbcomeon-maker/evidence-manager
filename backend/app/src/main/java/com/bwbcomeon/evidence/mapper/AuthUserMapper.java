@@ -7,30 +7,24 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 用户表 Mapper 接口
+ * 用户表 Mapper
  */
 @Mapper
 public interface AuthUserMapper {
-
     /**
-     * 根据ID查询
+     * 根据ID查询用户
      */
     AuthUser selectById(@Param("id") UUID id);
 
     /**
-     * 根据用户名查询
+     * 根据用户名查询用户
      */
     AuthUser selectByUsername(@Param("username") String username);
 
     /**
-     * 查询所有用户（分页）
+     * 查询所有用户
      */
-    List<AuthUser> selectAll(@Param("limit") Integer limit, @Param("offset") Integer offset);
-
-    /**
-     * 统计用户总数
-     */
-    Long countAll();
+    List<AuthUser> selectAll();
 
     /**
      * 插入用户

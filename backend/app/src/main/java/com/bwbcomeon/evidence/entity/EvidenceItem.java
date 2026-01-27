@@ -5,12 +5,12 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * 证据元数据表实体类
+ * 证据元数据表
  */
 @Data
 public class EvidenceItem {
     /**
-     * 证据ID (BIGSERIAL, 主键)
+     * 证据ID
      */
     private Long id;
 
@@ -25,37 +25,37 @@ public class EvidenceItem {
     private String title;
 
     /**
-     * 补充说明
+     * 证据说明
      */
     private String note;
 
     /**
-     * MinIO Bucket
+     * 存储桶
      */
     private String bucket;
 
     /**
-     * MinIO Key
+     * 对象路径
      */
     private String objectKey;
 
     /**
-     * MIME 类型
+     * 文件类型
      */
     private String contentType;
 
     /**
-     * 字节大小
+     * 文件大小（字节）
      */
     private Long sizeBytes;
 
     /**
-     * 校验标识
+     * ETag校验标识
      */
     private String etag;
 
     /**
-     * 状态（active / invalid / archived）
+     * 状态：active / invalid / archived
      */
     private String status;
 
@@ -75,17 +75,17 @@ public class EvidenceItem {
     private OffsetDateTime updatedAt;
 
     /**
-     * 误传说明
+     * 误传原因
      */
     private String invalidReason;
 
     /**
-     * 操作人
+     * 误传人
      */
     private UUID invalidBy;
 
     /**
-     * 操作时间
+     * 误传时间
      */
     private OffsetDateTime invalidAt;
 }

@@ -2,7 +2,6 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bwbcomeon.evidence.mapper.EvidenceItemMapper">
 
-    <!-- 结果映射 -->
     <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.EvidenceItem">
         <id column="id" property="id" jdbcType="BIGINT"/>
         <result column="project_id" property="projectId" jdbcType="BIGINT"/>
@@ -14,21 +13,19 @@
         <result column="size_bytes" property="sizeBytes" jdbcType="BIGINT"/>
         <result column="etag" property="etag" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
-        <result column="created_by" property="createdBy" jdbcType="OTHER"/>
+        <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="org.apache.ibatis.type.UUIDTypeHandler"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
         <result column="invalid_reason" property="invalidReason" jdbcType="VARCHAR"/>
-        <result column="invalid_by" property="invalidBy" jdbcType="OTHER"/>
+        <result column="invalid_by" property="invalidBy" jdbcType="OTHER" typeHandler="org.apache.ibatis.type.UUIDTypeHandler"/>
         <result column="invalid_at" property="invalidAt" jdbcType="TIMESTAMP"/>
     </resultMap>
 
-    <!-- 基础列 -->
     <sql id="Base_Column_List">
         id, project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
         status, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
     </sql>
 
-    <!-- 根据ID查询 -->
     <select id="selectById" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
@@ -36,98 +33,84 @@
         WHERE id = #{id}
     </select>
 
-    <!-- 根据项目ID查询证据列表（分页） -->
     <select id="selectByProjectId" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM evidence_item
         WHERE project_id = #{projectId}
         ORDER BY created_at DESC
-        LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 根据项目ID和状态查询证据列表（分页） -->
     <select id="selectByProjectIdAndStatus" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM evidence_item
-        WHERE project_id = #{projectId} AND status = #{status}
+        WHERE project_id = #{projectId}
+        AND status = #{status}
         ORDER BY created_at DESC
-        LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 根据创建人查询证据列表（分页） -->
     <select id="selectByCreatedBy" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM evidence_item
-        WHERE created_by = #{createdBy}
+        WHERE created_by = #{createdBy}::uuid
         ORDER BY created_at DESC
-        LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 根据存储桶和对象路径查询证据 -->
-    <select id="selectByBucketAndObjectKey" resultMap="BaseResultMap">
-        SELECT
-        <include refid="Base_Column_List"/>
-        FROM evidence_item
-        WHERE bucket = #{bucket} AND object_key = #{objectKey}
-    </select>
-
-    <!-- 查询所有证据（分页） -->
     <select id="selectAll" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM evidence_item
         ORDER BY created_at DESC
-        LIMIT #{limit} OFFSET #{offset}
     </select>
 
-    <!-- 统计证据总数 -->
-    <select id="countAll" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM evidence_item
-    </select>
-
-    <!-- 根据项目ID统计证据数量 -->
-    <select id="countByProjectId" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM evidence_item WHERE project_id = #{projectId}
-    </select>
-
-    <!-- 根据项目ID和状态统计证据数量 -->
-    <select id="countByProjectIdAndStatus" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM evidence_item
-        WHERE project_id = #{projectId} AND status = #{status}
-    </select>
-
-    <!-- 插入证据 -->
-    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO evidence_item (
             project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
             status, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
-        ) VALUES (
-            #{projectId}, #{title}, #{note}, #{bucket}, #{objectKey}, #{contentType}, #{sizeBytes}, #{etag},
-            #{status}, #{createdBy}, #{createdAt}, #{updatedAt}, #{invalidReason}, #{invalidBy}, #{invalidAt}
+        )
+        VALUES (
+            #{projectId},
+            #{title},
+            #{note},
+            #{bucket},
+            #{objectKey},
+            #{contentType},
+            #{sizeBytes},
+            #{etag},
+            COALESCE(#{status}, 'active'),
+            #{createdBy}::uuid,
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+            COALESCE(#{updatedAt}, CURRENT_TIMESTAMP),
+            #{invalidReason},
+            #{invalidBy}::uuid,
+            #{invalidAt}
         )
     </insert>
 
-    <!-- 更新证据 -->
     <update id="update" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem">
         UPDATE evidence_item
         <set>
             <if test="title != null">title = #{title},</if>
             <if test="note != null">note = #{note},</if>
+            <if test="bucket != null">bucket = #{bucket},</if>
+            <if test="objectKey != null">object_key = #{objectKey},</if>
+            <if test="contentType != null">content_type = #{contentType},</if>
+            <if test="sizeBytes != null">size_bytes = #{sizeBytes},</if>
+            <if test="etag != null">etag = #{etag},</if>
             <if test="status != null">status = #{status},</if>
-            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
             <if test="invalidReason != null">invalid_reason = #{invalidReason},</if>
-            <if test="invalidBy != null">invalid_by = #{invalidBy},</if>
+            <if test="invalidBy != null">invalid_by = #{invalidBy}::uuid,</if>
             <if test="invalidAt != null">invalid_at = #{invalidAt},</if>
+            updated_at = CURRENT_TIMESTAMP
         </set>
         WHERE id = #{id}
     </update>
 
-    <!-- 根据ID删除证据 -->
     <delete id="deleteById">
-        DELETE FROM evidence_item WHERE id = #{id}
+        DELETE FROM evidence_item
+        WHERE id = #{id}
     </delete>
 
 </mapper>

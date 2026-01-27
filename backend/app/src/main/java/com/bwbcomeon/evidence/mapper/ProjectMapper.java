@@ -7,54 +7,29 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 项目表 Mapper 接口
+ * 项目表 Mapper
  */
 @Mapper
 public interface ProjectMapper {
-
     /**
-     * 根据ID查询
+     * 根据ID查询项目
      */
     Project selectById(@Param("id") Long id);
 
     /**
-     * 根据项目编号查询
+     * 根据项目编号查询项目
      */
     Project selectByCode(@Param("code") String code);
 
     /**
-     * 根据创建人查询项目列表（分页）
+     * 根据创建人查询项目列表
      */
-    List<Project> selectByCreatedBy(@Param("createdBy") UUID createdBy, 
-                                    @Param("limit") Integer limit, 
-                                    @Param("offset") Integer offset);
+    List<Project> selectByCreatedBy(@Param("createdBy") UUID createdBy);
 
     /**
-     * 根据状态查询项目列表（分页）
+     * 查询所有项目
      */
-    List<Project> selectByStatus(@Param("status") String status, 
-                                 @Param("limit") Integer limit, 
-                                 @Param("offset") Integer offset);
-
-    /**
-     * 查询所有项目（分页）
-     */
-    List<Project> selectAll(@Param("limit") Integer limit, @Param("offset") Integer offset);
-
-    /**
-     * 统计项目总数
-     */
-    Long countAll();
-
-    /**
-     * 根据创建人统计项目数量
-     */
-    Long countByCreatedBy(@Param("createdBy") UUID createdBy);
-
-    /**
-     * 根据状态统计项目数量
-     */
-    Long countByStatus(@Param("status") String status);
+    List<Project> selectAll();
 
     /**
      * 插入项目
