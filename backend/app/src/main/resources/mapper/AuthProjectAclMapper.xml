@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.AuthProjectAclMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuthProjectAcl">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="project_id" property="projectId" jdbcType="BIGINT"/>
+        <result column="user_id" property="userId" jdbcType="OTHER"/>
+        <result column="role" property="role" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, project_id, user_id, role, created_at
+    </sql>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据项目ID和用户ID查询 -->
+    <select id="selectByProjectIdAndUserId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        WHERE project_id = #{projectId} AND user_id = #{userId}
+    </select>
+
+    <!-- 根据项目ID查询权限记录列表 -->
+    <select id="selectByProjectId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        WHERE project_id = #{projectId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 根据用户ID查询权限记录列表 -->
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 根据项目ID和角色查询权限记录列表 -->
+    <select id="selectByProjectIdAndRole" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        WHERE project_id = #{projectId} AND role = #{role}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 查询所有权限记录（分页） -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计权限记录总数 -->
+    <select id="countAll" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM auth_project_acl
+    </select>
+
+    <!-- 插入权限记录 -->
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuthProjectAcl" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO auth_project_acl (
+            project_id, user_id, role, created_at
+        ) VALUES (
+            #{projectId}, #{userId}, #{role}, #{createdAt}
+        )
+    </insert>
+
+    <!-- 更新权限记录 -->
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.AuthProjectAcl">
+        UPDATE auth_project_acl
+        <set>
+            <if test="role != null">role = #{role},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID删除权限记录 -->
+    <delete id="deleteById">
+        DELETE FROM auth_project_acl WHERE id = #{id}
+    </delete>
+
+    <!-- 根据项目ID和用户ID删除权限记录 -->
+    <delete id="deleteByProjectIdAndUserId">
+        DELETE FROM auth_project_acl
+        WHERE project_id = #{projectId} AND user_id = #{userId}
+    </delete>
+
+</mapper>

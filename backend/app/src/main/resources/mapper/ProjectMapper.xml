@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.ProjectMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.Project">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="code" property="code" jdbcType="VARCHAR"/>
+        <result column="name" property="name" jdbcType="VARCHAR"/>
+        <result column="description" property="description" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="created_by" property="createdBy" jdbcType="OTHER"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, code, name, description, status, created_by, created_at, updated_at
+    </sql>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM project
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据项目编号查询 -->
+    <select id="selectByCode" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM project
+        WHERE code = #{code}
+    </select>
+
+    <!-- 根据创建人查询项目列表（分页） -->
+    <select id="selectByCreatedBy" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM project
+        WHERE created_by = #{createdBy}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 根据状态查询项目列表（分页） -->
+    <select id="selectByStatus" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM project
+        WHERE status = #{status}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 查询所有项目（分页） -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM project
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计项目总数 -->
+    <select id="countAll" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM project
+    </select>
+
+    <!-- 根据创建人统计项目数量 -->
+    <select id="countByCreatedBy" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM project WHERE created_by = #{createdBy}
+    </select>
+
+    <!-- 根据状态统计项目数量 -->
+    <select id="countByStatus" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM project WHERE status = #{status}
+    </select>
+
+    <!-- 插入项目 -->
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.Project" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO project (
+            code, name, description, status, created_by, created_at, updated_at
+        ) VALUES (
+            #{code}, #{name}, #{description}, #{status}, #{createdBy}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <!-- 更新项目 -->
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.Project">
+        UPDATE project
+        <set>
+            <if test="code != null">code = #{code},</if>
+            <if test="name != null">name = #{name},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID删除项目 -->
+    <delete id="deleteById">
+        DELETE FROM project WHERE id = #{id}
+    </delete>
+
+</mapper>

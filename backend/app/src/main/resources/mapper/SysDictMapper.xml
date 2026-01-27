@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.SysDictMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.SysDict">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="dict_type" property="dictType" jdbcType="VARCHAR"/>
+        <result column="dict_code" property="dictCode" jdbcType="VARCHAR"/>
+        <result column="dict_value" property="dictValue" jdbcType="VARCHAR"/>
+        <result column="dict_label" property="dictLabel" jdbcType="VARCHAR"/>
+        <result column="sort_order" property="sortOrder" jdbcType="INTEGER"/>
+        <result column="is_active" property="isActive" jdbcType="BOOLEAN"/>
+        <result column="remark" property="remark" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, dict_type, dict_code, dict_value, dict_label, sort_order, is_active, remark, created_at, updated_at
+    </sql>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_dict
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据字典类型查询字典列表 -->
+    <select id="selectByDictType" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_dict
+        WHERE dict_type = #{dictType} AND is_active = TRUE
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <!-- 根据字典类型和字典编码查询字典 -->
+    <select id="selectByDictTypeAndCode" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_dict
+        WHERE dict_type = #{dictType} AND dict_code = #{dictCode}
+    </select>
+
+    <!-- 查询所有字典（分页） -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_dict
+        ORDER BY dict_type ASC, sort_order ASC, id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计字典总数 -->
+    <select id="countAll" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM sys_dict
+    </select>
+
+    <!-- 插入字典 -->
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.SysDict" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO sys_dict (
+            dict_type, dict_code, dict_value, dict_label, sort_order, is_active, remark, created_at, updated_at
+        ) VALUES (
+            #{dictType}, #{dictCode}, #{dictValue}, #{dictLabel}, #{sortOrder}, #{isActive}, #{remark}, #{createdAt}, #{updatedAt}
+        )
+    </insert>
+
+    <!-- 更新字典 -->
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.SysDict">
+        UPDATE sys_dict
+        <set>
+            <if test="dictValue != null">dict_value = #{dictValue},</if>
+            <if test="dictLabel != null">dict_label = #{dictLabel},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID删除字典 -->
+    <delete id="deleteById">
+        DELETE FROM sys_dict WHERE id = #{id}
+    </delete>
+
+</mapper>

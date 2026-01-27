@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.AuditOperationLogMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuditOperationLog">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="actor_user_id" property="actorUserId" jdbcType="OTHER"/>
+        <result column="action" property="action" jdbcType="VARCHAR"/>
+        <result column="target_type" property="targetType" jdbcType="VARCHAR"/>
+        <result column="target_id" property="targetId" jdbcType="VARCHAR"/>
+        <result column="detail" property="detail" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, actor_user_id, action, target_type, target_id, detail::text as detail, created_at
+    </sql>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_operation_log
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据操作人查询审计日志列表（分页） -->
+    <select id="selectByActorUserId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_operation_log
+        WHERE actor_user_id = #{actorUserId}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 根据操作类型查询审计日志列表（分页） -->
+    <select id="selectByAction" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_operation_log
+        WHERE action = #{action}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 根据目标类型和目标ID查询审计日志列表（分页） -->
+    <select id="selectByTarget" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_operation_log
+        WHERE target_type = #{targetType} AND target_id = #{targetId}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 根据时间范围查询审计日志列表（分页） -->
+    <select id="selectByTimeRange" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_operation_log
+        WHERE created_at &gt;= #{startTime} AND created_at &lt;= #{endTime}
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 查询所有审计日志（分页） -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_operation_log
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计审计日志总数 -->
+    <select id="countAll" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM audit_operation_log
+    </select>
+
+    <!-- 根据操作人统计审计日志数量 -->
+    <select id="countByActorUserId" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM audit_operation_log WHERE actor_user_id = #{actorUserId}
+    </select>
+
+    <!-- 插入审计日志 -->
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuditOperationLog" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO audit_operation_log (
+            actor_user_id, action, target_type, target_id, detail, created_at
+        ) VALUES (
+            #{actorUserId}, #{action}, #{targetType}, #{targetId}, 
+            <choose>
+                <when test="detail != null">#{detail}::jsonb</when>
+                <otherwise>NULL</otherwise>
+            </choose>, 
+            #{createdAt}
+        )
+    </insert>
+
+    <!-- 根据ID删除审计日志 -->
+    <delete id="deleteById">
+        DELETE FROM audit_operation_log WHERE id = #{id}
+    </delete>
+
+</mapper>

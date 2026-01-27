@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.AuthUserMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuthUser">
+        <id column="id" property="id" jdbcType="OTHER"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="display_name" property="displayName" jdbcType="VARCHAR"/>
+        <result column="email" property="email" jdbcType="VARCHAR"/>
+        <result column="is_active" property="isActive" jdbcType="BOOLEAN"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, username, display_name, email, is_active, created_at
+    </sql>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_user
+        WHERE id = #{id}
+    </select>
+
+    <!-- 根据用户名查询 -->
+    <select id="selectByUsername" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_user
+        WHERE username = #{username}
+    </select>
+
+    <!-- 查询所有用户（分页） -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_user
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 统计用户总数 -->
+    <select id="countAll" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM auth_user
+    </select>
+
+    <!-- 插入用户 -->
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuthUser">
+        INSERT INTO auth_user (
+            id, username, display_name, email, is_active, created_at
+        ) VALUES (
+            #{id}, #{username}, #{displayName}, #{email}, #{isActive}, #{createdAt}
+        )
+    </insert>
+
+    <!-- 更新用户 -->
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.AuthUser">
+        UPDATE auth_user
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="displayName != null">display_name = #{displayName},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据ID删除用户 -->
+    <delete id="deleteById">
+        DELETE FROM auth_user WHERE id = #{id}
+    </delete>
+
+</mapper>
