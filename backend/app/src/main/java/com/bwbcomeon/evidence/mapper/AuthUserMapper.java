@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 用户表 Mapper
+ * 用户表Mapper
  */
 @Mapper
 public interface AuthUserMapper {

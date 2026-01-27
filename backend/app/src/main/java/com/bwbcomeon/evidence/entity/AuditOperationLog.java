@@ -1,7 +1,5 @@
 package com.bwbcomeon.evidence.entity;
 
-package com.bwbcomeon.evidence.entity;
-
 import lombok.Data;
 import java.time.OffsetDateTime;
 import java.util.UUID;

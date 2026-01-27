@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 项目表 Mapper
+ * 项目表Mapper
  */
 @Mapper
 public interface ProjectMapper {

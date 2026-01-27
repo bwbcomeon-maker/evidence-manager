@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 项目权限表 Mapper
+ * 项目权限表Mapper
  */
 @Mapper
 public interface AuthProjectAclMapper {

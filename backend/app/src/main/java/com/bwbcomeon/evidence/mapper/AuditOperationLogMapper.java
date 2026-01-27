@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 操作审计日志表 Mapper
+ * 操作审计日志表Mapper
  */
 @Mapper
 public interface AuditOperationLogMapper {

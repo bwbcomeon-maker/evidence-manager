@@ -5,37 +5,35 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * 系统用户表
- */
+ * 绯荤粺鐢ㄦ埛琛? */
 @Data
 public class AuthUser {
     /**
-     * 用户ID
+     * 鐢ㄦ埛ID
      */
     private UUID id;
 
     /**
-     * 登录名
-     */
+     * 鐧诲綍鍚?     */
     private String username;
 
     /**
-     * 显示名称
+     * 鏄剧ず鍚嶇О
      */
     private String displayName;
 
     /**
-     * 联系邮箱
+     * 閭
      */
     private String email;
 
     /**
-     * 是否启用
+     * 鏄惁鍚敤
      */
     private Boolean isActive;
 
     /**
-     * 创建时间
+     * 鍒涘缓鏃堕棿
      */
     private OffsetDateTime createdAt;
 }
