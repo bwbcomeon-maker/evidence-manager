@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.EvidenceVersionMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.EvidenceVersion">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="evidence_id" property="evidenceId" jdbcType="BIGINT"/>
+        <result column="project_id" property="projectId" jdbcType="BIGINT"/>
+        <result column="version_no" property="versionNo" jdbcType="INTEGER"/>
+        <result column="original_filename" property="originalFilename" jdbcType="VARCHAR"/>
+        <result column="file_path" property="filePath" jdbcType="VARCHAR"/>
+        <result column="file_size" property="fileSize" jdbcType="BIGINT"/>
+        <result column="content_type" property="contentType" jdbcType="VARCHAR"/>
+        <result column="uploader_id" property="uploaderId" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
+        <result column="remark" property="remark" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, evidence_id, project_id, version_no, original_filename, file_path, file_size,
+        content_type, uploader_id, remark, created_at
+    </sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_version
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByEvidenceId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_version
+        WHERE evidence_id = #{evidenceId}
+        ORDER BY version_no DESC
+    </select>
+
+    <select id="selectByProjectId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_version
+        WHERE project_id = #{projectId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectMaxVersionNoByEvidenceId" resultType="java.lang.Integer">
+        SELECT MAX(version_no)
+        FROM evidence_version
+        WHERE evidence_id = #{evidenceId}
+    </select>
+
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceVersion" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO evidence_version (
+            evidence_id, project_id, version_no, original_filename, file_path, file_size,
+            content_type, uploader_id, remark, created_at
+        )
+        VALUES (
+            #{evidenceId},
+            #{projectId},
+            #{versionNo},
+            #{originalFilename},
+            #{filePath},
+            #{fileSize},
+            #{contentType},
+            #{uploaderId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            #{remark},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
+        )
+    </insert>
+
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.EvidenceVersion">
+        UPDATE evidence_version
+        <set>
+            <if test="originalFilename != null">original_filename = #{originalFilename},</if>
+            <if test="filePath != null">file_path = #{filePath},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            <if test="contentType != null">content_type = #{contentType},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM evidence_version
+        WHERE id = #{id}
+    </delete>
+
+    <select id="selectLatestVersionByEvidenceId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_version
+        WHERE evidence_id = #{evidenceId}
+        ORDER BY version_no DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestVersionsByEvidenceIds" resultMap="BaseResultMap">
+        SELECT DISTINCT ON (evidence_id)
+        <include refid="Base_Column_List"/>
+        FROM evidence_version
+        WHERE evidence_id IN
+        <foreach collection="evidenceIds" item="evidenceId" open="(" separator="," close=")">
+            #{evidenceId}
+        </foreach>
+        ORDER BY evidence_id, version_no DESC
+    </select>
+
+</mapper>

@@ -22,6 +22,10 @@ http.interceptors.request.use(
 // 响应拦截器
 http.interceptors.response.use(
   (response) => {
+    // 如果是 blob 类型，直接返回 blob
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
     return response.data
   },
   (error) => {

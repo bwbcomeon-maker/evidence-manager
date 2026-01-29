@@ -71,8 +71,8 @@ if (-not (Test-Path "node_modules")) {
 Write-Host ""
 Write-Host "步骤 3: 启动开发服务器..." -ForegroundColor Yellow
 Write-Host ""
-Write-Host "前端服务将在 http://localhost:3000 启动" -ForegroundColor Cyan
-Write-Host "按 Ctrl+C 停止服务器" -ForegroundColor Yellow
+Write-Host "Frontend will start at http://localhost:3000" -ForegroundColor Cyan
+Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
 
 npm run dev

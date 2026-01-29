@@ -60,6 +60,11 @@ public class EvidenceItem {
     private String status;
 
     /**
+     * 业务证据类型：方案/报告/纪要/测试/验收/OTHER等
+     */
+    private String bizType;
+
+    /**
      * 上传人
      */
     private UUID createdBy;

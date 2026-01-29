@@ -13,6 +13,7 @@
         <result column="size_bytes" property="sizeBytes" jdbcType="BIGINT"/>
         <result column="etag" property="etag" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="biz_type" property="bizType" jdbcType="VARCHAR"/>
         <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
@@ -23,7 +24,7 @@
 
     <sql id="Base_Column_List">
         id, project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-        status, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
+        status, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -68,7 +69,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO evidence_item (
             project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-            status, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
+            status, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
         )
         VALUES (
             #{projectId},
@@ -80,11 +81,12 @@
             #{sizeBytes},
             #{etag},
             COALESCE(#{status}, 'active'),
+            COALESCE(#{bizType}, 'OTHER'),
             #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
             COALESCE(#{updatedAt}, CURRENT_TIMESTAMP),
             #{invalidReason},
-            #{invalidBy}::uuid,
+            #{invalidBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
             #{invalidAt}
         )
     </insert>
@@ -100,6 +102,7 @@
             <if test="sizeBytes != null">size_bytes = #{sizeBytes},</if>
             <if test="etag != null">etag = #{etag},</if>
             <if test="status != null">status = #{status},</if>
+            <if test="bizType != null">biz_type = #{bizType},</if>
             <if test="invalidReason != null">invalid_reason = #{invalidReason},</if>
             <if test="invalidBy != null">invalid_by = #{invalidBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},</if>
             <if test="invalidAt != null">invalid_at = #{invalidAt},</if>
@@ -112,5 +115,25 @@
         DELETE FROM evidence_item
         WHERE id = #{id}
     </delete>
+
+    <select id="selectByProjectIdWithFilters" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_item
+        WHERE project_id = #{projectId}
+        <if test="nameLike != null and nameLike != ''">
+            AND title LIKE CONCAT('%', #{nameLike}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="bizType != null and bizType != ''">
+            AND biz_type = #{bizType}
+        </if>
+        <if test="contentType != null and contentType != ''">
+            AND content_type = #{contentType}
+        </if>
+        ORDER BY created_at DESC
+    </select>
 
 </mapper>
