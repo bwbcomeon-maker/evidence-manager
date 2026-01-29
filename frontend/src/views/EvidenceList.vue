@@ -1,11 +1,5 @@
 <template>
   <div class="evidence-list">
-    <van-nav-bar
-      title="证据列表"
-      left-arrow
-      @click-left="$router.back()"
-      fixed
-    />
     <div class="content">
       <van-pull-refresh v-model="loading" @refresh="onRefresh">
         <van-list
@@ -141,7 +135,6 @@ onMounted(() => {
 <style scoped>
 .evidence-list {
   min-height: 100vh;
-  padding-top: 46px;
 }
 
 .content {

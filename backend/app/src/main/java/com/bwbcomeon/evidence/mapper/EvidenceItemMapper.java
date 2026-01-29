@@ -67,4 +67,38 @@ public interface EvidenceItemMapper {
             @Param("bizType") String bizType,
             @Param("contentType") String contentType
     );
+
+    /**
+     * 分页查询证据（仅限可见项目内，支持 projectId/status/uploader/recentDays/fileCategory）
+     * @param projectIds 可见项目ID列表（非空）
+     * @param projectId 按项目筛选（可选，与 projectIds 取交集）
+     * @param status 状态（可选；不传时默认排除 invalid）
+     * @param createdBy 上传人 UUID（可选，uploader=me 时传入）
+     * @param createdAfter 创建时间下限（可选，recentDays 时传入）
+     * @param fileCategory 文件大类：image/document/video（可选，映射到 content_type）
+     * @param nameLike 标题模糊（可选）
+     * @param offset 偏移
+     * @param limit 条数
+     */
+    List<EvidenceItem> selectPageWithFilters(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("projectId") Long projectId,
+            @Param("status") String status,
+            @Param("createdBy") UUID createdBy,
+            @Param("createdAfter") java.time.OffsetDateTime createdAfter,
+            @Param("fileCategory") String fileCategory,
+            @Param("nameLike") String nameLike,
+            @Param("offset") long offset,
+            @Param("limit") long limit
+    );
+
+    long countPageWithFilters(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("projectId") Long projectId,
+            @Param("status") String status,
+            @Param("createdBy") UUID createdBy,
+            @Param("createdAfter") java.time.OffsetDateTime createdAfter,
+            @Param("fileCategory") String fileCategory,
+            @Param("nameLike") String nameLike
+    );
 }

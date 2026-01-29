@@ -136,4 +136,69 @@
         ORDER BY created_at DESC
     </select>
 
+    <!-- 分页查询：仅限 projectIds 内，可选 projectId/status/createdBy/createdAfter/fileCategory/nameLike -->
+    <sql id="PageWhereClause">
+        <if test="projectIds != null and projectIds.size() > 0">
+            AND project_id IN
+            <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+                #{pid}
+            </foreach>
+        </if>
+        <if test="projectId != null">
+            AND project_id = #{projectId}
+        </if>
+        <!-- 默认不返回作废：未传 status 时排除 invalid -->
+        <choose>
+            <when test="status != null and status != ''">
+                AND status = #{status}
+            </when>
+            <otherwise>
+                AND COALESCE(status, '') != 'invalid'
+            </otherwise>
+        </choose>
+        <if test="createdBy != null">
+            AND created_by = #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        </if>
+        <if test="createdAfter != null">
+            AND created_at &gt;= #{createdAfter}
+        </if>
+        <if test="fileCategory == 'image'">
+            AND content_type LIKE 'image/%'
+        </if>
+        <if test="fileCategory == 'video'">
+            AND content_type LIKE 'video/%'
+        </if>
+        <if test="fileCategory == 'document'">
+            AND (
+                content_type LIKE 'application/pdf'
+                OR content_type LIKE 'application/msword'
+                OR content_type LIKE 'application/vnd.openxmlformats-officedocument.%'
+                OR content_type LIKE 'text/%'
+                OR content_type IN ('application/zip', 'application/x-rar-compressed')
+            )
+        </if>
+        <if test="nameLike != null and nameLike != ''">
+            AND title ILIKE CONCAT('%', #{nameLike}, '%')
+        </if>
+    </sql>
+
+    <select id="selectPageWithFilters" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_item
+        <where>
+            <include refid="PageWhereClause"/>
+        </where>
+        ORDER BY created_at DESC
+        OFFSET #{offset} LIMIT #{limit}
+    </select>
+
+    <select id="countPageWithFilters" resultType="long">
+        SELECT COUNT(1)
+        FROM evidence_item
+        <where>
+            <include refid="PageWhereClause"/>
+        </where>
+    </select>
+
 </mapper>

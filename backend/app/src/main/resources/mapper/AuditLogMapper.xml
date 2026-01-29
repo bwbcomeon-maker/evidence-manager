@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.AuditLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuditLog">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="actor_user_id" property="actorUserId" jdbcType="BIGINT"/>
+        <result column="action" property="action" jdbcType="VARCHAR"/>
+        <result column="target_type" property="targetType" jdbcType="VARCHAR"/>
+        <result column="target_id" property="targetId" jdbcType="BIGINT"/>
+        <result column="success" property="success" jdbcType="BOOLEAN"/>
+        <result column="ip" property="ip" jdbcType="VARCHAR"/>
+        <result column="user_agent" property="userAgent" jdbcType="VARCHAR"/>
+        <result column="detail" property="detail" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, actor_user_id, action, target_type, target_id, success, ip, user_agent, detail, created_at
+    </sql>
+
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuditLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_log (
+            actor_user_id, action, target_type, target_id, success, ip, user_agent, detail, created_at
+        )
+        VALUES (
+            #{actorUserId},
+            #{action},
+            #{targetType},
+            #{targetId},
+            #{success},
+            #{ip},
+            #{userAgent},
+            #{detail},
+            COALESCE(#{createdAt}, now())
+        )
+    </insert>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM audit_log
+        ORDER BY created_at DESC
+        OFFSET #{offset} LIMIT #{limit}
+    </select>
+
+    <select id="countPageQuery" resultType="long">
+        SELECT COUNT(1)
+        FROM audit_log
+    </select>
+
+</mapper>

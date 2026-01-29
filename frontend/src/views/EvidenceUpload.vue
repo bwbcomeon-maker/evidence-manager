@@ -1,11 +1,5 @@
 <template>
   <div class="evidence-upload">
-    <van-nav-bar
-      title="上传证据"
-      left-arrow
-      @click-left="$router.back()"
-      fixed
-    />
     <div class="content">
       <van-form @submit="onSubmit">
         <van-cell-group inset>
@@ -102,7 +96,6 @@ const onSubmit = async () => {
 <style scoped>
 .evidence-upload {
   min-height: 100vh;
-  padding-top: 46px;
 }
 
 .content {

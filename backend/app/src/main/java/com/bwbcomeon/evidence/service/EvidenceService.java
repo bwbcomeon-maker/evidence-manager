@@ -3,11 +3,18 @@ package com.bwbcomeon.evidence.service;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.EvidenceResponse;
 import com.bwbcomeon.evidence.dto.LatestVersionVO;
+import com.bwbcomeon.evidence.dto.PageResult;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import com.bwbcomeon.evidence.entity.EvidenceVersion;
 import com.bwbcomeon.evidence.exception.BusinessException;
+import com.bwbcomeon.evidence.entity.AuthProjectAcl;
+import com.bwbcomeon.evidence.entity.AuthUser;
+import com.bwbcomeon.evidence.entity.Project;
+import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
+import com.bwbcomeon.evidence.mapper.AuthUserMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceVersionMapper;
+import com.bwbcomeon.evidence.mapper.ProjectMapper;
 import com.bwbcomeon.evidence.util.FileStorageUtil;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.slf4j.Logger;
@@ -51,6 +58,15 @@ public class EvidenceService {
 
     @Autowired
     private EvidenceVersionMapper evidenceVersionMapper;
+
+    @Autowired
+    private ProjectMapper projectMapper;
+
+    @Autowired
+    private AuthUserMapper authUserMapper;
+
+    @Autowired
+    private AuthProjectAclMapper authProjectAclMapper;
 
     @Autowired
     private PermissionUtil permissionUtil;
@@ -284,6 +300,101 @@ public class EvidenceService {
 
         logger.info("List evidences: projectId={}, count={}", projectId, result.size());
         return result;
+    }
+
+    /**
+     * 获取当前用户可见的项目ID列表（权限过滤）
+     * SYSTEM_ADMIN：全部项目；普通用户：其创建的项目 + 其有 ACL 的项目（按 auth_user UUID 匹配）
+     */
+    public List<Long> getVisibleProjectIds(String username, String roleCode) {
+        if (roleCode != null && "SYSTEM_ADMIN".equals(roleCode)) {
+            return projectMapper.selectAll().stream().map(Project::getId).distinct().collect(Collectors.toList());
+        }
+        AuthUser authUser = authUserMapper.selectByUsername(username);
+        if (authUser == null) {
+            return new ArrayList<>();
+        }
+        UUID uuid = authUser.getId();
+        List<Long> ids = new ArrayList<>();
+        for (Project p : projectMapper.selectByCreatedBy(uuid)) {
+            ids.add(p.getId());
+        }
+        for (AuthProjectAcl a : authProjectAclMapper.selectByUserId(uuid)) {
+            ids.add(a.getProjectId());
+        }
+        return ids.stream().distinct().collect(Collectors.toList());
+    }
+
+    /**
+     * 根据 sys_user 用户名解析为 auth_user UUID（用于 uploader=me 等）
+     */
+    public UUID resolveCreatedByUuid(String username) {
+        if (username == null || username.isBlank()) return null;
+        AuthUser u = authUserMapper.selectByUsername(username);
+        return u != null ? u.getId() : null;
+    }
+
+    /**
+     * 分页查询证据（仅可见项目内，支持 projectId/status/uploader/recentDays/fileCategory）
+     * 默认不返回作废证据（status=invalid），除非传 status=VOIDED 或 invalid。
+     */
+    public PageResult<EvidenceListItemVO> pageEvidence(
+            int page, int pageSize,
+            Long projectId, String status, String uploader, Integer recentDays, String fileCategory, String nameLike,
+            Long currentUserId, String username, String roleCode) {
+        List<Long> visibleIds = getVisibleProjectIds(username, roleCode);
+        if (visibleIds.isEmpty()) {
+            return new PageResult<>(0, new ArrayList<>(), page, pageSize);
+        }
+        // status: 前端传 VOIDED 时映射为 invalid
+        String statusParam = (status != null && !status.isBlank()) ? ("VOIDED".equalsIgnoreCase(status.trim()) ? "invalid" : status.trim()) : null;
+        UUID createdByUuid = "me".equalsIgnoreCase(uploader != null ? uploader.trim() : "") ? resolveCreatedByUuid(username) : null;
+        OffsetDateTime createdAfter = (recentDays != null && recentDays > 0) ? OffsetDateTime.now().minusDays(recentDays) : null;
+        String fileCategoryParam = (fileCategory != null && !fileCategory.isBlank()) ? fileCategory.trim().toLowerCase() : null;
+        if (fileCategoryParam != null && !Set.of("image", "document", "video").contains(fileCategoryParam)) {
+            fileCategoryParam = null;
+        }
+        long offset = (long) (page - 1) * pageSize;
+        int limit = Math.min(Math.max(1, pageSize), 100);
+
+        List<EvidenceItem> items = evidenceItemMapper.selectPageWithFilters(
+                visibleIds, projectId, statusParam, createdByUuid, createdAfter, fileCategoryParam, nameLike, offset, limit);
+        long total = evidenceItemMapper.countPageWithFilters(
+                visibleIds, projectId, statusParam, createdByUuid, createdAfter, fileCategoryParam, nameLike);
+
+        if (items.isEmpty()) {
+            return new PageResult<>(total, new ArrayList<>(), page, pageSize);
+        }
+        List<Long> evidenceIds = items.stream().map(EvidenceItem::getId).collect(Collectors.toList());
+        List<EvidenceVersion> latestVersions = evidenceVersionMapper.selectLatestVersionsByEvidenceIds(evidenceIds);
+        Map<Long, EvidenceVersion> versionMap = latestVersions.stream().collect(Collectors.toMap(EvidenceVersion::getEvidenceId, v -> v));
+
+        List<EvidenceListItemVO> records = new ArrayList<>();
+        for (EvidenceItem item : items) {
+            EvidenceListItemVO vo = new EvidenceListItemVO();
+            vo.setEvidenceId(item.getId());
+            vo.setProjectId(item.getProjectId());
+            vo.setTitle(item.getTitle());
+            vo.setBizType(item.getBizType());
+            vo.setContentType(item.getContentType());
+            vo.setStatus(item.getStatus());
+            vo.setCreatedBy(item.getCreatedBy());
+            vo.setCreatedAt(item.getCreatedAt());
+            vo.setUpdatedAt(item.getUpdatedAt());
+            EvidenceVersion latest = versionMap.get(item.getId());
+            if (latest != null) {
+                LatestVersionVO lv = new LatestVersionVO();
+                lv.setVersionId(latest.getId());
+                lv.setVersionNo(latest.getVersionNo());
+                lv.setOriginalFilename(latest.getOriginalFilename());
+                lv.setFilePath(latest.getFilePath());
+                lv.setFileSize(latest.getFileSize());
+                lv.setCreatedAt(latest.getCreatedAt());
+                vo.setLatestVersion(lv);
+            }
+            records.add(vo);
+        }
+        return new PageResult<>(total, records, page, pageSize);
     }
 
     /**

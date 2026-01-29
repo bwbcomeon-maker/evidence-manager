@@ -1,11 +1,5 @@
 <template>
   <div class="project-detail">
-    <van-nav-bar
-      title="项目详情"
-      left-arrow
-      @click-left="$router.back()"
-      fixed
-    />
     <div class="content">
       <van-tabs v-model:active="activeTab" sticky>
         <!-- 详情 Tab -->
@@ -490,7 +484,6 @@ onMounted(() => {
 <style scoped>
 .project-detail {
   min-height: 100vh;
-  padding-top: 46px;
 }
 
 .content {

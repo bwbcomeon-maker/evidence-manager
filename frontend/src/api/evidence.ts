@@ -27,6 +27,31 @@ export interface EvidenceListParams {
   contentType?: string
 }
 
+/** 全局证据列表查询参数（GET /api/evidence） */
+export interface EvidenceGlobalListParams {
+  page?: number
+  pageSize?: number
+  projectId?: number
+  status?: string
+  uploader?: string
+  recentDays?: number
+  fileCategory?: 'image' | 'document' | 'video'
+  nameLike?: string
+}
+
+export interface PageResult<T> {
+  total: number
+  records: T[]
+  page: number
+  pageSize: number
+}
+
+export interface EvidenceListResponse {
+  code: number
+  message: string
+  data: PageResult<EvidenceListItem>
+}
+
 export interface EvidenceUploadParams {
   name: string
   type: string
@@ -34,12 +59,17 @@ export interface EvidenceUploadParams {
   file: File
 }
 
-// 获取证据列表
+// 获取证据列表（按项目）
 export const getEvidenceList = (projectId: number, params?: EvidenceListParams) => {
   return http.get<{ code: number; message: string; data: EvidenceListItem[] }>(
     `/projects/${projectId}/evidences`,
     { params }
   )
+}
+
+// 全局证据分页列表（GET /api/evidence）
+export const listEvidence = (params?: EvidenceGlobalListParams) => {
+  return http.get<EvidenceListResponse>('/evidence', { params })
 }
 
 // 上传证据

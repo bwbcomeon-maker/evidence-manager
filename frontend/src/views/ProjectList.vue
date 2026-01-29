@@ -1,6 +1,5 @@
 <template>
   <div class="project-list">
-    <van-nav-bar title="项目列表" fixed />
     <div class="content">
       <van-pull-refresh v-model="loading" @refresh="onRefresh">
         <van-list
@@ -32,7 +31,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { NavBar, Cell, List, PullRefresh, Tag } from 'vant'
+import { Cell, List, PullRefresh, Tag } from 'vant'
 
 interface Project {
   id: number
@@ -103,7 +102,6 @@ onMounted(() => {
 <style scoped>
 .project-list {
   min-height: 100vh;
-  padding-top: 46px;
 }
 
 .content {

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.SysUserMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.SysUser">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="password_hash" property="passwordHash" jdbcType="VARCHAR"/>
+        <result column="real_name" property="realName" jdbcType="VARCHAR"/>
+        <result column="phone" property="phone" jdbcType="VARCHAR"/>
+        <result column="email" property="email" jdbcType="VARCHAR"/>
+        <result column="role_code" property="roleCode" jdbcType="VARCHAR"/>
+        <result column="enabled" property="enabled" jdbcType="BOOLEAN"/>
+        <result column="is_deleted" property="isDeleted" jdbcType="BOOLEAN"/>
+        <result column="last_login_at" property="lastLoginAt" jdbcType="TIMESTAMP"/>
+        <result column="last_login_ip" property="lastLoginIp" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, username, password_hash, real_name, phone, email, role_code,
+        enabled, is_deleted, last_login_at, last_login_ip, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.SysUser" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_user (
+            username, password_hash, real_name, phone, email, role_code,
+            enabled, is_deleted, last_login_at, last_login_ip, created_at, updated_at
+        )
+        VALUES (
+            #{username},
+            #{passwordHash},
+            #{realName},
+            #{phone},
+            #{email},
+            #{roleCode},
+            COALESCE(#{enabled}, true),
+            COALESCE(#{isDeleted}, false),
+            #{lastLoginAt},
+            #{lastLoginIp},
+            COALESCE(#{createdAt}, now()),
+            COALESCE(#{updatedAt}, now())
+        )
+    </insert>
+
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.SysUser">
+        UPDATE sys_user
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="passwordHash != null">password_hash = #{passwordHash},</if>
+            <if test="realName != null">real_name = #{realName},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="roleCode != null">role_code = #{roleCode},</if>
+            <if test="enabled != null">enabled = #{enabled},</if>
+            <if test="lastLoginAt != null">last_login_at = #{lastLoginAt},</if>
+            <if test="lastLoginIp != null">last_login_ip = #{lastLoginIp},</if>
+            updated_at = now()
+        </set>
+        WHERE id = #{id} AND (is_deleted = false OR is_deleted IS NULL)
+    </update>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_user
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUsername" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_user
+        WHERE username = #{username}
+          AND (is_deleted = false OR is_deleted IS NULL)
+    </select>
+
+    <!-- 分页查询条件片段：keyword 模糊匹配 username/real_name/phone/email，roleCode/enabled 精确 -->
+    <sql id="PageQuery_Where_Clause">
+        (is_deleted = false OR is_deleted IS NULL)
+        <if test="keyword != null and keyword != ''">
+            AND (
+                username ILIKE CONCAT('%', #{keyword}, '%')
+                OR real_name ILIKE CONCAT('%', #{keyword}, '%')
+                OR phone ILIKE CONCAT('%', #{keyword}, '%')
+                OR email ILIKE CONCAT('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="roleCode != null and roleCode != ''">
+            AND role_code = #{roleCode}
+        </if>
+        <if test="enabled != null">
+            AND enabled = #{enabled}
+        </if>
+    </sql>
+
+    <select id="pageQuery" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_user
+        <where>
+            <include refid="PageQuery_Where_Clause"/>
+        </where>
+        ORDER BY created_at DESC
+        OFFSET #{offset} LIMIT #{limit}
+    </select>
+
+    <select id="countPageQuery" resultType="long">
+        SELECT COUNT(1)
+        FROM sys_user
+        <where>
+            <include refid="PageQuery_Where_Clause"/>
+        </where>
+    </select>
+
+    <update id="setEnabled">
+        UPDATE sys_user
+        SET enabled = #{enabled}, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <update id="resetPassword">
+        UPDATE sys_user
+        SET password_hash = #{passwordHash}, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <update id="logicalDelete">
+        UPDATE sys_user
+        SET is_deleted = true, updated_at = now()
+        WHERE id = #{id}
+    </update>
+
+    <select id="countByUsername" resultType="long">
+        SELECT COUNT(1) FROM sys_user WHERE username = #{username}
+    </select>
+
+    <select id="countByRoleCodeAndNotDeleted" resultType="long">
+        SELECT COUNT(1) FROM sys_user
+        WHERE role_code = #{roleCode}
+          AND (is_deleted = false OR is_deleted IS NULL)
+    </select>
+
+</mapper>
