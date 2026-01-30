@@ -30,7 +30,7 @@
 
             <!-- 上传按钮 -->
             <div class="upload-btn-wrapper">
-              <van-button type="primary" icon="plus" @click="showUploadDialog = true">
+              <van-button type="primary" icon="plus" @click="openUploadDialog">
                 上传证据
               </van-button>
             </div>
@@ -46,27 +46,38 @@
                 <van-cell
                   v-for="evidence in evidenceList"
                   :key="evidence.evidenceId"
-                  :title="evidence.title"
-                  :label="getEvidenceLabel(evidence)"
-                  is-link
+                  class="evidence-list-cell"
+                  @click="goToEvidenceDetail(evidence.evidenceId)"
                 >
-                  <template #value>
-                    <div class="cell-actions">
-                      <van-button
-                        size="mini"
-                        type="primary"
-                        icon="eye-o"
-                        class="preview-btn"
-                        aria-label="预览"
-                        @click.stop="handlePreview(evidence)"
-                      />
-                      <van-button
-                        size="mini"
-                        type="primary"
-                        @click.stop="handleDownload(evidence)"
-                      >
-                        下载
-                      </van-button>
+                  <template #default>
+                    <div class="evidence-cell-content">
+                      <div class="evidence-cell-main">
+                        <div class="evidence-cell-title">{{ evidence.title }}</div>
+                        <div class="evidence-cell-label">{{ getEvidenceLabel(evidence) }}</div>
+                      </div>
+                      <div class="cell-actions">
+                        <van-tag :type="evidenceListStatusTagType(evidence)">
+                          {{ evidenceListStatusText(evidence) }}
+                        </van-tag>
+                        <van-button
+                          size="mini"
+                          type="primary"
+                          icon="eye-o"
+                          class="preview-btn"
+                          aria-label="预览"
+                          @click.stop="handlePreview(evidence)"
+                        />
+                        <van-button
+                          size="mini"
+                          type="primary"
+                          icon="down"
+                          class="download-btn"
+                          @click.stop="handleDownload(evidence)"
+                        >
+                          下载
+                        </van-button>
+                        <van-icon name="arrow" class="cell-arrow" />
+                      </div>
                     </div>
                   </template>
                 </van-cell>
@@ -78,15 +89,18 @@
       </van-tabs>
     </div>
 
-    <!-- 上传 Dialog -->
+    <!-- 上传弹窗：两阶段（表单 -> 结果与操作） -->
     <van-dialog
       v-model:show="showUploadDialog"
-      title="上传证据"
-      show-cancel-button
-      @confirm="handleUpload"
+      :title="uploadPhase === 'form' ? '上传证据' : '上传结果'"
+      :show-cancel-button="uploadPhase === 'form'"
+      :show-confirm-button="uploadPhase === 'result'"
+      confirm-button-text="关闭"
+      @confirm="closeUploadDialog"
       @cancel="resetUploadForm"
     >
-      <van-form @submit="handleUpload">
+      <!-- 阶段1：表单 -->
+      <template v-if="uploadPhase === 'form'">
         <van-cell-group inset>
           <van-field
             v-model="uploadForm.name"
@@ -122,7 +136,62 @@
             </van-uploader>
           </div>
         </van-cell-group>
-      </van-form>
+        <div class="upload-dialog-footer-inner">
+          <van-button type="primary" block :loading="uploading" @click="handleUpload">
+            确认上传
+          </van-button>
+        </div>
+      </template>
+
+      <!-- 阶段2：结果与操作 -->
+      <template v-else>
+        <div class="upload-result-block">
+          <van-cell-group inset>
+            <van-cell title="证据标题" :value="uploadResult?.title" />
+            <van-cell title="文件名" :value="uploadResult?.fileName || '—'" />
+            <van-cell title="上传时间" :value="uploadResult?.createdAt || '—'" />
+            <van-cell title="当前状态">
+              <template #value>
+                <van-tag :type="uploadResultStatusTagType">
+                  {{ uploadResultStatusText }}
+                </van-tag>
+              </template>
+            </van-cell>
+          </van-cell-group>
+          <div class="upload-result-actions">
+            <van-button
+              v-if="showUploadResultSubmit"
+              type="primary"
+              block
+              :loading="submitLoading"
+              @click="handleUploadResultSubmit"
+            >
+              提交
+            </van-button>
+            <van-button
+              type="primary"
+              plain
+              block
+              @click="goToUploadResultDetail"
+            >
+              查看详情
+            </van-button>
+            <van-button
+              v-if="showUploadResultInvalidate"
+              type="danger"
+              plain
+              block
+              :loading="invalidateLoading"
+              @click="handleUploadResultInvalidate"
+            >
+              作废
+            </van-button>
+            <van-button plain block @click="continueUpload">
+              继续上传
+            </van-button>
+          </div>
+        </div>
+      </template>
     </van-dialog>
 
     <!-- 业务类型选择器 -->
@@ -137,7 +206,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NavBar,
@@ -164,7 +233,17 @@ import {
   closeToast
 } from 'vant'
 import type { UploaderFileListItem } from 'vant'
-import { getEvidenceList, uploadEvidence, downloadVersionFile, type EvidenceListItem } from '@/api/evidence'
+import {
+  getEvidenceList,
+  uploadEvidence,
+  downloadVersionFile,
+  submitEvidence,
+  invalidateEvidence,
+  type EvidenceListItem
+} from '@/api/evidence'
+import { useAuthStore } from '@/stores/auth'
+import { showConfirmDialog } from 'vant'
+import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
 
 interface Project {
   id: number
@@ -220,6 +299,17 @@ const contentTypeOptions = [
 
 // 上传相关
 const showUploadDialog = ref(false)
+const uploadPhase = ref<'form' | 'result'>('form')
+const uploadResult = ref<{
+  evidenceId: number
+  evidenceStatus: string
+  title: string
+  fileName?: string
+  createdAt?: string
+} | null>(null)
+const uploading = ref(false)
+const submitLoading = ref(false)
+const invalidateLoading = ref(false)
 const uploadForm = ref({
   name: '',
   type: 'OTHER',
@@ -227,6 +317,19 @@ const uploadForm = ref({
 })
 const uploadFileList = ref<UploaderFileListItem[]>([])
 const showBizTypePicker = ref(false)
+const auth = useAuthStore()
+
+// 上传结果：状态展示（与列表/详情统一用 evidenceStatus 优先）
+const uploadResultStatusText = computed(() => mapStatusToText(getEffectiveEvidenceStatus(uploadResult.value)))
+const uploadResultStatusTagType = computed(() => evidenceStatusTagType(getEffectiveEvidenceStatus(uploadResult.value)))
+const showUploadResultSubmit = computed(
+  () => getEffectiveEvidenceStatus(uploadResult.value) === 'DRAFT'
+)
+const showUploadResultInvalidate = computed(() => {
+  const s = getEffectiveEvidenceStatus(uploadResult.value)
+  if (!s || s === 'ARCHIVED' || s === 'INVALID') return false
+  return auth.canAccessVoidedEvidence
+})
 const bizTypePickerOptions = [
   { text: '方案', value: 'PLAN' },
   { text: '报告', value: 'REPORT' },
@@ -244,6 +347,35 @@ const bizTypeMap: Record<string, string> = {
   TEST: '测试',
   ACCEPTANCE: '验收',
   OTHER: '其他'
+}
+
+// 列表项状态展示：统一用 getEffectiveEvidenceStatus（evidenceStatus 优先）
+function evidenceListStatusText(evidence: EvidenceListItem) {
+  return mapStatusToText(getEffectiveEvidenceStatus(evidence))
+}
+function evidenceListStatusTagType(evidence: EvidenceListItem) {
+  return evidenceStatusTagType(getEffectiveEvidenceStatus(evidence))
+}
+
+// 打开上传弹窗（重置为阶段1）
+function openUploadDialog() {
+  uploadPhase.value = 'form'
+  uploadResult.value = null
+  resetUploadForm()
+  showUploadDialog.value = true
+}
+
+// 关闭上传弹窗并重置
+function closeUploadDialog() {
+  showUploadDialog.value = false
+  uploadPhase.value = 'form'
+  uploadResult.value = null
+  resetUploadForm()
+}
+
+// 跳转证据详情
+function goToEvidenceDetail(id: number) {
+  router.push({ path: `/evidence/detail/${id}`, query: { fromProject: String(projectId) } })
 }
 
 // 文件类型映射
@@ -407,7 +539,7 @@ const onBizTypeConfirm = ({ selectedOptions }: any) => {
   showBizTypePicker.value = false
 }
 
-// 上传证据
+// 上传证据（成功后切到阶段2，不关闭弹窗）
 const handleUpload = async () => {
   if (!uploadForm.value.name.trim()) {
     showToast('请输入证据标题')
@@ -425,9 +557,10 @@ const handleUpload = async () => {
     return
   }
 
+  uploading.value = true
   try {
     showLoadingToast({ message: '上传中...', forbidClick: true, duration: 0 })
-    
+
     const formData = new FormData()
     formData.append('name', uploadForm.value.name)
     formData.append('type', uploadForm.value.type)
@@ -436,23 +569,112 @@ const handleUpload = async () => {
     }
     formData.append('file', file)
 
-    const response = await uploadEvidence(projectId, formData)
-    
-    if (response.code === 0) {
+    const response = (await uploadEvidence(projectId, formData)) as {
+      code: number
+      message?: string
+      data?: {
+        id: number
+        evidenceStatus?: string
+        title?: string
+        createdAt?: string
+      }
+    }
+    closeToast()
+
+    if (response.code === 0 && response.data) {
+      const data = response.data
+      const status = data.evidenceStatus ?? 'DRAFT'
+      uploadResult.value = {
+        evidenceId: data.id,
+        evidenceStatus: status,
+        title: data.title ?? uploadForm.value.name,
+        fileName: file instanceof File ? file.name : undefined,
+        createdAt: data.createdAt ? formatDate(data.createdAt) : undefined
+      }
+      uploadPhase.value = 'result'
       showSuccessToast('上传成功')
-      showUploadDialog.value = false
-      resetUploadForm()
-      // 刷新列表
       onRefresh()
     } else {
       showToast(response.message || '上传失败')
     }
   } catch (error: any) {
+    closeToast()
     console.error('Upload error:', error)
     showToast(error.message || '上传失败')
   } finally {
-    closeToast()
+    uploading.value = false
   }
+}
+
+// 阶段2：提交
+async function handleUploadResultSubmit() {
+  if (!uploadResult.value || getEffectiveEvidenceStatus(uploadResult.value) !== 'DRAFT') return
+  try {
+    await showConfirmDialog({
+      title: '确认提交',
+      message: '提交后将进入管理流程，是否继续？'
+    })
+  } catch {
+    return
+  }
+  submitLoading.value = true
+  try {
+    const res = (await submitEvidence(uploadResult.value.evidenceId)) as { code: number; message?: string }
+    if (res?.code === 0) {
+      uploadResult.value = { ...uploadResult.value!, evidenceStatus: 'SUBMITTED' }
+      showSuccessToast('已提交')
+      onRefresh()
+    } else {
+      showToast(res?.message || '提交失败')
+    }
+  } catch (e: any) {
+    showToast(e?.message || '提交失败')
+  } finally {
+    submitLoading.value = false
+  }
+}
+
+// 阶段2：作废
+async function handleUploadResultInvalidate() {
+  if (!uploadResult.value) return
+  try {
+    await showConfirmDialog({
+      title: '确认作废',
+      message: '作废后不可恢复，确定要作废该证据吗？'
+    })
+  } catch {
+    return
+  }
+  invalidateLoading.value = true
+  try {
+    const res = (await invalidateEvidence(uploadResult.value.evidenceId)) as { code: number; message?: string }
+    if (res?.code === 0) {
+      uploadResult.value = { ...uploadResult.value!, evidenceStatus: 'INVALID' }
+      showSuccessToast('已作废')
+      onRefresh()
+    } else {
+      showToast(res?.message || '作废失败')
+    }
+  } catch (e: any) {
+    showToast(e?.message || '作废失败')
+  } finally {
+    invalidateLoading.value = false
+  }
+}
+
+// 阶段2：查看详情（关闭弹窗并跳转）
+function goToUploadResultDetail() {
+  if (uploadResult.value) {
+    closeUploadDialog()
+    router.push({ path: `/evidence/detail/${uploadResult.value.evidenceId}`, query: { fromProject: String(projectId) } })
+  }
+}
+
+// 阶段2：继续上传（回到阶段1）
+function continueUpload() {
+  uploadPhase.value = 'form'
+  uploadResult.value = null
+  resetUploadForm()
 }
 
 // 重置上传表单
@@ -472,9 +694,19 @@ watch(activeTab, (newVal) => {
   }
 })
 
+// 从证据详情返回时带 ?tab=evidence，需激活证据 Tab
+watch(() => route.query.tab, (tab) => {
+  if (tab === 'evidence') {
+    activeTab.value = 1
+    if (evidenceList.value.length === 0) loadEvidenceList()
+  }
+}, { immediate: true })
+
 onMounted(() => {
   loadProject()
-  // 如果直接进入证据Tab，加载证据列表
+  if (route.query.tab === 'evidence') {
+    activeTab.value = 1
+  }
   if (activeTab.value === 1) {
     loadEvidenceList()
   }
@@ -506,11 +738,52 @@ onMounted(() => {
   border-radius: 8px;
 }
 
+/* 证据列表 cell：自定义整行布局，右侧操作区紧贴右边缘无留白 */
+.evidence-cell-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+  min-height: 0;
+}
+
+.evidence-cell-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.evidence-cell-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-cell-label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--van-gray-6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* value 区域占满剩余宽度，内容区左撑满，避免整块被挤到右侧 */
+.evidence-list-cell :deep(.van-cell__value) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: stretch;
+  text-align: left;
+}
+
 .cell-actions {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
   align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .cell-actions .preview-btn {
@@ -525,5 +798,32 @@ onMounted(() => {
 .cell-actions .preview-btn :deep(.van-icon) {
   font-size: 16px;
   color: #fff;
+}
+
+.cell-arrow {
+  color: var(--van-gray-5);
+  font-size: 16px;
+}
+
+/* 窄屏：下载按钮仅显示图标，避免挤断行 */
+@media (max-width: 360px) {
+  .evidence-list-cell .cell-actions .download-btn :deep(.van-button__text) {
+    display: none;
+  }
+}
+
+.upload-dialog-footer-inner {
+  padding: 12px 16px 16px;
+}
+
+.upload-result-block {
+  padding-bottom: 8px;
+}
+
+.upload-result-actions {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 </style>

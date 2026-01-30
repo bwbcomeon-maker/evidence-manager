@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { listEvidence, type EvidenceListItem, type EvidenceGlobalListParams, type EvidenceListResponse } from '@/api/evidence'
 import { formatDateTime } from '@/utils/format'
+import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as utilStatusTagType } from '@/utils/evidenceStatus'
 
 const PAGE_SIZE = 20
 
@@ -101,20 +102,11 @@ export function useEvidenceList(
   }
 
   function statusTagType(s: string): 'success' | 'danger' | 'default' | 'primary' {
-    if (s === 'INVALID') return 'danger'
-    if (s === 'ARCHIVED') return 'success'
-    if (s === 'SUBMITTED') return 'primary'
-    if (s === 'DRAFT') return 'default'
-    if (s === 'invalid') return 'danger'
-    if (s === 'archived') return 'success'
-    return 'default'
+    return utilStatusTagType(s)
   }
 
   function statusText(s: string): string {
-    const life: Record<string, string> = { DRAFT: '草稿', SUBMITTED: '已提交', ARCHIVED: '已归档', INVALID: '已作废' }
-    if (life[s]) return life[s]
-    const legacy: Record<string, string> = { active: '有效', invalid: '作废', archived: '归档' }
-    return legacy[s] || s
+    return mapStatusToText(s)
   }
 
   watch(
@@ -139,6 +131,7 @@ export function useEvidenceList(
     itemLabel,
     statusTagType,
     statusText,
+    getEffectiveEvidenceStatus: (item: EvidenceListItem) => getEffectiveEvidenceStatus(item),
     goDetail
   }
 }

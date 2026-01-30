@@ -130,7 +130,7 @@ public class EvidenceService {
             evidenceItem.setContentType(file.getContentType());
             evidenceItem.setSizeBytes(file.getSize());
             evidenceItem.setStatus("active");
-            evidenceItem.setEvidenceStatus("SUBMITTED"); // 上传即已提交
+            evidenceItem.setEvidenceStatus("DRAFT"); // 上传默认为草稿，由用户点击「提交」后变为 SUBMITTED
             evidenceItem.setBizType(bizType); // 设置业务证据类型
             evidenceItem.setCreatedBy(userId);
             evidenceItem.setCreatedAt(OffsetDateTime.now());
@@ -199,7 +199,9 @@ public class EvidenceService {
             response.setNote(evidenceItem.getNote());
             response.setContentType(evidenceItem.getContentType());
             response.setSizeBytes(evidenceItem.getSizeBytes());
-            response.setStatus(evidenceItem.getStatus());
+            // 兼容：前端统一读 evidenceStatus，旧逻辑若只读 status 则与 evidenceStatus 一致，避免列表误显示「已提交」
+            response.setStatus(evidenceItem.getEvidenceStatus() != null ? evidenceItem.getEvidenceStatus() : evidenceItem.getStatus());
+            response.setEvidenceStatus(evidenceItem.getEvidenceStatus());
             response.setCreatedBy(evidenceItem.getCreatedBy());
             response.setCreatedAt(evidenceItem.getCreatedAt());
 
@@ -487,7 +489,7 @@ public class EvidenceService {
     }
 
     /**
-     * 证据状态流转：作废（SUBMITTED -> INVALID）
+     * 证据状态流转：作废（DRAFT 或 SUBMITTED -> INVALID）
      */
     @Transactional(rollbackFor = Exception.class)
     public void invalidateEvidence(Long id, String username) {

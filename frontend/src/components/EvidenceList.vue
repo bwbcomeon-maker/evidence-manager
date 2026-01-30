@@ -21,8 +21,8 @@
             @click="goDetail(item)"
           >
             <template #value>
-              <van-tag :type="forceVoidTag ? 'danger' : statusTagType(item.evidenceStatus || item.status)">
-                {{ forceVoidTag ? '作废' : statusText(item.evidenceStatus || item.status) }}
+              <van-tag :type="forceVoidTag ? 'danger' : statusTagType(effectiveStatus(item))">
+                {{ forceVoidTag ? '作废' : statusText(effectiveStatus(item)) }}
               </van-tag>
             </template>
           </van-cell>
@@ -40,7 +40,7 @@
 import { toRef, onMounted } from 'vue'
 import { Cell, CellGroup, List, PullRefresh, Empty, Tag } from 'vant'
 import { useEvidenceList } from '@/composables/useEvidenceList'
-import type { EvidenceGlobalListParams } from '@/api/evidence'
+import type { EvidenceGlobalListParams, EvidenceListItem } from '@/api/evidence'
 
 const props = withDefaults(
   defineProps<{
@@ -72,8 +72,10 @@ const {
   itemLabel,
   statusTagType,
   statusText,
+  getEffectiveEvidenceStatus,
   goDetail
 } = useEvidenceList(filterParamsRef)
+const effectiveStatus = (item: EvidenceListItem) => getEffectiveEvidenceStatus(item) ?? ''
 
 onMounted(() => {
   if (records.value.length === 0) onLoad()

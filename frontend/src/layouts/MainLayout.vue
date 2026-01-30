@@ -37,6 +37,17 @@ const showBack = computed(() => !!route.meta.showBack)
 const showTabbar = computed(() => !!route.meta.showTabbar)
 
 function onBack() {
+  const fromProject = route.query.fromProject as string | undefined
+  if (fromProject && route.path.startsWith('/evidence/detail/')) {
+    // 用 replace 替换当前历史，避免「项目详情 → 返回」时又回到证据详情
+    router.replace({ path: `/projects/${fromProject}`, query: { tab: 'evidence' } })
+    return
+  }
+  // 项目详情页的返回一律回到项目列表，避免历史栈中有证据详情时返回到错误页
+  if (route.path.match(/^\/projects\/[^/]+$/)) {
+    router.replace('/projects')
+    return
+  }
   if (window.history.length > 1) {
     router.back()
   } else {

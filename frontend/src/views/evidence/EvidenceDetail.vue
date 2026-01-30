@@ -6,10 +6,10 @@
         <van-cell title="项目ID" :value="String(evidence.projectId)" />
         <van-cell title="业务类型" :value="evidence.bizType" />
         <van-cell title="文件类型" :value="evidence.contentType || '—'" />
-        <van-cell title="状态">
+        <van-cell title="当前状态">
           <template #value>
-            <van-tag :type="lifecycleTagType(evidence.evidenceStatus || evidence.status)">
-              {{ lifecycleStatusText(evidence.evidenceStatus || evidence.status) }}
+            <van-tag :type="statusTagType(effectiveStatus)">
+              {{ mapStatusToText(effectiveStatus) }}
             </van-tag>
           </template>
         </van-cell>
@@ -40,11 +40,11 @@ import {
   submitEvidence,
   archiveEvidence,
   invalidateEvidence,
-  type EvidenceListItem,
-  type EvidenceStatus
+  type EvidenceListItem
 } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/format'
+import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,21 +53,17 @@ const auth = useAuthStore()
 const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
 
-function lifecycleStatusText(s: string): string {
-  const m: Record<string, string> = { DRAFT: '草稿', SUBMITTED: '已提交', ARCHIVED: '已归档', INVALID: '已作废', invalid: '已作废', archived: '已归档', active: '有效' }
-  return m[s] || s
-}
+/** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
+const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
 
-function lifecycleTagType(s: string): 'success' | 'danger' | 'default' | 'primary' {
-  if (s === 'INVALID' || s === 'invalid') return 'danger'
-  if (s === 'ARCHIVED' || s === 'archived') return 'success'
-  if (s === 'SUBMITTED') return 'primary'
-  return 'default'
-}
-
-const canSubmit = computed(() => (evidence.value?.evidenceStatus || evidence.value?.status) === 'DRAFT')
-const canArchive = computed(() => (evidence.value?.evidenceStatus || evidence.value?.status) === 'SUBMITTED' && auth.isAdmin)
-const canVoid = computed(() => (evidence.value?.evidenceStatus || evidence.value?.status) === 'SUBMITTED' && auth.isAdmin)
+const canSubmit = computed(() => effectiveStatus.value === 'DRAFT')
+/** 归档：仅已提交时可操作；权限与「作废证据」页一致：SYSTEM_ADMIN / PROJECT_OWNER / PROJECT_AUDITOR */
+const canArchive = computed(() => effectiveStatus.value === 'SUBMITTED' && auth.canAccessVoidedEvidence)
+/** 作废：草稿或已提交时可操作；权限同上 */
+const canVoid = computed(() => {
+  const s = effectiveStatus.value
+  return (s === 'DRAFT' || s === 'SUBMITTED') && auth.canAccessVoidedEvidence
+})
 
 function initFromState() {
   const state = history.state as { evidence?: EvidenceListItem } | undefined
@@ -140,6 +136,11 @@ async function handleDownload() {
 
 async function handleSubmit() {
   try {
+    await showConfirmDialog({ title: '确认提交', message: '提交后进入管理流程，是否继续？' })
+  } catch {
+    return
+  }
+  try {
     showLoadingToast({ message: '提交中...', forbidClick: true, duration: 0 })
     const res = await submitEvidence(evidenceId.value) as { code: number; message?: string }
     if (res?.code === 0) {
@@ -156,7 +157,7 @@ async function handleSubmit() {
 }
 
 async function handleArchive() {
-  showConfirmDialog({ title: '确认归档', message: '确定将该证据归档吗？归档后为最终有效状态。' })
+  showConfirmDialog({ title: '确认归档', message: '归档后仅用于留存，是否继续？' })
     .then(async () => {
       try {
         showLoadingToast({ message: '归档中...', forbidClick: true, duration: 0 })
@@ -179,7 +180,7 @@ async function handleArchive() {
 function handleVoid() {
   showConfirmDialog({
     title: '确认作废',
-    message: '确定要将该证据标记为作废吗？作废后仍可查看与下载，但会列入作废证据。'
+    message: '作废后不可恢复，是否继续？'
   })
     .then(async () => {
       try {

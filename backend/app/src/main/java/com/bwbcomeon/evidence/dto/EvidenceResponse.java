@@ -40,9 +40,14 @@ public class EvidenceResponse {
     private Long sizeBytes;
 
     /**
-     * 状态
+     * 状态（兼容旧字段）
      */
     private String status;
+
+    /**
+     * 证据生命周期状态：DRAFT/SUBMITTED/ARCHIVED/INVALID
+     */
+    private String evidenceStatus;
 
     /**
      * 上传人ID
