@@ -13,6 +13,9 @@
         <result column="size_bytes" property="sizeBytes" jdbcType="BIGINT"/>
         <result column="etag" property="etag" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="evidence_status" property="evidenceStatus" jdbcType="VARCHAR"/>
+        <result column="archived_time" property="archivedTime" jdbcType="TIMESTAMP"/>
+        <result column="invalid_time" property="invalidTime" jdbcType="TIMESTAMP"/>
         <result column="biz_type" property="bizType" jdbcType="VARCHAR"/>
         <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
@@ -24,7 +27,7 @@
 
     <sql id="Base_Column_List">
         id, project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-        status, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
+        status, evidence_status, archived_time, invalid_time, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -69,7 +72,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO evidence_item (
             project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-            status, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
+            status, evidence_status, archived_time, invalid_time, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
         )
         VALUES (
             #{projectId},
@@ -81,6 +84,9 @@
             #{sizeBytes},
             #{etag},
             COALESCE(#{status}, 'active'),
+            COALESCE(#{evidenceStatus}, 'SUBMITTED'),
+            #{archivedTime},
+            #{invalidTime},
             COALESCE(#{bizType}, 'OTHER'),
             #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
@@ -147,13 +153,13 @@
         <if test="projectId != null">
             AND project_id = #{projectId}
         </if>
-        <!-- 默认不返回作废：未传 status 时排除 invalid -->
+        <!-- 按 evidence_status 筛选：未传 status 时默认排除 INVALID（已作废） -->
         <choose>
             <when test="status != null and status != ''">
-                AND status = #{status}
+                AND COALESCE(evidence_status, status, '') = #{status}
             </when>
             <otherwise>
-                AND COALESCE(status, '') != 'invalid'
+                AND COALESCE(evidence_status, 'SUBMITTED') != 'INVALID'
             </otherwise>
         </choose>
         <if test="createdBy != null">
@@ -200,5 +206,16 @@
             <include refid="PageWhereClause"/>
         </where>
     </select>
+
+    <!-- 状态流转：乐观约束，仅当前状态匹配时更新 -->
+    <update id="updateEvidenceStatus">
+        UPDATE evidence_item
+        SET evidence_status = #{evidenceStatus},
+            archived_time = #{archivedTime},
+            invalid_time = #{invalidTime},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND COALESCE(evidence_status, status, '') = #{expectedCurrentStatus}
+    </update>
 
 </mapper>

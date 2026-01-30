@@ -100,15 +100,21 @@ export function useEvidenceList(
     return parts.join(' · ') || '—'
   }
 
-  function statusTagType(s: string): 'success' | 'danger' | 'default' {
+  function statusTagType(s: string): 'success' | 'danger' | 'default' | 'primary' {
+    if (s === 'INVALID') return 'danger'
+    if (s === 'ARCHIVED') return 'success'
+    if (s === 'SUBMITTED') return 'primary'
+    if (s === 'DRAFT') return 'default'
     if (s === 'invalid') return 'danger'
-    if (s === 'archived') return 'default'
-    return 'success'
+    if (s === 'archived') return 'success'
+    return 'default'
   }
 
   function statusText(s: string): string {
-    const m: Record<string, string> = { active: '有效', invalid: '作废', archived: '归档' }
-    return m[s] || s
+    const life: Record<string, string> = { DRAFT: '草稿', SUBMITTED: '已提交', ARCHIVED: '已归档', INVALID: '已作废' }
+    if (life[s]) return life[s]
+    const legacy: Record<string, string> = { active: '有效', invalid: '作废', archived: '归档' }
+    return legacy[s] || s
   }
 
   watch(

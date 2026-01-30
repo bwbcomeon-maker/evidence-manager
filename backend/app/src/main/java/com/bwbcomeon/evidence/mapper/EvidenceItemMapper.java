@@ -101,4 +101,16 @@ public interface EvidenceItemMapper {
             @Param("fileCategory") String fileCategory,
             @Param("nameLike") String nameLike
     );
+
+    /**
+     * 更新证据生命周期状态（乐观约束：仅当前状态匹配时更新）
+     * @return 更新行数，0 表示状态已变更或不存在
+     */
+    int updateEvidenceStatus(
+            @Param("id") Long id,
+            @Param("evidenceStatus") String evidenceStatus,
+            @Param("archivedTime") java.time.OffsetDateTime archivedTime,
+            @Param("invalidTime") java.time.OffsetDateTime invalidTime,
+            @Param("expectedCurrentStatus") String expectedCurrentStatus
+    );
 }

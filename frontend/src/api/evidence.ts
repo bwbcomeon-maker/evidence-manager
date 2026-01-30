@@ -1,5 +1,8 @@
 import http from './http'
 
+/** 证据生命周期状态 */
+export type EvidenceStatus = 'DRAFT' | 'SUBMITTED' | 'ARCHIVED' | 'INVALID'
+
 export interface EvidenceListItem {
   evidenceId: number
   projectId: number
@@ -7,6 +10,7 @@ export interface EvidenceListItem {
   bizType: string
   contentType: string
   status: string
+  evidenceStatus?: EvidenceStatus
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -71,6 +75,16 @@ export const getEvidenceList = (projectId: number, params?: EvidenceListParams) 
 export const listEvidence = (params?: EvidenceGlobalListParams) => {
   return http.get<EvidenceListResponse>('/evidence', { params })
 }
+
+// 证据详情（GET /api/evidence/{id}）
+export const getEvidenceById = (id: number) => {
+  return http.get<{ code: number; message: string; data: EvidenceListItem }>(`/evidence/${id}`)
+}
+
+// 证据状态流转
+export const submitEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/submit`)
+export const archiveEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/archive`)
+export const invalidateEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/invalidate`)
 
 // 上传证据
 export const uploadEvidence = (projectId: number, formData: FormData) => {

@@ -55,9 +55,24 @@ public class EvidenceItem {
     private String etag;
 
     /**
-     * 状态：active / invalid / archived
+     * 状态：active / invalid / archived（兼容旧字段，列表筛选可同时看 evidence_status）
      */
     private String status;
+
+    /**
+     * 证据生命周期状态：DRAFT/SUBMITTED/ARCHIVED/INVALID
+     */
+    private String evidenceStatus;
+
+    /**
+     * 归档时间（evidence_status=ARCHIVED 时有值）
+     */
+    private OffsetDateTime archivedTime;
+
+    /**
+     * 作废时间（evidence_status=INVALID 时有值）
+     */
+    private OffsetDateTime invalidTime;
 
     /**
      * 业务证据类型：方案/报告/纪要/测试/验收/OTHER等

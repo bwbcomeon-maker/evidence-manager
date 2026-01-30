@@ -56,6 +56,62 @@ public class EvidenceVersionController {
     }
 
     /**
+     * 证据详情（含 evidenceStatus）
+     * GET /api/evidence/{id}
+     */
+    @GetMapping("/{id}")
+    public Result<EvidenceListItemVO> getEvidence(
+            HttpServletRequest request,
+            @PathVariable Long id) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        EvidenceListItemVO data = evidenceService.getEvidenceById(id, user.getUsername());
+        return Result.success(data);
+    }
+
+    /**
+     * 证据状态流转：提交（DRAFT -> SUBMITTED）
+     * POST /api/evidence/{id}/submit
+     */
+    @PostMapping("/{id}/submit")
+    public Result<Void> submitEvidence(
+            HttpServletRequest request,
+            @PathVariable Long id) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        evidenceService.submitEvidence(id, user.getUsername());
+        return Result.success(null);
+    }
+
+    /**
+     * 证据状态流转：归档（SUBMITTED -> ARCHIVED）
+     * POST /api/evidence/{id}/archive
+     */
+    @PostMapping("/{id}/archive")
+    public Result<Void> archiveEvidence(
+            HttpServletRequest request,
+            @PathVariable Long id) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        evidenceService.archiveEvidence(id, user.getUsername());
+        return Result.success(null);
+    }
+
+    /**
+     * 证据状态流转：作废（SUBMITTED -> INVALID）
+     * POST /api/evidence/{id}/invalidate
+     */
+    @PostMapping("/{id}/invalidate")
+    public Result<Void> invalidateEvidence(
+            HttpServletRequest request,
+            @PathVariable Long id) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        evidenceService.invalidateEvidence(id, user.getUsername());
+        return Result.success(null);
+    }
+
+    /**
      * 下载证据版本文件
      * GET /api/evidence/versions/{versionId}/download
      * 

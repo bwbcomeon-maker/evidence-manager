@@ -21,8 +21,8 @@
             @click="goDetail(item)"
           >
             <template #value>
-              <van-tag :type="forceVoidTag ? 'danger' : statusTagType(item.status)">
-                {{ forceVoidTag ? '作废' : statusText(item.status) }}
+              <van-tag :type="forceVoidTag ? 'danger' : statusTagType(item.evidenceStatus || item.status)">
+                {{ forceVoidTag ? '作废' : statusText(item.evidenceStatus || item.status) }}
               </van-tag>
             </template>
           </van-cell>

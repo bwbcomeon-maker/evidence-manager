@@ -3,9 +3,10 @@
     <van-nav-bar
       :title="(route.meta.title as string) || '证据管理'"
       :left-arrow="showBack"
+      :left-text="showBack ? '返回' : ''"
       fixed
       placeholder
-      @click-left="onBack"
+      @click-left="showBack ? onBack() : undefined"
     />
     <main class="layout-content">
       <router-view />
@@ -55,5 +56,9 @@ function onBack() {
 .layout-content {
   flex: 1;
   padding-bottom: env(safe-area-inset-bottom, 0);
+}
+/* 返回文字强化：仅字重，不新增颜色/阴影 */
+:deep(.van-nav-bar__text) {
+  font-weight: 600;
 }
 </style>

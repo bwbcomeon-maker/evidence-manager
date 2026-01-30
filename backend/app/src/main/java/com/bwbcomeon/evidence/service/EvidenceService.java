@@ -4,6 +4,7 @@ import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.EvidenceResponse;
 import com.bwbcomeon.evidence.dto.LatestVersionVO;
 import com.bwbcomeon.evidence.dto.PageResult;
+import com.bwbcomeon.evidence.enums.EvidenceStatus;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import com.bwbcomeon.evidence.entity.EvidenceVersion;
 import com.bwbcomeon.evidence.exception.BusinessException;
@@ -129,6 +130,7 @@ public class EvidenceService {
             evidenceItem.setContentType(file.getContentType());
             evidenceItem.setSizeBytes(file.getSize());
             evidenceItem.setStatus("active");
+            evidenceItem.setEvidenceStatus("SUBMITTED"); // 上传即已提交
             evidenceItem.setBizType(bizType); // 设置业务证据类型
             evidenceItem.setCreatedBy(userId);
             evidenceItem.setCreatedAt(OffsetDateTime.now());
@@ -278,6 +280,7 @@ public class EvidenceService {
             vo.setBizType(item.getBizType());
             vo.setContentType(item.getContentType());
             vo.setStatus(item.getStatus());
+            vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
             vo.setCreatedBy(item.getCreatedBy());
             vo.setCreatedAt(item.getCreatedAt());
             vo.setUpdatedAt(item.getUpdatedAt());
@@ -346,8 +349,12 @@ public class EvidenceService {
         if (visibleIds.isEmpty()) {
             return new PageResult<>(0, new ArrayList<>(), page, pageSize);
         }
-        // status: 前端传 VOIDED 时映射为 invalid
-        String statusParam = (status != null && !status.isBlank()) ? ("VOIDED".equalsIgnoreCase(status.trim()) ? "invalid" : status.trim()) : null;
+        // status: 前端传 VOIDED 时映射为 INVALID；支持 DRAFT/SUBMITTED/ARCHIVED/INVALID
+        String statusParam = null;
+        if (status != null && !status.isBlank()) {
+            String s = status.trim().toUpperCase();
+            statusParam = "VOIDED".equals(s) ? "INVALID" : s;
+        }
         UUID createdByUuid = "me".equalsIgnoreCase(uploader != null ? uploader.trim() : "") ? resolveCreatedByUuid(username) : null;
         OffsetDateTime createdAfter = (recentDays != null && recentDays > 0) ? OffsetDateTime.now().minusDays(recentDays) : null;
         String fileCategoryParam = (fileCategory != null && !fileCategory.isBlank()) ? fileCategory.trim().toLowerCase() : null;
@@ -378,6 +385,7 @@ public class EvidenceService {
             vo.setBizType(item.getBizType());
             vo.setContentType(item.getContentType());
             vo.setStatus(item.getStatus());
+            vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
             vo.setCreatedBy(item.getCreatedBy());
             vo.setCreatedAt(item.getCreatedAt());
             vo.setUpdatedAt(item.getUpdatedAt());
@@ -395,6 +403,105 @@ public class EvidenceService {
             records.add(vo);
         }
         return new PageResult<>(total, records, page, pageSize);
+    }
+
+    /** 兼容旧 status 字段映射到 evidence_status */
+    private static String resolveEvidenceStatusFromOld(String status) {
+        if (status == null || status.isBlank()) return "SUBMITTED";
+        switch (status.toLowerCase()) {
+            case "invalid": return "INVALID";
+            case "archived": return "ARCHIVED";
+            default: return "SUBMITTED";
+        }
+    }
+
+    /**
+     * 根据ID获取证据详情（含最新版本），校验项目访问权限
+     */
+    public EvidenceListItemVO getEvidenceById(Long id, String username) {
+        UUID userId = resolveCreatedByUuid(username);
+        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+        EvidenceItem item = evidenceItemMapper.selectById(id);
+        if (item == null) {
+            throw new BusinessException(404, "证据不存在");
+        }
+        permissionUtil.checkProjectAccess(item.getProjectId(), userId);
+        EvidenceListItemVO vo = new EvidenceListItemVO();
+        vo.setEvidenceId(item.getId());
+        vo.setProjectId(item.getProjectId());
+        vo.setTitle(item.getTitle());
+        vo.setBizType(item.getBizType());
+        vo.setContentType(item.getContentType());
+        vo.setStatus(item.getStatus());
+        vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
+        vo.setCreatedBy(item.getCreatedBy());
+        vo.setCreatedAt(item.getCreatedAt());
+        vo.setUpdatedAt(item.getUpdatedAt());
+        EvidenceVersion latest = evidenceVersionMapper.selectLatestVersionByEvidenceId(item.getId());
+        if (latest != null) {
+            LatestVersionVO lv = new LatestVersionVO();
+            lv.setVersionId(latest.getId());
+            lv.setVersionNo(latest.getVersionNo());
+            lv.setOriginalFilename(latest.getOriginalFilename());
+            lv.setFilePath(latest.getFilePath());
+            lv.setFileSize(latest.getFileSize());
+            lv.setCreatedAt(latest.getCreatedAt());
+            vo.setLatestVersion(lv);
+        }
+        return vo;
+    }
+
+    /**
+     * 证据状态流转：提交（DRAFT -> SUBMITTED）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void submitEvidence(Long id, String username) {
+        UUID userId = resolveCreatedByUuid(username);
+        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+        EvidenceItem item = evidenceItemMapper.selectById(id);
+        if (item == null) throw new BusinessException(404, "证据不存在");
+        permissionUtil.checkProjectAccess(item.getProjectId(), userId);
+        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus());
+        EvidenceStatus currentStatus = EvidenceStatus.fromCode(current);
+        currentStatus.validateTransition(EvidenceStatus.SUBMITTED);
+        int n = evidenceItemMapper.updateEvidenceStatus(id, EvidenceStatus.SUBMITTED.getCode(), null, null, currentStatus.getCode());
+        if (n == 0) throw new BusinessException(400, "证据状态已变更，请刷新后重试");
+    }
+
+    /**
+     * 证据状态流转：归档（SUBMITTED -> ARCHIVED）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void archiveEvidence(Long id, String username) {
+        UUID userId = resolveCreatedByUuid(username);
+        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+        EvidenceItem item = evidenceItemMapper.selectById(id);
+        if (item == null) throw new BusinessException(404, "证据不存在");
+        permissionUtil.checkProjectAccess(item.getProjectId(), userId);
+        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus());
+        EvidenceStatus currentStatus = EvidenceStatus.fromCode(current);
+        currentStatus.validateTransition(EvidenceStatus.ARCHIVED);
+        OffsetDateTime now = OffsetDateTime.now();
+        int n = evidenceItemMapper.updateEvidenceStatus(id, EvidenceStatus.ARCHIVED.getCode(), now, null, currentStatus.getCode());
+        if (n == 0) throw new BusinessException(400, "证据状态已变更，请刷新后重试");
+    }
+
+    /**
+     * 证据状态流转：作废（SUBMITTED -> INVALID）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void invalidateEvidence(Long id, String username) {
+        UUID userId = resolveCreatedByUuid(username);
+        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+        EvidenceItem item = evidenceItemMapper.selectById(id);
+        if (item == null) throw new BusinessException(404, "证据不存在");
+        permissionUtil.checkProjectAccess(item.getProjectId(), userId);
+        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus());
+        EvidenceStatus currentStatus = EvidenceStatus.fromCode(current);
+        currentStatus.validateTransition(EvidenceStatus.INVALID);
+        OffsetDateTime now = OffsetDateTime.now();
+        int n = evidenceItemMapper.updateEvidenceStatus(id, EvidenceStatus.INVALID.getCode(), null, now, currentStatus.getCode());
+        if (n == 0) throw new BusinessException(400, "证据状态已变更，请刷新后重试");
     }
 
     /**

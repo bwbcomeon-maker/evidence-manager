@@ -8,8 +8,8 @@
         <van-cell title="文件类型" :value="evidence.contentType || '—'" />
         <van-cell title="状态">
           <template #value>
-            <van-tag :type="evidence.status === 'invalid' ? 'danger' : 'success'">
-              {{ evidence.status === 'invalid' ? '作废' : evidence.status === 'archived' ? '归档' : '有效' }}
+            <van-tag :type="lifecycleTagType(evidence.evidenceStatus || evidence.status)">
+              {{ lifecycleStatusText(evidence.evidenceStatus || evidence.status) }}
             </van-tag>
           </template>
         </van-cell>
@@ -21,16 +21,9 @@
       <div class="actions">
         <van-button type="primary" block icon="eye-o" @click="handlePreview">预览</van-button>
         <van-button type="primary" block plain icon="down" @click="handleDownload">下载</van-button>
-        <van-button
-          v-if="canVoid"
-          type="danger"
-          block
-          plain
-          icon="warning-o"
-          @click="handleVoid"
-        >
-          作废
-        </van-button>
+        <van-button v-if="canSubmit" type="primary" block plain @click="handleSubmit">提交</van-button>
+        <van-button v-if="canArchive" type="primary" block plain @click="handleArchive">归档</van-button>
+        <van-button v-if="canVoid" type="danger" block plain icon="warning-o" @click="handleVoid">作废</van-button>
       </div>
     </template>
     <van-empty v-else description="无法加载详情，请从列表进入" />
@@ -41,7 +34,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Cell, CellGroup, Button, Tag, Empty, showToast, showLoadingToast, showSuccessToast, closeToast, showConfirmDialog } from 'vant'
-import { downloadVersionFile, type EvidenceListItem } from '@/api/evidence'
+import {
+  downloadVersionFile,
+  getEvidenceById,
+  submitEvidence,
+  archiveEvidence,
+  invalidateEvidence,
+  type EvidenceListItem,
+  type EvidenceStatus
+} from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/format'
 
@@ -52,15 +53,35 @@ const auth = useAuthStore()
 const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
 
-const canVoid = computed(() => {
-  return auth.isAdmin
-})
+function lifecycleStatusText(s: string): string {
+  const m: Record<string, string> = { DRAFT: '草稿', SUBMITTED: '已提交', ARCHIVED: '已归档', INVALID: '已作废', invalid: '已作废', archived: '已归档', active: '有效' }
+  return m[s] || s
+}
 
+function lifecycleTagType(s: string): 'success' | 'danger' | 'default' | 'primary' {
+  if (s === 'INVALID' || s === 'invalid') return 'danger'
+  if (s === 'ARCHIVED' || s === 'archived') return 'success'
+  if (s === 'SUBMITTED') return 'primary'
+  return 'default'
+}
+
+const canSubmit = computed(() => (evidence.value?.evidenceStatus || evidence.value?.status) === 'DRAFT')
+const canArchive = computed(() => (evidence.value?.evidenceStatus || evidence.value?.status) === 'SUBMITTED' && auth.isAdmin)
+const canVoid = computed(() => (evidence.value?.evidenceStatus || evidence.value?.status) === 'SUBMITTED' && auth.isAdmin)
 
 function initFromState() {
   const state = history.state as { evidence?: EvidenceListItem } | undefined
   if (state?.evidence && state.evidence.evidenceId === evidenceId.value) {
     evidence.value = state.evidence
+  }
+}
+
+async function fetchDetail() {
+  try {
+    const res = await getEvidenceById(evidenceId.value) as { code: number; data?: EvidenceListItem }
+    if (res?.code === 0 && res.data) evidence.value = res.data
+  } catch {
+    evidence.value = null
   }
 }
 
@@ -117,17 +138,71 @@ async function handleDownload() {
   }
 }
 
+async function handleSubmit() {
+  try {
+    showLoadingToast({ message: '提交中...', forbidClick: true, duration: 0 })
+    const res = await submitEvidence(evidenceId.value) as { code: number; message?: string }
+    if (res?.code === 0) {
+      showSuccessToast('已提交')
+      await fetchDetail()
+    } else {
+      showToast(res?.message || '提交失败')
+    }
+  } catch (e: any) {
+    showToast(e?.response?.data?.message || e?.message || '提交失败')
+  } finally {
+    closeToast()
+  }
+}
+
+async function handleArchive() {
+  showConfirmDialog({ title: '确认归档', message: '确定将该证据归档吗？归档后为最终有效状态。' })
+    .then(async () => {
+      try {
+        showLoadingToast({ message: '归档中...', forbidClick: true, duration: 0 })
+        const res = await archiveEvidence(evidenceId.value) as { code: number; message?: string }
+        if (res?.code === 0) {
+          showSuccessToast('已归档')
+          await fetchDetail()
+        } else {
+          showToast(res?.message || '归档失败')
+        }
+      } catch (e: any) {
+        showToast(e?.response?.data?.message || e?.message || '归档失败')
+      } finally {
+        closeToast()
+      }
+    })
+    .catch(() => {})
+}
+
 function handleVoid() {
   showConfirmDialog({
     title: '确认作废',
     message: '确定要将该证据标记为作废吗？作废后仍可查看与下载，但会列入作废证据。'
-  }).then(() => {
-    showToast('作废功能需后端接口支持，敬请期待')
-  }).catch(() => {})
+  })
+    .then(async () => {
+      try {
+        showLoadingToast({ message: '作废中...', forbidClick: true, duration: 0 })
+        const res = await invalidateEvidence(evidenceId.value) as { code: number; message?: string }
+        if (res?.code === 0) {
+          showSuccessToast('已作废')
+          await fetchDetail()
+        } else {
+          showToast(res?.message || '作废失败')
+        }
+      } catch (e: any) {
+        showToast(e?.response?.data?.message || e?.message || '作废失败')
+      } finally {
+        closeToast()
+      }
+    })
+    .catch(() => {})
 }
 
 onMounted(() => {
   initFromState()
+  if (!evidence.value) fetchDetail()
 })
 </script>
 

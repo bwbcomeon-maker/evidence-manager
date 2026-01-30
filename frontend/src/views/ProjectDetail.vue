@@ -518,20 +518,12 @@ onMounted(() => {
   height: 28px;
   padding: 0 10px;
   border: none;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #1989fa 0%, #0d6efd 50%, #0a58ca 100%);
-  box-shadow: 0 2px 8px rgba(25, 137, 250, 0.35);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 4px;
+  background: var(--van-primary-color);
 }
 
 .cell-actions .preview-btn :deep(.van-icon) {
   font-size: 16px;
   color: #fff;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
-}
-
-.cell-actions .preview-btn:active {
-  transform: scale(0.96);
-  box-shadow: 0 1px 4px rgba(25, 137, 250, 0.4);
 }
 </style>
