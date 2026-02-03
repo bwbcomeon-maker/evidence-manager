@@ -15,7 +15,7 @@ public class Project {
     private Long id;
 
     /**
-     * ????
+     * 项目令号（唯一，创建时手动填写）
      */
     private String code;
 

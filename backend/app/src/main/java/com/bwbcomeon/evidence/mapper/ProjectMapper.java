@@ -17,7 +17,7 @@ public interface ProjectMapper {
     Project selectById(@Param("id") Long id);
 
     /**
-     * 根据项目编号查询项目
+     * 根据项目令号查询项目
      */
     Project selectByCode(@Param("code") String code);
 
@@ -30,6 +30,11 @@ public interface ProjectMapper {
      * 查询所有项目
      */
     List<Project> selectAll();
+
+    /**
+     * 根据ID列表查询项目（保持 created_at 倒序）
+     */
+    List<Project> selectByIds(@Param("ids") List<Long> ids);
 
     /**
      * 插入项目

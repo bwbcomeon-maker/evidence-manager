@@ -1,7 +1,10 @@
 import axios from 'axios'
 
-// baseURL 按项目配置，开发时走 Vite 代理 /api -> 后端
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? '/api'
+// baseURL：开发时用 /api（Vite 代理到后端）；直连时须为完整地址且以 /api 结尾，如 http://localhost:8081/api
+let baseURL = import.meta.env.VITE_API_BASE_URL ?? '/api'
+if (baseURL !== '/api' && !baseURL.endsWith('/api')) {
+  baseURL = baseURL.replace(/\/?$/, '') + '/api'
+}
 
 const http = axios.create({
   baseURL,

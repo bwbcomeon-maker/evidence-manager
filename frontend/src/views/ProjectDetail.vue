@@ -4,8 +4,10 @@
       <van-tabs v-model:active="activeTab" sticky>
         <!-- 详情 Tab -->
         <van-tab title="详情">
-          <van-cell-group v-if="project">
-            <van-cell title="项目编号" :value="project.code" />
+          <van-loading v-if="projectLoading" class="detail-loading" vertical>加载中...</van-loading>
+          <van-empty v-else-if="projectError" :description="projectError" />
+          <van-cell-group v-else-if="project">
+            <van-cell title="项目令号" :value="project.code" />
             <van-cell title="项目名称" :value="project.name" />
             <van-cell title="项目描述" :value="project.description" />
             <van-cell title="项目状态">
@@ -221,6 +223,7 @@ import {
   List,
   PullRefresh,
   Empty,
+  Loading,
   Dialog,
   Form,
   Field,
@@ -241,6 +244,7 @@ import {
   invalidateEvidence,
   type EvidenceListItem
 } from '@/api/evidence'
+import { getProjectDetail } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
@@ -256,19 +260,11 @@ interface Project {
 
 const route = useRoute()
 const router = useRouter()
-const projectId = Number(route.params.id)
+const projectId = computed(() => Number(route.params.id))
 const project = ref<Project | null>(null)
+const projectLoading = ref(false)
+const projectError = ref('')
 const activeTab = ref(0)
-
-// Mock 项目数据
-const mockProject: Project = {
-  id: projectId,
-  code: 'PROJ-001',
-  name: '智慧城市项目',
-  description: '智慧城市综合管理平台开发项目，包括数据采集、分析、可视化等功能模块。',
-  status: 'active',
-  createdAt: '2024-01-15 10:30:00'
-}
 
 // 证据列表相关
 const evidenceList = ref<EvidenceListItem[]>([])
@@ -375,7 +371,7 @@ function closeUploadDialog() {
 
 // 跳转证据详情
 function goToEvidenceDetail(id: number) {
-  router.push({ path: `/evidence/detail/${id}`, query: { fromProject: String(projectId) } })
+  router.push({ path: `/evidence/detail/${id}`, query: { fromProject: String(projectId.value) } })
 }
 
 // 文件类型映射
@@ -387,11 +383,33 @@ const getFileTypeText = (contentType: string) => {
   return '文件'
 }
 
-// 加载项目信息
-const loadProject = () => {
-  setTimeout(() => {
-    project.value = mockProject
-  }, 300)
+// 加载项目信息（真实 API）
+const loadProject = async () => {
+  projectError.value = ''
+  projectLoading.value = true
+  try {
+    const res = await getProjectDetail(projectId.value)
+    if (res.code === 0 && res.data) {
+      const p = res.data
+      project.value = {
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        description: p.description ?? '',
+        status: p.status,
+        createdAt: p.createdAt ?? ''
+      }
+    } else {
+      projectError.value = res.message || '加载失败'
+    }
+  } catch (e: any) {
+    projectError.value = e?.message || '加载失败'
+    if (e?.response?.data?.code === 403) {
+      projectError.value = '无权限访问该项目'
+    }
+  } finally {
+    projectLoading.value = false
+  }
 }
 
 // 加载证据列表
@@ -409,7 +427,7 @@ const loadEvidenceList = async () => {
       params.contentType = filterContentType.value
     }
     
-    const response = await getEvidenceList(projectId, params)
+    const response = await getEvidenceList(projectId.value, params)
     if (response.code === 0) {
       evidenceList.value = response.data || []
       finished.value = true
@@ -569,7 +587,7 @@ const handleUpload = async () => {
     }
     formData.append('file', file)
 
-    const response = (await uploadEvidence(projectId, formData)) as {
+    const response = (await uploadEvidence(projectId.value, formData)) as {
       code: number
       message?: string
       data?: {
@@ -666,7 +684,7 @@ async function handleUploadResultInvalidate() {
 function goToUploadResultDetail() {
   if (uploadResult.value) {
     closeUploadDialog()
-    router.push({ path: `/evidence/detail/${uploadResult.value.evidenceId}`, query: { fromProject: String(projectId) } })
+    router.push({ path: `/evidence/detail/${uploadResult.value.evidenceId}`, query: { fromProject: String(projectId.value) } })
   }
 }
 
@@ -693,6 +711,11 @@ watch(activeTab, (newVal) => {
     loadEvidenceList()
   }
 })
+
+// 路由 projectId 变化时重新加载详情
+watch(() => route.params.id, () => {
+  if (projectId.value) loadProject()
+}, { immediate: false })
 
 // 从证据详情返回时带 ?tab=evidence，需激活证据 Tab
 watch(() => route.query.tab, (tab) => {
@@ -825,5 +848,11 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.detail-loading {
+  padding: 24px;
+  display: flex;
+  justify-content: center;
 }
 </style>
