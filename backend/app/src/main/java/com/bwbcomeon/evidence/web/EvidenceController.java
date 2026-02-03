@@ -1,9 +1,11 @@
 package com.bwbcomeon.evidence.web;
 
+import com.bwbcomeon.evidence.dto.AuthUserVO;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.EvidenceResponse;
 import com.bwbcomeon.evidence.dto.Result;
 import com.bwbcomeon.evidence.service.EvidenceService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,22 +39,24 @@ public class EvidenceController {
      */
     @PostMapping("/{projectId}/evidences")
     public Result<EvidenceResponse> uploadEvidence(
+            HttpServletRequest request,
             @PathVariable Long projectId,
             @RequestParam("name") String name,
             @RequestParam("type") String type,
             @RequestParam(value = "remark", required = false) String remark,
             @RequestParam("file") MultipartFile file) {
-        
-        // TODO: MVP阶段暂时使用固定用户ID，后续需要从认证信息中获取
-        // 这里使用一个示例UUID，实际应该从SecurityContext或JWT中获取
-        UUID currentUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        
-        logger.info("Upload evidence request: projectId={}, name={}, type={}, fileName={}", 
-                   projectId, name, type, file.getOriginalFilename());
-        
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
+        if (currentUserId == null) {
+            return Result.error(403, "无法解析当前用户");
+        }
+        logger.info("Upload evidence request: projectId={}, name={}, type={}, fileName={}, userId={}",
+                   projectId, name, type, file.getOriginalFilename(), currentUserId);
         EvidenceResponse response = evidenceService.uploadEvidence(
             projectId, name, type, remark, file, currentUserId);
-        
         return Result.success(response);
     }
 
@@ -69,21 +73,24 @@ public class EvidenceController {
      */
     @GetMapping("/{projectId}/evidences")
     public Result<List<EvidenceListItemVO>> listEvidences(
+            HttpServletRequest request,
             @PathVariable Long projectId,
             @RequestParam(value = "nameLike", required = false) String nameLike,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "bizType", required = false) String bizType,
             @RequestParam(value = "contentType", required = false) String contentType) {
-        
-        // TODO: MVP阶段暂时使用固定用户ID，后续需要从认证信息中获取
-        UUID currentUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        
-        logger.info("List evidences request: projectId={}, nameLike={}, status={}, bizType={}, contentType={}", 
-                   projectId, nameLike, status, bizType, contentType);
-        
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
+        if (currentUserId == null) {
+            return Result.error(403, "无法解析当前用户");
+        }
+        logger.info("List evidences request: projectId={}, nameLike={}, status={}, bizType={}, contentType={}, userId={}",
+                   projectId, nameLike, status, bizType, contentType, currentUserId);
         List<EvidenceListItemVO> result = evidenceService.listEvidences(
                 projectId, nameLike, status, bizType, contentType, currentUserId);
-        
         return Result.success(result);
     }
 }

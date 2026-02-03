@@ -4,9 +4,13 @@ import com.bwbcomeon.evidence.dto.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.stream.Collectors;
 
 /**
  * 全局异常处理器
@@ -38,6 +42,16 @@ public class GlobalExceptionHandler {
     public Result<?> handleForbidden(ForbiddenException e) {
         logger.warn("Forbidden: {}", e.getMessage());
         return Result.error(403, e.getMessage());
+    }
+
+    /** 请求体验证失败（@Valid）→ 400 */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Result<?> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining("; "));
+        logger.warn("Validation failed: {}", message);
+        return Result.error(400, message);
     }
 
     /**
