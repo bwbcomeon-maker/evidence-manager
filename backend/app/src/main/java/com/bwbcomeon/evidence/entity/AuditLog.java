@@ -39,4 +39,13 @@ public class AuditLog {
 
     /** 操作时间 */
     private LocalDateTime createdAt;
+
+    /** 关联项目ID（如证据作废、项目成员变更等） */
+    private Long projectId;
+
+    /** 变更前数据快照（JSON） */
+    private String beforeData;
+
+    /** 变更后数据快照（JSON） */
+    private String afterData;
 }

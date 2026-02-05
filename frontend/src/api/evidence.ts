@@ -3,6 +3,15 @@ import http from './http'
 /** 证据生命周期状态 */
 export type EvidenceStatus = 'DRAFT' | 'SUBMITTED' | 'ARCHIVED' | 'INVALID'
 
+/** V1 统一权限位（与后端同源） */
+export interface PermissionBits {
+  canUpload?: boolean
+  canSubmit?: boolean
+  canArchive?: boolean
+  canInvalidate?: boolean
+  canManageMembers?: boolean
+}
+
 export interface EvidenceListItem {
   evidenceId: number
   projectId: number
@@ -14,6 +23,12 @@ export interface EvidenceListItem {
   createdBy: string
   createdAt: string
   updatedAt: string
+  permissions?: PermissionBits
+  canInvalidate?: boolean
+  /** 作废原因/人/时间（INVALID 时有值） */
+  invalidReason?: string
+  invalidBy?: string
+  invalidAt?: string
   latestVersion: {
     versionId: number
     versionNo: number
@@ -84,7 +99,8 @@ export const getEvidenceById = (id: number) => {
 // 证据状态流转
 export const submitEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/submit`)
 export const archiveEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/archive`)
-export const invalidateEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/invalidate`)
+export const invalidateEvidence = (id: number, invalidReason: string) =>
+  http.post<{ code: number; message: string }>(`/evidence/${id}/invalidate`, { invalidReason })
 
 // 上传证据
 export const uploadEvidence = (projectId: number, formData: FormData) => {

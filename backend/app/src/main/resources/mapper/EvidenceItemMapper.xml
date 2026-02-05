@@ -218,4 +218,17 @@
           AND COALESCE(evidence_status, status, '') = #{expectedCurrentStatus}
     </update>
 
+    <!-- 作废证据：写入 evidence_status/invalid_time/invalid_reason/invalid_by/invalid_at（时间优先 invalid_at），状态保护：仅当未作废时更新 -->
+    <update id="updateEvidenceInvalidate">
+        UPDATE evidence_item
+        SET evidence_status = #{evidenceStatus},
+            invalid_time = #{invalidTime},
+            invalid_reason = #{invalidReason},
+            invalid_by = #{invalidBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            invalid_at = #{invalidAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND COALESCE(evidence_status, '') &lt;&gt; 'INVALID'
+    </update>
+
 </mapper>

@@ -3,6 +3,7 @@
     <div class="content">
       <div class="toolbar">
         <van-button type="primary" size="small" @click="showCreate = true">新建项目</van-button>
+        <van-button v-if="canImportProjects" type="primary" size="small" plain @click="showImport = true">批量导入</van-button>
       </div>
       <van-pull-refresh v-model="loading" @refresh="onRefresh">
         <van-list
@@ -66,14 +67,38 @@
         </van-form>
       </div>
     </van-popup>
+
+    <van-popup v-model:show="showImport" position="bottom" round :style="{ padding: '16px', maxHeight: '80vh' }">
+      <div class="import-form">
+        <h3 class="form-title">批量导入项目</h3>
+        <p class="import-tip">仅 SYSTEM_ADMIN / PMO 可导入。模板列：项目令号、项目名称、项目描述。</p>
+        <a :href="importTemplateUrl" target="_blank" rel="noopener" class="download-link">下载模板</a>
+        <van-field name="file" label="选择文件">
+          <template #input>
+            <input type="file" accept=".xlsx,.xls" @change="onImportFileChange" />
+          </template>
+        </van-field>
+        <van-button block type="primary" :loading="importLoading" :disabled="!importFile" @click="onImportSubmit">上传导入</van-button>
+        <div v-if="importResult" class="import-result">
+          <p>共 {{ importResult.total }} 行，成功 {{ importResult.successCount }}，失败 {{ importResult.failCount }}</p>
+          <div v-if="importResult.details?.length" class="import-details">
+            <div v-for="d in importResult.details" :key="d.row" class="detail-row" :class="{ fail: !d.success }">
+              第{{ d.row }}行 {{ d.code }} {{ d.success ? '✓' : '✗' }} {{ d.message }}
+            </div>
+          </div>
+        </div>
+        <van-button block plain class="mt" @click="showImport = false">关闭</van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag } from 'vant'
-import { createProject, getProjects, type ProjectVO } from '@/api/projects'
+import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, type ProjectVO, type ProjectImportResult } from '@/api/projects'
+import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 
 interface Project {
@@ -85,6 +110,13 @@ interface Project {
 }
 
 const router = useRouter()
+const auth = useAuthStore()
+const canImportProjects = computed(() => {
+  const code = auth.currentUser?.roleCode
+  return code === 'SYSTEM_ADMIN' || code === 'PMO'
+})
+const importTemplateUrl = getProjectImportTemplateUrl()
+
 const loading = ref(false)
 const listLoading = ref(false)
 const finished = ref(false)
@@ -94,6 +126,35 @@ const listError = ref('')
 const showCreate = ref(false)
 const createLoading = ref(false)
 const createForm = ref({ code: '', name: '', description: '' })
+
+const showImport = ref(false)
+const importFile = ref<File | null>(null)
+const importLoading = ref(false)
+const importResult = ref<ProjectImportResult | null>(null)
+function onImportFileChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  importFile.value = target.files?.[0] ?? null
+  importResult.value = null
+}
+async function onImportSubmit() {
+  if (!importFile.value) return
+  importLoading.value = true
+  importResult.value = null
+  try {
+    const res = await importProjects(importFile.value)
+    if (res.code === 0 && res.data) {
+      importResult.value = res.data
+      showToast(res.data.failCount === 0 ? '导入完成' : `成功 ${res.data.successCount}，失败 ${res.data.failCount}`)
+      if (res.data.successCount > 0) loadProjects()
+    } else {
+      showToast(res.message || '导入失败')
+    }
+  } catch (e: any) {
+    showToast(e?.message || '导入失败')
+  } finally {
+    importLoading.value = false
+  }
+}
 
 const loadProjects = async () => {
   listError.value = ''
@@ -178,7 +239,7 @@ const onCreateSubmit = async () => {
     createLoading.value = false
   }
 }
-
+direction
 onMounted(() => {
   loadProjects()
 })

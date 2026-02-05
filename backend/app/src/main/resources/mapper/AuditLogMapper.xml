@@ -13,15 +13,18 @@
         <result column="user_agent" property="userAgent" jdbcType="VARCHAR"/>
         <result column="detail" property="detail" jdbcType="VARCHAR"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="project_id" property="projectId" jdbcType="BIGINT"/>
+        <result column="before_data" property="beforeData" jdbcType="VARCHAR"/>
+        <result column="after_data" property="afterData" jdbcType="VARCHAR"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, actor_user_id, action, target_type, target_id, success, ip, user_agent, detail, created_at
+        id, actor_user_id, action, target_type, target_id, success, ip, user_agent, detail, created_at, project_id, before_data, after_data
     </sql>
 
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuditLog" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO audit_log (
-            actor_user_id, action, target_type, target_id, success, ip, user_agent, detail, created_at
+            actor_user_id, action, target_type, target_id, success, ip, user_agent, detail, created_at, project_id, before_data, after_data
         )
         VALUES (
             #{actorUserId},
@@ -32,7 +35,10 @@
             #{ip},
             #{userAgent},
             #{detail},
-            COALESCE(#{createdAt}, now())
+            COALESCE(#{createdAt}, now()),
+            #{projectId},
+            cast(#{beforeData} as jsonb),
+            cast(#{afterData} as jsonb)
         )
     </insert>
 

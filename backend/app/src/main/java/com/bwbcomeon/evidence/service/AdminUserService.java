@@ -23,8 +23,10 @@ import java.util.stream.Collectors;
 @Service
 public class AdminUserService {
 
+    /** V1：系统级角色 SYSTEM_ADMIN / PMO / AUDITOR；PROJECT_* 保留仅作存量兼容，不再参与权限判断 */
     public static final Set<String> VALID_ROLE_CODES = Set.of(
-            "SYSTEM_ADMIN", "PROJECT_OWNER", "PROJECT_EDITOR", "PROJECT_VIEWER", "PROJECT_AUDITOR"
+            "SYSTEM_ADMIN", "PMO", "AUDITOR",
+            "PROJECT_OWNER", "PROJECT_EDITOR", "PROJECT_VIEWER", "PROJECT_AUDITOR"
     );
     private static final String DEFAULT_PASSWORD = "Init@12345";
     private static final String CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

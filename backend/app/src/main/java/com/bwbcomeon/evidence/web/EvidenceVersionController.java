@@ -4,6 +4,9 @@ import com.bwbcomeon.evidence.dto.AuthUserVO;
 import com.bwbcomeon.evidence.dto.PageResult;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.Result;
+import com.bwbcomeon.evidence.exception.ForbiddenException;
+import com.bwbcomeon.evidence.exception.UnauthorizedException;
+import com.bwbcomeon.evidence.service.AuthService;
 import com.bwbcomeon.evidence.service.EvidenceService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -29,6 +32,9 @@ public class EvidenceVersionController {
 
     @Autowired
     private EvidenceService evidenceService;
+
+    @Autowired
+    private AuthService authService;
 
     /**
      * 全局证据分页列表（仅当前用户可见项目内证据，默认不含作废）
@@ -65,7 +71,7 @@ public class EvidenceVersionController {
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        EvidenceListItemVO data = evidenceService.getEvidenceById(id, user.getUsername());
+        EvidenceListItemVO data = evidenceService.getEvidenceById(id, user.getUsername(), user.getRoleCode());
         return Result.success(data);
     }
 
@@ -79,7 +85,7 @@ public class EvidenceVersionController {
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        evidenceService.submitEvidence(id, user.getUsername());
+        evidenceService.submitEvidence(id, user.getUsername(), user.getRoleCode());
         return Result.success(null);
     }
 
@@ -93,39 +99,50 @@ public class EvidenceVersionController {
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        evidenceService.archiveEvidence(id, user.getUsername());
+        evidenceService.archiveEvidence(id, user.getUsername(), user.getRoleCode());
         return Result.success(null);
     }
 
     /**
-     * 证据状态流转：作废（SUBMITTED -> INVALID）
+     * 证据状态流转：作废（DRAFT/SUBMITTED -> INVALID），仅项目责任人可操作，请求体需传 invalidReason
      * POST /api/evidence/{id}/invalidate
      */
     @PostMapping("/{id}/invalidate")
     public Result<Void> invalidateEvidence(
             HttpServletRequest request,
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        evidenceService.invalidateEvidence(id, user.getUsername());
+        String invalidReason = body != null ? body.get("invalidReason") : null;
+        com.bwbcomeon.evidence.dto.InvalidateAuditInfo info =
+                evidenceService.invalidateEvidence(id, user.getUsername(), user.getRoleCode(), invalidReason);
+        String detail = (invalidReason != null && !invalidReason.isBlank()) ? "作废原因: " + invalidReason : "证据作废";
+        authService.recordAudit(request, "EVIDENCE_INVALIDATE", true, user.getId(), null, null, detail,
+                "EVIDENCE", id, info.getProjectId(), info.getBeforeData(), info.getAfterData());
         return Result.success(null);
     }
 
     /**
-     * 下载证据版本文件
+     * 下载证据版本文件（预览/下载共用，按当前登录用户做项目权限校验）
      * GET /api/evidence/versions/{versionId}/download
-     * 
+     *
      * @param versionId 版本ID
      * @return 文件资源（附件形式）
      */
     @GetMapping("/versions/{versionId}/download")
-    public ResponseEntity<Resource> downloadVersionFile(@PathVariable Long versionId) {
-        // TODO: MVP阶段暂时使用固定用户ID，后续需要从认证信息中获取
-        UUID currentUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-        
-        logger.info("Download version file request: versionId={}", versionId);
-        
-        // 获取文件资源
+    public ResponseEntity<Resource> downloadVersionFile(
+            HttpServletRequest request,
+            @PathVariable Long versionId) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            throw new UnauthorizedException("未登录");
+        }
+        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
+        if (currentUserId == null) {
+            throw new ForbiddenException("无法解析当前用户");
+        }
+        logger.info("Download version file request: versionId={}, userId={}", versionId, currentUserId);
         Resource resource = evidenceService.downloadVersionFile(versionId, currentUserId);
         
         // 获取原始文件名和Content-Type

@@ -3,6 +3,7 @@ package com.bwbcomeon.evidence.mapper;
 import com.bwbcomeon.evidence.entity.AuthUser;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -20,6 +21,11 @@ public interface AuthUserMapper {
      * 根据用户名查询用户
      */
     AuthUser selectByUsername(@Param("username") String username);
+
+    /**
+     * 根据ID列表批量查询用户（用于成员列表展示）
+     */
+    List<AuthUser> selectByIds(@Param("ids") List<UUID> ids);
 
     /**
      * 查询所有用户

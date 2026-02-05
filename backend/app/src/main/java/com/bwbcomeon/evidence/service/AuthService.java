@@ -105,6 +105,15 @@ public class AuthService {
      */
     public void recordAudit(HttpServletRequest request, String action, boolean success,
                             Long actorUserId, String ip, String userAgent, String detail) {
+        recordAudit(request, action, success, actorUserId, ip, userAgent, detail, null, null, null, null, null);
+    }
+
+    /**
+     * 写入审计日志（含目标类型/ID、项目ID、变更前后快照，供证据作废等场景）
+     */
+    public void recordAudit(HttpServletRequest request, String action, boolean success,
+                            Long actorUserId, String ip, String userAgent, String detail,
+                            String targetType, Long targetId, Long projectId, String beforeData, String afterData) {
         if (ip == null && request != null) {
             ip = WebUtils.getClientIp(request);
         }
@@ -119,6 +128,11 @@ public class AuthService {
         log.setUserAgent(userAgent);
         log.setDetail(detail);
         log.setCreatedAt(LocalDateTime.now());
+        log.setTargetType(targetType);
+        log.setTargetId(targetId);
+        log.setProjectId(projectId);
+        log.setBeforeData(beforeData);
+        log.setAfterData(afterData);
         auditLogMapper.insert(log);
     }
 

@@ -15,6 +15,11 @@
         </van-cell>
         <van-cell title="上传人" :value="evidence.createdBy || '—'" />
         <van-cell title="上传时间" :value="formatDateTime(evidence.createdAt)" />
+        <template v-if="effectiveStatus === 'INVALID' && (evidence.invalidReason || evidence.invalidBy || evidence.invalidAt)">
+          <van-cell title="作废原因" :value="evidence.invalidReason || '—'" />
+          <van-cell title="作废人" :value="evidence.invalidBy || '—'" />
+          <van-cell title="作废时间" :value="evidence.invalidAt ? formatDateTime(evidence.invalidAt) : '—'" />
+        </template>
         <van-cell v-if="evidence.latestVersion" title="文件名" :value="evidence.latestVersion.originalFilename" />
       </van-cell-group>
 
@@ -25,6 +30,23 @@
         <van-button v-if="canArchive" type="primary" block plain @click="handleArchive">归档</van-button>
         <van-button v-if="canVoid" type="danger" block plain icon="warning-o" @click="handleVoid">作废</van-button>
       </div>
+
+      <!-- 作废原因弹窗 -->
+      <van-dialog
+        v-model:show="showInvalidateReasonDialog"
+        title="确认作废"
+        show-cancel-button
+        :before-close="onInvalidateReasonConfirm"
+      >
+        <van-field
+          v-model="invalidateReasonText"
+          type="textarea"
+          rows="3"
+          placeholder="请填写作废原因（必填）"
+          maxlength="500"
+          show-word-limit
+        />
+      </van-dialog>
     </template>
     <van-empty v-else description="无法加载详情，请从列表进入" />
   </div>
@@ -33,7 +55,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Cell, CellGroup, Button, Tag, Empty, showToast, showLoadingToast, showSuccessToast, closeToast, showConfirmDialog } from 'vant'
+import { Cell, CellGroup, Button, Tag, Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, closeToast, showConfirmDialog } from 'vant'
 import {
   downloadVersionFile,
   getEvidenceById,
@@ -52,17 +74,18 @@ const auth = useAuthStore()
 
 const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
+const showInvalidateReasonDialog = ref(false)
+const invalidateReasonText = ref('')
 
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
 const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
 
-const canSubmit = computed(() => effectiveStatus.value === 'DRAFT')
-/** 归档：仅已提交时可操作；权限与「作废证据」页一致：SYSTEM_ADMIN / PROJECT_OWNER / PROJECT_AUDITOR */
-const canArchive = computed(() => effectiveStatus.value === 'SUBMITTED' && auth.canAccessVoidedEvidence)
-/** 作废：草稿或已提交时可操作；权限同上 */
+/** V1：提交/归档/作废只读后端 permissions，兼容扁平 canInvalidate */
+const canSubmit = computed(() => effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
+const canArchive = computed(() => effectiveStatus.value === 'SUBMITTED' && (evidence.value?.permissions?.canArchive === true || evidence.value?.canInvalidate === true))
 const canVoid = computed(() => {
   const s = effectiveStatus.value
-  return (s === 'DRAFT' || s === 'SUBMITTED') && auth.canAccessVoidedEvidence
+  return (s === 'DRAFT' || s === 'SUBMITTED') && (evidence.value?.permissions?.canInvalidate === true || evidence.value?.canInvalidate === true)
 })
 
 function initFromState() {
@@ -178,27 +201,34 @@ async function handleArchive() {
 }
 
 function handleVoid() {
-  showConfirmDialog({
-    title: '确认作废',
-    message: '作废后不可恢复，是否继续？'
-  })
-    .then(async () => {
-      try {
-        showLoadingToast({ message: '作废中...', forbidClick: true, duration: 0 })
-        const res = await invalidateEvidence(evidenceId.value) as { code: number; message?: string }
-        if (res?.code === 0) {
-          showSuccessToast('已作废')
-          await fetchDetail()
-        } else {
-          showToast(res?.message || '作废失败')
-        }
-      } catch (e: any) {
-        showToast(e?.response?.data?.message || e?.message || '作废失败')
-      } finally {
-        closeToast()
-      }
-    })
-    .catch(() => {})
+  invalidateReasonText.value = ''
+  showInvalidateReasonDialog.value = true
+}
+
+async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
+  if (action !== 'confirm') return true
+  const reason = invalidateReasonText.value?.trim()
+  if (!reason) {
+    showToast('请填写作废原因')
+    return false
+  }
+  try {
+    showLoadingToast({ message: '作废中...', forbidClick: true, duration: 0 })
+    const res = await invalidateEvidence(evidenceId.value, reason) as { code: number; message?: string }
+    if (res?.code === 0) {
+      showSuccessToast('已作废')
+      await fetchDetail()
+      invalidateReasonText.value = ''
+      return true
+    }
+    showToast(res?.message || '作废失败')
+    return false
+  } catch (e: any) {
+    showToast(e?.response?.data?.message || e?.message || '作废失败')
+    return false
+  } finally {
+    closeToast()
+  }
 }
 
 onMounted(() => {

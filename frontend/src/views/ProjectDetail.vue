@@ -30,8 +30,8 @@
               <van-dropdown-item v-model="filterContentType" :options="contentTypeOptions" @change="onFilterChange" />
             </van-dropdown-menu>
 
-            <!-- 上传按钮 -->
-            <div class="upload-btn-wrapper">
+            <!-- 上传按钮：仅 canUpload 时显示（V1 只读后端 permissions） -->
+            <div v-if="canUpload" class="upload-btn-wrapper">
               <van-button type="primary" icon="plus" @click="openUploadDialog">
                 上传证据
               </van-button>
@@ -89,6 +89,13 @@
           </div>
         </van-tab>
       </van-tabs>
+
+      <!-- 成员管理入口：底部居中按钮，仅在有权限时显示 -->
+      <div v-if="project?.canManageMembers" class="member-entry-wrap">
+        <van-button type="primary" class="member-entry-btn" @click="goToMembers">
+          成员管理
+        </van-button>
+      </div>
     </div>
 
     <!-- 上传弹窗：两阶段（表单 -> 结果与操作） -->
@@ -196,6 +203,24 @@
       </template>
     </van-dialog>
 
+    <!-- 作废原因弹窗（项目页上传结果内作废） -->
+    <van-dialog
+      v-model:show="showInvalidateReasonDialog"
+      title="确认作废"
+      show-cancel-button
+      :before-close="onInvalidateReasonConfirm"
+    >
+      <van-field
+        v-model="invalidateReasonText"
+        type="textarea"
+        rows="3"
+        placeholder="请填写作废原因（必填）"
+        maxlength="500"
+        show-word-limit
+        class="invalidate-reason-field"
+      />
+    </van-dialog>
+
     <!-- 业务类型选择器 -->
     <van-popup v-model:show="showBizTypePicker" position="bottom">
       <van-picker
@@ -256,6 +281,11 @@ interface Project {
   description: string
   status: string
   createdAt: string
+  permissions?: { canUpload?: boolean; canInvalidate?: boolean; canManageMembers?: boolean }
+  canInvalidate?: boolean
+  canUpload?: boolean
+  currentPmUserId?: string
+  currentPmDisplayName?: string
 }
 
 const route = useRoute()
@@ -313,7 +343,13 @@ const uploadForm = ref({
 })
 const uploadFileList = ref<UploaderFileListItem[]>([])
 const showBizTypePicker = ref(false)
+const showInvalidateReasonDialog = ref(false)
+const invalidateReasonText = ref('')
+const pendingInvalidateEvidenceId = ref<number | null>(null)
 const auth = useAuthStore()
+
+/** V1：上传按钮仅在后端返回 canUpload 时显示 */
+const canUpload = computed(() => project.value?.permissions?.canUpload === true || project.value?.canUpload === true)
 
 // 上传结果：状态展示（与列表/详情统一用 evidenceStatus 优先）
 const uploadResultStatusText = computed(() => mapStatusToText(getEffectiveEvidenceStatus(uploadResult.value)))
@@ -324,7 +360,7 @@ const showUploadResultSubmit = computed(
 const showUploadResultInvalidate = computed(() => {
   const s = getEffectiveEvidenceStatus(uploadResult.value)
   if (!s || s === 'ARCHIVED' || s === 'INVALID') return false
-  return auth.canAccessVoidedEvidence
+  return project.value?.canInvalidate === true
 })
 const bizTypePickerOptions = [
   { text: '方案', value: 'PLAN' },
@@ -374,6 +410,10 @@ function goToEvidenceDetail(id: number) {
   router.push({ path: `/evidence/detail/${id}`, query: { fromProject: String(projectId.value) } })
 }
 
+function goToMembers() {
+  router.push({ path: `/projects/${projectId.value}/members` })
+}
+
 // 文件类型映射
 const getFileTypeText = (contentType: string) => {
   if (contentType?.includes('pdf')) return 'PDF'
@@ -397,7 +437,13 @@ const loadProject = async () => {
         name: p.name,
         description: p.description ?? '',
         status: p.status,
-        createdAt: p.createdAt ?? ''
+        createdAt: p.createdAt ?? '',
+        permissions: p.permissions,
+        canInvalidate: p.canInvalidate ?? false,
+        canManageMembers: p.canManageMembers ?? false,
+        canUpload: p.canUpload ?? p.permissions?.canUpload ?? false,
+        currentPmUserId: p.currentPmUserId,
+        currentPmDisplayName: p.currentPmDisplayName
       }
     } else {
       projectError.value = res.message || '加载失败'
@@ -652,29 +698,41 @@ async function handleUploadResultSubmit() {
   }
 }
 
-// 阶段2：作废
-async function handleUploadResultInvalidate() {
+// 阶段2：作废（先弹出填写原因）
+function handleUploadResultInvalidate() {
   if (!uploadResult.value) return
-  try {
-    await showConfirmDialog({
-      title: '确认作废',
-      message: '作废后不可恢复，确定要作废该证据吗？'
-    })
-  } catch {
-    return
+  pendingInvalidateEvidenceId.value = uploadResult.value.evidenceId
+  invalidateReasonText.value = ''
+  showInvalidateReasonDialog.value = true
+}
+
+async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
+  if (action !== 'confirm') return true
+  const reason = invalidateReasonText.value?.trim()
+  if (!reason) {
+    showToast('请填写作废原因')
+    return false
   }
+  const id = pendingInvalidateEvidenceId.value
+  if (id == null) return true
   invalidateLoading.value = true
   try {
-    const res = (await invalidateEvidence(uploadResult.value.evidenceId)) as { code: number; message?: string }
+    const res = (await invalidateEvidence(id, reason)) as { code: number; message?: string }
     if (res?.code === 0) {
-      uploadResult.value = { ...uploadResult.value!, evidenceStatus: 'INVALID' }
+      if (uploadResult.value?.evidenceId === id) {
+        uploadResult.value = { ...uploadResult.value!, evidenceStatus: 'INVALID' }
+      }
       showSuccessToast('已作废')
       onRefresh()
-    } else {
-      showToast(res?.message || '作废失败')
+      pendingInvalidateEvidenceId.value = null
+      invalidateReasonText.value = ''
+      return true
     }
+    showToast(res?.message || '作废失败')
+    return false
   } catch (e: any) {
     showToast(e?.message || '作废失败')
+    return false
   } finally {
     invalidateLoading.value = false
   }
@@ -854,5 +912,16 @@ onMounted(() => {
   padding: 24px;
   display: flex;
   justify-content: center;
+}
+
+/* 成员管理入口：底部居中按钮 */
+.member-entry-wrap {
+  padding: 24px 16px 32px;
+  display: flex;
+  justify-content: center;
+}
+
+.member-entry-btn {
+  min-width: 160px;
 }
 </style>

@@ -113,4 +113,18 @@ public interface EvidenceItemMapper {
             @Param("invalidTime") java.time.OffsetDateTime invalidTime,
             @Param("expectedCurrentStatus") String expectedCurrentStatus
     );
+
+    /**
+     * 作废证据：更新状态并写入 invalid_reason / invalid_by / invalid_at（时间优先 invalid_at）
+     * 状态保护：WHERE id=? AND evidence_status&lt;&gt;'INVALID'
+     * @return 更新行数，0 表示已作废或状态不允许
+     */
+    int updateEvidenceInvalidate(
+            @Param("id") Long id,
+            @Param("evidenceStatus") String evidenceStatus,
+            @Param("invalidTime") java.time.OffsetDateTime invalidTime,
+            @Param("invalidReason") String invalidReason,
+            @Param("invalidBy") java.util.UUID invalidBy,
+            @Param("invalidAt") java.time.OffsetDateTime invalidAt
+    );
 }

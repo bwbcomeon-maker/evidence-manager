@@ -6,6 +6,7 @@ import java.util.UUID;
 
 /**
  * 证据列表项VO
+ * V1：权限位以 permissions 为准；canInvalidate 保留兼容。
  */
 @Data
 public class EvidenceListItemVO {
@@ -63,4 +64,15 @@ public class EvidenceListItemVO {
      * 最新版本信息
      */
     private LatestVersionVO latestVersion;
+
+    /** V1 统一权限位（前端按钮只读此） */
+    private PermissionBits permissions;
+    /** @deprecated 兼容，与 permissions.canInvalidate 一致 */
+    private Boolean canInvalidate;
+    /** 作废原因（evidence_status=INVALID 时有值） */
+    private String invalidReason;
+    /** 作废人 UUID（INVALID 时有值） */
+    private UUID invalidBy;
+    /** 作废时间（INVALID 时有值） */
+    private OffsetDateTime invalidAt;
 }

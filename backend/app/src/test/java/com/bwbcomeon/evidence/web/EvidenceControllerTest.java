@@ -48,7 +48,7 @@ class EvidenceControllerTest {
         request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
                 new AuthUserVO(10L, "userA", "User A", "USER", true));
         when(evidenceService.resolveCreatedByUuid("userA")).thenReturn(USER_A_UUID);
-        when(evidenceService.listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_UUID)))
+        when(evidenceService.listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_UUID), eq("USER")))
                 .thenReturn(List.of());
 
         Result<List<EvidenceListItemVO>> result = evidenceController.listEvidences(
@@ -56,7 +56,7 @@ class EvidenceControllerTest {
 
         assertThat(result.getCode()).isEqualTo(0);
         verify(evidenceService).resolveCreatedByUuid("userA");
-        verify(evidenceService).listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_UUID));
+        verify(evidenceService).listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_UUID), eq("USER"));
     }
 
     @Test
@@ -64,7 +64,7 @@ class EvidenceControllerTest {
         request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
                 new AuthUserVO(20L, "userB", "User B", "USER", true));
         when(evidenceService.resolveCreatedByUuid("userB")).thenReturn(USER_B_UUID);
-        when(evidenceService.listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_UUID)))
+        when(evidenceService.listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_UUID), eq("USER")))
                 .thenReturn(List.of());
 
         Result<List<EvidenceListItemVO>> result = evidenceController.listEvidences(
@@ -72,7 +72,7 @@ class EvidenceControllerTest {
 
         assertThat(result.getCode()).isEqualTo(0);
         verify(evidenceService).resolveCreatedByUuid("userB");
-        verify(evidenceService).listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_UUID));
+        verify(evidenceService).listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_UUID), eq("USER"));
     }
 
     @Test
@@ -82,7 +82,7 @@ class EvidenceControllerTest {
 
         assertThat(result.getCode()).isEqualTo(401);
         assertThat(result.getMessage()).isEqualTo("未登录");
-        verify(evidenceService, never()).listEvidences(anyLong(), any(), any(), any(), any(), any());
+        verify(evidenceService, never()).listEvidences(anyLong(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -97,7 +97,7 @@ class EvidenceControllerTest {
         assertThat(result.getCode()).isEqualTo(403);
         assertThat(result.getMessage()).isEqualTo("无法解析当前用户");
         verify(evidenceService).resolveCreatedByUuid("unknown");
-        verify(evidenceService, never()).listEvidences(anyLong(), any(), any(), any(), any(), any());
+        verify(evidenceService, never()).listEvidences(anyLong(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

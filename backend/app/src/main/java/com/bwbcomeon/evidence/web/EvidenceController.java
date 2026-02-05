@@ -56,7 +56,7 @@ public class EvidenceController {
         logger.info("Upload evidence request: projectId={}, name={}, type={}, fileName={}, userId={}",
                    projectId, name, type, file.getOriginalFilename(), currentUserId);
         EvidenceResponse response = evidenceService.uploadEvidence(
-            projectId, name, type, remark, file, currentUserId);
+            projectId, name, type, remark, file, currentUserId, user.getRoleCode());
         return Result.success(response);
     }
 
@@ -90,7 +90,7 @@ public class EvidenceController {
         logger.info("List evidences request: projectId={}, nameLike={}, status={}, bizType={}, contentType={}, userId={}",
                    projectId, nameLike, status, bizType, contentType, currentUserId);
         List<EvidenceListItemVO> result = evidenceService.listEvidences(
-                projectId, nameLike, status, bizType, contentType, currentUserId);
+                projectId, nameLike, status, bizType, contentType, currentUserId, user.getRoleCode());
         return Result.success(result);
     }
 }

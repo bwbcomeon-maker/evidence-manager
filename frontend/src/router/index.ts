@@ -3,6 +3,7 @@ import MainLayout from '@/layouts/MainLayout.vue'
 import Home from '@/views/Home.vue'
 import ProjectList from '@/views/ProjectList.vue'
 import ProjectDetail from '@/views/ProjectDetail.vue'
+import ProjectMembers from '@/views/ProjectMembers.vue'
 import EvidenceUpload from '@/views/EvidenceUpload.vue'
 import EvidenceList from '@/views/EvidenceList.vue'
 import EvidenceHome from '@/views/evidence/EvidenceHome.vue'
@@ -17,8 +18,8 @@ import AdminUsers from '@/views/AdminUsers.vue'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 
-/** 可访问「作废证据」页的角色 */
-const VOIDED_EVIDENCE_ROLES = ['SYSTEM_ADMIN', 'PROJECT_OWNER', 'PROJECT_AUDITOR']
+/** V1：作废证据/审计入口 = SYSTEM_ADMIN + AUDITOR；PROJECT_AUDITOR 短期兼容（迁移后为 AUDITOR） */
+const VOIDED_EVIDENCE_ROLES = ['SYSTEM_ADMIN', 'AUDITOR', 'PROJECT_AUDITOR']
 
 const router = createRouter({
   history: createWebHistory(),
@@ -95,6 +96,12 @@ const router = createRouter({
           meta: { title: '项目详情', showTabbar: false, showBack: true }
         },
         {
+          path: 'projects/:id/members',
+          name: 'ProjectMembers',
+          component: ProjectMembers,
+          meta: { title: '成员管理', showTabbar: false, showBack: true }
+        },
+        {
           path: 'projects/:id/upload',
           name: 'EvidenceUpload',
           component: EvidenceUpload,
@@ -123,7 +130,7 @@ router.beforeEach(async (to) => {
 
   const auth = useAuthStore()
 
-  // 作废证据页：需登录 + 需角色 SYSTEM_ADMIN / PROJECT_OWNER / PROJECT_AUDITOR
+  // 作废证据页：需登录 + 需角色 SYSTEM_ADMIN / AUDITOR（PROJECT_AUDITOR 短期兼容）
   if (to.path === '/evidence/voided') {
     const user = await auth.fetchMe()
     if (!user) return { path: '/login', query: { redirect: to.fullPath } }

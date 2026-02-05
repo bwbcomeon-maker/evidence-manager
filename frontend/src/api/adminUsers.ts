@@ -42,12 +42,15 @@ interface ApiResult<T> {
   data: T
 }
 
+/** V1：系统级角色优先；PROJECT_* 已废弃，仅存量兼容 */
 const ROLE_OPTIONS = [
   { text: '系统管理员', value: 'SYSTEM_ADMIN' },
-  { text: '项目负责人', value: 'PROJECT_OWNER' },
-  { text: '项目编辑', value: 'PROJECT_EDITOR' },
-  { text: '项目查看', value: 'PROJECT_VIEWER' },
-  { text: '项目审计', value: 'PROJECT_AUDITOR' }
+  { text: 'PMO（治理）', value: 'PMO' },
+  { text: '审计（只读入口）', value: 'AUDITOR' },
+  { text: '项目负责人（已废弃）', value: 'PROJECT_OWNER' },
+  { text: '项目编辑（已废弃）', value: 'PROJECT_EDITOR' },
+  { text: '项目查看（已废弃）', value: 'PROJECT_VIEWER' },
+  { text: '项目审计（已废弃）', value: 'PROJECT_AUDITOR' }
 ]
 
 export { ROLE_OPTIONS }
