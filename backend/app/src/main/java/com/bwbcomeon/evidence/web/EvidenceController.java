@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 证据控制器
@@ -49,14 +48,10 @@ public class EvidenceController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
-        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (currentUserId == null) {
-            return Result.error(403, "无法解析当前用户");
-        }
         logger.info("Upload evidence request: projectId={}, name={}, type={}, fileName={}, userId={}",
-                   projectId, name, type, file.getOriginalFilename(), currentUserId);
+                   projectId, name, type, file.getOriginalFilename(), user.getId());
         EvidenceResponse response = evidenceService.uploadEvidence(
-            projectId, name, type, remark, file, currentUserId, user.getRoleCode());
+            projectId, name, type, remark, file, user.getId(), user.getRoleCode());
         return Result.success(response);
     }
 
@@ -83,14 +78,10 @@ public class EvidenceController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
-        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (currentUserId == null) {
-            return Result.error(403, "无法解析当前用户");
-        }
         logger.info("List evidences request: projectId={}, nameLike={}, status={}, bizType={}, contentType={}, userId={}",
-                   projectId, nameLike, status, bizType, contentType, currentUserId);
+                   projectId, nameLike, status, bizType, contentType, user.getId());
         List<EvidenceListItemVO> result = evidenceService.listEvidences(
-                projectId, nameLike, status, bizType, contentType, currentUserId, user.getRoleCode());
+                projectId, nameLike, status, bizType, contentType, user.getId(), user.getRoleCode());
         return Result.success(result);
     }
 }

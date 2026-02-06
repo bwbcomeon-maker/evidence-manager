@@ -2,7 +2,6 @@ package com.bwbcomeon.evidence.dto;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
  * 证据列表项VO
@@ -46,9 +45,9 @@ public class EvidenceListItemVO {
     private String evidenceStatus;
 
     /**
-     * 创建人ID
+     * 创建人 sys_user.id
      */
-    private UUID createdBy;
+    private Long createdByUserId;
 
     /**
      * 创建时间
@@ -71,8 +70,8 @@ public class EvidenceListItemVO {
     private Boolean canInvalidate;
     /** 作废原因（evidence_status=INVALID 时有值） */
     private String invalidReason;
-    /** 作废人 UUID（INVALID 时有值） */
-    private UUID invalidBy;
+    /** 作废人 sys_user.id（INVALID 时有值） */
+    private Long invalidByUserId;
     /** 作废时间（INVALID 时有值） */
     private OffsetDateTime invalidAt;
 }

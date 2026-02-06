@@ -28,8 +28,8 @@ public class ProjectVO {
     private Boolean canManageMembers;
     /** 兼容：与 permissions.canUpload 一致 */
     private Boolean canUpload;
-    /** 当前项目经理 auth_user.id（ACL 中 role=owner 的用户，若无则为 created_by） */
-    private String currentPmUserId;
-    /** 当前项目经理展示名（auth_user.display_name） */
+    /** 当前项目经理 sys_user.id（ACL 中 role=owner 的用户，若无则为 created_by_user_id） */
+    private Long currentPmUserId;
+    /** 当前项目经理展示名（sys_user.real_name） */
     private String currentPmDisplayName;
 }

@@ -8,13 +8,13 @@
         <result column="name" property="name" jdbcType="VARCHAR"/>
         <result column="description" property="description" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
-        <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
+        <result column="created_by_user_id" property="createdByUserId" jdbcType="BIGINT"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, code, name, description, status, created_by, created_at, updated_at
+        id, code, name, description, status, created_by_user_id, created_at, updated_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -35,7 +35,7 @@
         SELECT
         <include refid="Base_Column_List"/>
         FROM project
-        WHERE created_by = #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        WHERE created_by_user_id = #{createdByUserId}
         ORDER BY created_at DESC
     </select>
 
@@ -58,13 +58,13 @@
     </select>
 
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.Project" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO project (code, name, description, status, created_by, created_at, updated_at)
+        INSERT INTO project (code, name, description, status, created_by_user_id, created_at, updated_at)
         VALUES (
             #{code},
             #{name},
             #{description},
             COALESCE(#{status}, 'active'),
-            #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            #{createdByUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
             COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
         )

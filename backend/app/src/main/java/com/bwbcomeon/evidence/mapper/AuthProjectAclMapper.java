@@ -4,7 +4,6 @@ import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 项目权限表Mapper
@@ -24,12 +23,12 @@ public interface AuthProjectAclMapper {
     /**
      * 根据用户ID查询权限列表
      */
-    List<AuthProjectAcl> selectByUserId(@Param("userId") UUID userId);
+    List<AuthProjectAcl> selectBySysUserId(@Param("sysUserId") Long sysUserId);
 
     /**
      * 根据项目ID和用户ID查询权限
      */
-    AuthProjectAcl selectByProjectIdAndUserId(@Param("projectId") Long projectId, @Param("userId") UUID userId);
+    AuthProjectAcl selectByProjectIdAndSysUserId(@Param("projectId") Long projectId, @Param("sysUserId") Long sysUserId);
 
     /**
      * 插入权限记录
@@ -49,5 +48,5 @@ public interface AuthProjectAclMapper {
     /**
      * 根据项目ID和用户ID删除权限记录
      */
-    int deleteByProjectIdAndUserId(@Param("projectId") Long projectId, @Param("userId") UUID userId);
+    int deleteByProjectIdAndSysUserId(@Param("projectId") Long projectId, @Param("sysUserId") Long sysUserId);
 }

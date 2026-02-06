@@ -17,17 +17,17 @@
         <result column="archived_time" property="archivedTime" jdbcType="TIMESTAMP"/>
         <result column="invalid_time" property="invalidTime" jdbcType="TIMESTAMP"/>
         <result column="biz_type" property="bizType" jdbcType="VARCHAR"/>
-        <result column="created_by" property="createdBy" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
+        <result column="created_by_user_id" property="createdByUserId" jdbcType="BIGINT"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
         <result column="invalid_reason" property="invalidReason" jdbcType="VARCHAR"/>
-        <result column="invalid_by" property="invalidBy" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
+        <result column="invalid_by_user_id" property="invalidByUserId" jdbcType="BIGINT"/>
         <result column="invalid_at" property="invalidAt" jdbcType="TIMESTAMP"/>
     </resultMap>
 
     <sql id="Base_Column_List">
         id, project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-        status, evidence_status, archived_time, invalid_time, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
+        status, evidence_status, archived_time, invalid_time, biz_type, created_by_user_id, created_at, updated_at, invalid_reason, invalid_by_user_id, invalid_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -58,7 +58,7 @@
         SELECT
         <include refid="Base_Column_List"/>
         FROM evidence_item
-        WHERE created_by = #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        WHERE created_by_user_id = #{createdByUserId}
         ORDER BY created_at DESC
     </select>
 
@@ -72,7 +72,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO evidence_item (
             project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-            status, evidence_status, archived_time, invalid_time, biz_type, created_by, created_at, updated_at, invalid_reason, invalid_by, invalid_at
+            status, evidence_status, archived_time, invalid_time, biz_type, created_by_user_id, created_at, updated_at, invalid_reason, invalid_by_user_id, invalid_at
         )
         VALUES (
             #{projectId},
@@ -88,11 +88,11 @@
             #{archivedTime},
             #{invalidTime},
             COALESCE(#{bizType}, 'OTHER'),
-            #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            #{createdByUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
             COALESCE(#{updatedAt}, CURRENT_TIMESTAMP),
             #{invalidReason},
-            #{invalidBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            #{invalidByUserId},
             #{invalidAt}
         )
     </insert>
@@ -110,7 +110,7 @@
             <if test="status != null">status = #{status},</if>
             <if test="bizType != null">biz_type = #{bizType},</if>
             <if test="invalidReason != null">invalid_reason = #{invalidReason},</if>
-            <if test="invalidBy != null">invalid_by = #{invalidBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},</if>
+            <if test="invalidByUserId != null">invalid_by_user_id = #{invalidByUserId},</if>
             <if test="invalidAt != null">invalid_at = #{invalidAt},</if>
             updated_at = CURRENT_TIMESTAMP
         </set>
@@ -162,8 +162,8 @@
                 AND COALESCE(evidence_status, 'SUBMITTED') != 'INVALID'
             </otherwise>
         </choose>
-        <if test="createdBy != null">
-            AND created_by = #{createdBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        <if test="createdByUserId != null">
+            AND created_by_user_id = #{createdByUserId}
         </if>
         <if test="createdAfter != null">
             AND created_at &gt;= #{createdAfter}
@@ -224,7 +224,7 @@
         SET evidence_status = #{evidenceStatus},
             invalid_time = #{invalidTime},
             invalid_reason = #{invalidReason},
-            invalid_by = #{invalidBy, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            invalid_by_user_id = #{invalidByUserId},
             invalid_at = #{invalidAt},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = #{id}

@@ -20,14 +20,14 @@ export interface EvidenceListItem {
   contentType: string
   status: string
   evidenceStatus?: EvidenceStatus
-  createdBy: string
+  createdByUserId?: number
   createdAt: string
   updatedAt: string
   permissions?: PermissionBits
   canInvalidate?: boolean
   /** 作废原因/人/时间（INVALID 时有值） */
   invalidReason?: string
-  invalidBy?: string
+  invalidByUserId?: number
   invalidAt?: string
   latestVersion: {
     versionId: number

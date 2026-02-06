@@ -11,14 +11,14 @@
         <result column="file_path" property="filePath" jdbcType="VARCHAR"/>
         <result column="file_size" property="fileSize" jdbcType="BIGINT"/>
         <result column="content_type" property="contentType" jdbcType="VARCHAR"/>
-        <result column="uploader_id" property="uploaderId" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
+        <result column="uploader_user_id" property="uploaderUserId" jdbcType="BIGINT"/>
         <result column="remark" property="remark" jdbcType="VARCHAR"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
     </resultMap>
 
     <sql id="Base_Column_List">
         id, evidence_id, project_id, version_no, original_filename, file_path, file_size,
-        content_type, uploader_id, remark, created_at
+        content_type, uploader_user_id, remark, created_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -53,7 +53,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceVersion" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO evidence_version (
             evidence_id, project_id, version_no, original_filename, file_path, file_size,
-            content_type, uploader_id, remark, created_at
+            content_type, uploader_user_id, remark, created_at
         )
         VALUES (
             #{evidenceId},
@@ -63,7 +63,7 @@
             #{filePath},
             #{fileSize},
             #{contentType},
-            #{uploaderId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            #{uploaderUserId},
             #{remark},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
         )

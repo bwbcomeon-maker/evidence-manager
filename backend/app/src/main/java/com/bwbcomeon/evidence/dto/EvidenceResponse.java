@@ -2,7 +2,6 @@ package com.bwbcomeon.evidence.dto;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
  * 证据响应DTO
@@ -50,9 +49,9 @@ public class EvidenceResponse {
     private String evidenceStatus;
 
     /**
-     * 上传人ID
+     * 上传人 sys_user.id
      */
-    private UUID createdBy;
+    private Long createdByUserId;
 
     /**
      * 上传时间

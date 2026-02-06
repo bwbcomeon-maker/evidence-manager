@@ -15,20 +15,19 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.List;
-import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * P0-1 回归：EvidenceController 使用当前用户 UUID，不再使用固定 UUID。
+ * P0-1 回归：EvidenceController 使用当前用户 sys_user.id (Long)。
  */
 @ExtendWith(MockitoExtension.class)
 class EvidenceControllerTest {
 
-    private static final UUID USER_A_UUID = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
-    private static final UUID USER_B_UUID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
+    private static final Long USER_A_ID = 10L;
+    private static final Long USER_B_ID = 20L;
 
     @Mock
     private EvidenceService evidenceService;
@@ -44,35 +43,31 @@ class EvidenceControllerTest {
     }
 
     @Test
-    void listEvidences_uses_resolved_current_user_uuid_not_fixed() {
+    void listEvidences_uses_current_user_id() {
         request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
-                new AuthUserVO(10L, "userA", "User A", "USER", true));
-        when(evidenceService.resolveCreatedByUuid("userA")).thenReturn(USER_A_UUID);
-        when(evidenceService.listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_UUID), eq("USER")))
+                new AuthUserVO(USER_A_ID, "userA", "User A", "USER", true));
+        when(evidenceService.listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_ID), eq("USER")))
                 .thenReturn(List.of());
 
         Result<List<EvidenceListItemVO>> result = evidenceController.listEvidences(
                 request, 1L, null, null, null, null);
 
         assertThat(result.getCode()).isEqualTo(0);
-        verify(evidenceService).resolveCreatedByUuid("userA");
-        verify(evidenceService).listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_UUID), eq("USER"));
+        verify(evidenceService).listEvidences(eq(1L), isNull(), isNull(), isNull(), isNull(), eq(USER_A_ID), eq("USER"));
     }
 
     @Test
-    void listEvidences_different_user_gets_different_uuid() {
+    void listEvidences_different_user_gets_different_id() {
         request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
-                new AuthUserVO(20L, "userB", "User B", "USER", true));
-        when(evidenceService.resolveCreatedByUuid("userB")).thenReturn(USER_B_UUID);
-        when(evidenceService.listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_UUID), eq("USER")))
+                new AuthUserVO(USER_B_ID, "userB", "User B", "USER", true));
+        when(evidenceService.listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_ID), eq("USER")))
                 .thenReturn(List.of());
 
         Result<List<EvidenceListItemVO>> result = evidenceController.listEvidences(
                 request, 2L, null, null, null, null);
 
         assertThat(result.getCode()).isEqualTo(0);
-        verify(evidenceService).resolveCreatedByUuid("userB");
-        verify(evidenceService).listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_UUID), eq("USER"));
+        verify(evidenceService).listEvidences(eq(2L), isNull(), isNull(), isNull(), isNull(), eq(USER_B_ID), eq("USER"));
     }
 
     @Test
@@ -86,26 +81,10 @@ class EvidenceControllerTest {
     }
 
     @Test
-    void listEvidences_returns_403_when_resolve_created_by_uuid_returns_null() {
+    void uploadEvidence_uses_current_user_id() {
         request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
-                new AuthUserVO(99L, "unknown", null, "USER", true));
-        when(evidenceService.resolveCreatedByUuid("unknown")).thenReturn(null);
-
-        Result<List<EvidenceListItemVO>> result = evidenceController.listEvidences(
-                request, 1L, null, null, null, null);
-
-        assertThat(result.getCode()).isEqualTo(403);
-        assertThat(result.getMessage()).isEqualTo("无法解析当前用户");
-        verify(evidenceService).resolveCreatedByUuid("unknown");
-        verify(evidenceService, never()).listEvidences(anyLong(), any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    void uploadEvidence_uses_resolved_current_user_uuid_not_fixed() {
-        request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
-                new AuthUserVO(10L, "userA", "User A", "USER", true));
-        when(evidenceService.resolveCreatedByUuid("userA")).thenReturn(USER_A_UUID);
-        when(evidenceService.uploadEvidence(eq(1L), eq("n"), eq("PLAN"), any(), any(), eq(USER_A_UUID), eq("USER")))
+                new AuthUserVO(USER_A_ID, "userA", "User A", "USER", true));
+        when(evidenceService.uploadEvidence(eq(1L), eq("n"), eq("PLAN"), any(), any(), eq(USER_A_ID), eq("USER")))
                 .thenReturn(new EvidenceResponse());
 
         MockMultipartFile file = new MockMultipartFile("file", "t.txt", "text/plain", "hello".getBytes());
@@ -113,7 +92,6 @@ class EvidenceControllerTest {
                 request, 1L, "n", "PLAN", null, file);
 
         assertThat(result.getCode()).isEqualTo(0);
-        verify(evidenceService).resolveCreatedByUuid("userA");
-        verify(evidenceService).uploadEvidence(eq(1L), eq("n"), eq("PLAN"), any(), any(), eq(USER_A_UUID), eq("USER"));
+        verify(evidenceService).uploadEvidence(eq(1L), eq("n"), eq("PLAN"), any(), any(), eq(USER_A_ID), eq("USER"));
     }
 }

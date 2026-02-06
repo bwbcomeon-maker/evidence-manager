@@ -11,15 +11,11 @@ import com.bwbcomeon.evidence.entity.EvidenceItem;
 import com.bwbcomeon.evidence.entity.EvidenceVersion;
 import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
-import com.bwbcomeon.evidence.entity.AuthUser;
 import com.bwbcomeon.evidence.entity.Project;
-import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
-import com.bwbcomeon.evidence.mapper.AuthUserMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceVersionMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
-import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.FileStorageUtil;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.slf4j.Logger;
@@ -28,7 +24,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -42,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -69,13 +63,7 @@ public class EvidenceService {
     private ProjectMapper projectMapper;
 
     @Autowired
-    private AuthUserMapper authUserMapper;
-
-    @Autowired
     private AuthProjectAclMapper authProjectAclMapper;
-
-    @Autowired
-    private SysUserMapper sysUserMapper;
 
     @Autowired
     private PermissionUtil permissionUtil;
@@ -99,7 +87,7 @@ public class EvidenceService {
      */
     @Transactional(rollbackFor = Exception.class)
     public EvidenceResponse uploadEvidence(Long projectId, String name, String type, String remark,
-                                          MultipartFile file, UUID userId, String roleCode) {
+                                          MultipartFile file, Long userId, String roleCode) {
         // 1. 参数校验
         if (file == null || file.isEmpty()) {
             throw new BusinessException(400, "File is required");
@@ -140,7 +128,7 @@ public class EvidenceService {
             evidenceItem.setStatus("active");
             evidenceItem.setEvidenceStatus("DRAFT"); // 上传默认为草稿，由用户点击「提交」后变为 SUBMITTED
             evidenceItem.setBizType(bizType); // 设置业务证据类型
-            evidenceItem.setCreatedBy(userId);
+            evidenceItem.setCreatedByUserId(userId);
             evidenceItem.setCreatedAt(OffsetDateTime.now());
             evidenceItem.setUpdatedAt(OffsetDateTime.now());
             evidenceItem.setBucket(fileStorageUtil.getBucket());
@@ -185,7 +173,7 @@ public class EvidenceService {
             evidenceVersion.setFilePath(objectKey); // 相对路径，与本地存储真实路径对应
             evidenceVersion.setFileSize(file.getSize());
             evidenceVersion.setContentType(file.getContentType());
-            evidenceVersion.setUploaderId(userId);
+            evidenceVersion.setUploaderUserId(userId);
             evidenceVersion.setRemark(remark);
             evidenceVersion.setCreatedAt(OffsetDateTime.now());
 
@@ -210,7 +198,7 @@ public class EvidenceService {
             // 兼容：前端统一读 evidenceStatus，旧逻辑若只读 status 则与 evidenceStatus 一致，避免列表误显示「已提交」
             response.setStatus(evidenceItem.getEvidenceStatus() != null ? evidenceItem.getEvidenceStatus() : evidenceItem.getStatus());
             response.setEvidenceStatus(evidenceItem.getEvidenceStatus());
-            response.setCreatedBy(evidenceItem.getCreatedBy());
+            response.setCreatedByUserId(evidenceItem.getCreatedByUserId());
             response.setCreatedAt(evidenceItem.getCreatedAt());
 
             return response;
@@ -249,10 +237,8 @@ public class EvidenceService {
      * @param userId 当前用户ID
      * @return 证据列表
      */
-    public List<EvidenceListItemVO> listEvidences(Long projectId, String nameLike, String status, String bizType, String contentType, UUID userId, String roleCode) {
+    public List<EvidenceListItemVO> listEvidences(Long projectId, String nameLike, String status, String bizType, String contentType, Long userId, String roleCode) {
         // 1. 权限校验
-        // TODO: 当前退化为检查project.created_by = 当前用户，后续需要实现成员表检查
-        // TODO: ADMIN 可查看全部，当前未实现 ADMIN 角色检查
         permissionUtil.checkProjectAccess(projectId, userId);
 
         // 2. bizType规范化处理（如果传入，转换为大写以匹配数据库存储格式）
@@ -291,11 +277,11 @@ public class EvidenceService {
             vo.setContentType(item.getContentType());
             vo.setStatus(item.getStatus());
             vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
-            vo.setCreatedBy(item.getCreatedBy());
+            vo.setCreatedByUserId(item.getCreatedByUserId());
             vo.setCreatedAt(item.getCreatedAt());
             vo.setUpdatedAt(item.getUpdatedAt());
             vo.setInvalidReason(item.getInvalidReason());
-            vo.setInvalidBy(item.getInvalidBy());
+            vo.setInvalidByUserId(item.getInvalidByUserId());
             vo.setInvalidAt(item.getInvalidAt());
 
             // 设置最新版本信息
@@ -323,53 +309,23 @@ public class EvidenceService {
 
     /**
      * 获取当前用户可见的项目ID列表（权限过滤）
-     * SYSTEM_ADMIN：全部项目；普通用户：其创建的项目 + 其有 ACL 的项目（按 auth_user UUID 匹配）
+     * SYSTEM_ADMIN/PMO：全部项目；普通用户：其创建的项目 + 其有 ACL 的项目（按 sys_user.id 匹配）
      */
-    public List<Long> getVisibleProjectIds(String username, String roleCode) {
+    public List<Long> getVisibleProjectIds(Long currentUserId, String roleCode) {
         if (roleCode != null && ("SYSTEM_ADMIN".equals(roleCode) || "PMO".equals(roleCode))) {
             return projectMapper.selectAll().stream().map(Project::getId).distinct().collect(Collectors.toList());
         }
-        AuthUser authUser = authUserMapper.selectByUsername(username);
-        if (authUser == null) {
+        if (currentUserId == null) {
             return new ArrayList<>();
         }
-        UUID uuid = authUser.getId();
         List<Long> ids = new ArrayList<>();
-        for (Project p : projectMapper.selectByCreatedBy(uuid)) {
+        for (Project p : projectMapper.selectByCreatedBy(currentUserId)) {
             ids.add(p.getId());
         }
-        for (AuthProjectAcl a : authProjectAclMapper.selectByUserId(uuid)) {
+        for (AuthProjectAcl a : authProjectAclMapper.selectBySysUserId(currentUserId)) {
             ids.add(a.getProjectId());
         }
         return ids.stream().distinct().collect(Collectors.toList());
-    }
-
-    /**
-     * 根据 sys_user 用户名解析为 auth_user UUID（用于创建项目、证据等）。
-     * 若 auth_user 无该用户，则从 sys_user 同步一条（懒同步），保证仅存在于 sys_user 的用户也能正常创建项目。
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public UUID resolveCreatedByUuid(String username) {
-        if (username == null || username.isBlank()) return null;
-        AuthUser u = authUserMapper.selectByUsername(username);
-        if (u != null) return u.getId();
-        SysUser sysUser = sysUserMapper.selectByUsername(username);
-        if (sysUser == null) return null;
-        AuthUser authUser = new AuthUser();
-        authUser.setUsername(username);
-        authUser.setDisplayName(sysUser.getRealName() != null && !sysUser.getRealName().isBlank() ? sysUser.getRealName() : username);
-        authUser.setEmail(sysUser.getEmail());
-        authUser.setIsActive(Boolean.TRUE.equals(sysUser.getEnabled()));
-        authUser.setCreatedAt(OffsetDateTime.now());
-        try {
-            authUserMapper.insert(authUser);
-        } catch (DuplicateKeyException e) {
-            // 并发时可能已被其他请求插入，重新查询
-            u = authUserMapper.selectByUsername(username);
-            return u != null ? u.getId() : null;
-        }
-        u = authUserMapper.selectByUsername(username);
-        return u != null ? u.getId() : null;
     }
 
     /**
@@ -379,8 +335,8 @@ public class EvidenceService {
     public PageResult<EvidenceListItemVO> pageEvidence(
             int page, int pageSize,
             Long projectId, String status, String uploader, Integer recentDays, String fileCategory, String nameLike,
-            Long currentUserId, String username, String roleCode) {
-        List<Long> visibleIds = getVisibleProjectIds(username, roleCode);
+            Long currentUserId, String roleCode) {
+        List<Long> visibleIds = getVisibleProjectIds(currentUserId, roleCode);
         if (visibleIds.isEmpty()) {
             return new PageResult<>(0, new ArrayList<>(), page, pageSize);
         }
@@ -390,7 +346,7 @@ public class EvidenceService {
             String s = status.trim().toUpperCase();
             statusParam = "VOIDED".equals(s) ? "INVALID" : s;
         }
-        UUID createdByUuid = "me".equalsIgnoreCase(uploader != null ? uploader.trim() : "") ? resolveCreatedByUuid(username) : null;
+        Long createdByUserId = "me".equalsIgnoreCase(uploader != null ? uploader.trim() : "") ? currentUserId : null;
         OffsetDateTime createdAfter = (recentDays != null && recentDays > 0) ? OffsetDateTime.now().minusDays(recentDays) : null;
         String fileCategoryParam = (fileCategory != null && !fileCategory.isBlank()) ? fileCategory.trim().toLowerCase() : null;
         if (fileCategoryParam != null && !Set.of("image", "document", "video").contains(fileCategoryParam)) {
@@ -400,9 +356,9 @@ public class EvidenceService {
         int limit = Math.min(Math.max(1, pageSize), 100);
 
         List<EvidenceItem> items = evidenceItemMapper.selectPageWithFilters(
-                visibleIds, projectId, statusParam, createdByUuid, createdAfter, fileCategoryParam, nameLike, offset, limit);
+                visibleIds, projectId, statusParam, createdByUserId, createdAfter, fileCategoryParam, nameLike, offset, limit);
         long total = evidenceItemMapper.countPageWithFilters(
-                visibleIds, projectId, statusParam, createdByUuid, createdAfter, fileCategoryParam, nameLike);
+                visibleIds, projectId, statusParam, createdByUserId, createdAfter, fileCategoryParam, nameLike);
 
         if (items.isEmpty()) {
             return new PageResult<>(total, new ArrayList<>(), page, pageSize);
@@ -411,7 +367,6 @@ public class EvidenceService {
         List<EvidenceVersion> latestVersions = evidenceVersionMapper.selectLatestVersionsByEvidenceIds(evidenceIds);
         Map<Long, EvidenceVersion> versionMap = latestVersions.stream().collect(Collectors.toMap(EvidenceVersion::getEvidenceId, v -> v));
 
-        UUID authUserId = resolveCreatedByUuid(username);
         List<EvidenceListItemVO> records = new ArrayList<>();
         for (EvidenceItem item : items) {
             EvidenceListItemVO vo = new EvidenceListItemVO();
@@ -422,11 +377,11 @@ public class EvidenceService {
             vo.setContentType(item.getContentType());
             vo.setStatus(item.getStatus());
             vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
-            vo.setCreatedBy(item.getCreatedBy());
+            vo.setCreatedByUserId(item.getCreatedByUserId());
             vo.setCreatedAt(item.getCreatedAt());
             vo.setUpdatedAt(item.getUpdatedAt());
             vo.setInvalidReason(item.getInvalidReason());
-            vo.setInvalidBy(item.getInvalidBy());
+            vo.setInvalidByUserId(item.getInvalidByUserId());
             vo.setInvalidAt(item.getInvalidAt());
             EvidenceVersion latest = versionMap.get(item.getId());
             if (latest != null) {
@@ -439,7 +394,7 @@ public class EvidenceService {
                 lv.setCreatedAt(latest.getCreatedAt());
                 vo.setLatestVersion(lv);
             }
-            PermissionBits bits = permissionUtil.computeProjectPermissionBits(item.getProjectId(), authUserId, roleCode);
+            PermissionBits bits = permissionUtil.computeProjectPermissionBits(item.getProjectId(), currentUserId, roleCode);
             vo.setPermissions(bits);
             vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
             records.add(vo);
@@ -460,9 +415,7 @@ public class EvidenceService {
     /**
      * 根据ID获取证据详情（含最新版本），校验项目访问权限，并返回当前用户是否可作废 canInvalidate
      */
-    public EvidenceListItemVO getEvidenceById(Long id, String username, String roleCode) {
-        UUID userId = resolveCreatedByUuid(username);
-        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+    public EvidenceListItemVO getEvidenceById(Long id, Long userId, String roleCode) {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) {
             throw new BusinessException(404, "证据不存在");
@@ -476,11 +429,11 @@ public class EvidenceService {
         vo.setContentType(item.getContentType());
         vo.setStatus(item.getStatus());
         vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
-        vo.setCreatedBy(item.getCreatedBy());
+        vo.setCreatedByUserId(item.getCreatedByUserId());
         vo.setCreatedAt(item.getCreatedAt());
         vo.setUpdatedAt(item.getUpdatedAt());
         vo.setInvalidReason(item.getInvalidReason());
-        vo.setInvalidBy(item.getInvalidBy());
+        vo.setInvalidByUserId(item.getInvalidByUserId());
         vo.setInvalidAt(item.getInvalidAt());
         PermissionBits bits = permissionUtil.computeProjectPermissionBits(item.getProjectId(), userId, roleCode);
         vo.setPermissions(bits);
@@ -503,9 +456,7 @@ public class EvidenceService {
      * 证据状态流转：提交（DRAFT -> SUBMITTED），需上传权限（owner/editor 或 SYSTEM_ADMIN）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void submitEvidence(Long id, String username, String roleCode) {
-        UUID userId = resolveCreatedByUuid(username);
-        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+    public void submitEvidence(Long id, Long userId, String roleCode) {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
         permissionUtil.checkCanSubmit(item.getProjectId(), userId, roleCode);
@@ -520,9 +471,7 @@ public class EvidenceService {
      * 证据状态流转：归档（SUBMITTED -> ARCHIVED），仅项目责任人可操作（与 permissions 同源）
      */
     @Transactional(rollbackFor = Exception.class)
-    public void archiveEvidence(Long id, String username, String roleCode) {
-        UUID userId = resolveCreatedByUuid(username);
-        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+    public void archiveEvidence(Long id, Long userId, String roleCode) {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
         permissionUtil.checkCanArchive(item.getProjectId(), userId, roleCode);
@@ -540,9 +489,7 @@ public class EvidenceService {
      * @return 审计用快照信息（projectId, beforeData, afterData）
      */
     @Transactional(rollbackFor = Exception.class)
-    public InvalidateAuditInfo invalidateEvidence(Long id, String username, String roleCode, String invalidReason) {
-        UUID userId = resolveCreatedByUuid(username);
-        if (userId == null) throw new BusinessException(403, "无法解析当前用户");
+    public InvalidateAuditInfo invalidateEvidence(Long id, Long userId, String roleCode, String invalidReason) {
         if (invalidReason == null || invalidReason.isBlank()) {
             throw new BusinessException(400, "作废原因不能为空");
         }
@@ -557,7 +504,7 @@ public class EvidenceService {
                 id, EvidenceStatus.INVALID.getCode(), now, invalidReason.trim(), userId, now);
         if (n == 0) throw new BusinessException(400, "已作废或状态不允许");
         String afterData = buildEvidenceSnapshotJson(id, item.getProjectId(), EvidenceStatus.INVALID.getCode(),
-                invalidReason.trim(), userId.toString(), now.toString());
+                invalidReason.trim(), String.valueOf(userId), now.toString());
         return new InvalidateAuditInfo(item.getProjectId(), beforeData, afterData);
     }
 
@@ -588,7 +535,7 @@ public class EvidenceService {
      * @return 文件资源
      * @throws BusinessException 如果版本不存在、文件不存在或权限不足
      */
-    public Resource downloadVersionFile(Long versionId, UUID userId) {
+    public Resource downloadVersionFile(Long versionId, Long userId) {
         // 1. 查询版本记录
         EvidenceVersion version = evidenceVersionMapper.selectById(versionId);
         if (version == null) {

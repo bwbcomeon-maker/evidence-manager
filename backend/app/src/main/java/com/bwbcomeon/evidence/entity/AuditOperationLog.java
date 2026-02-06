@@ -2,10 +2,9 @@ package com.bwbcomeon.evidence.entity;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
- * 操作审计日志表
+ * 操作审计日志表（操作人为 sys_user.id）
  */
 @Data
 public class AuditOperationLog {
@@ -15,9 +14,9 @@ public class AuditOperationLog {
     private Long id;
 
     /**
-     * 操作人
+     * 操作人 sys_user.id
      */
-    private UUID actorUserId;
+    private Long actorUserId;
 
     /**
      * 操作类型：upload / mark_invalid 等

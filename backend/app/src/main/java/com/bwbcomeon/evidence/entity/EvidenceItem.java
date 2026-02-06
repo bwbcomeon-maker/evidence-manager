@@ -2,7 +2,6 @@ package com.bwbcomeon.evidence.entity;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
  * 证据元数据表
@@ -80,9 +79,9 @@ public class EvidenceItem {
     private String bizType;
 
     /**
-     * 上传人
+     * 上传人 sys_user.id
      */
-    private UUID createdBy;
+    private Long createdByUserId;
 
     /**
      * 上传时间
@@ -100,9 +99,9 @@ public class EvidenceItem {
     private String invalidReason;
 
     /**
-     * 误传人
+     * 作废人 sys_user.id
      */
-    private UUID invalidBy;
+    private Long invalidByUserId;
 
     /**
      * 误传时间

@@ -5,13 +5,13 @@
     <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.AuthProjectAcl">
         <id column="id" property="id" jdbcType="BIGINT"/>
         <result column="project_id" property="projectId" jdbcType="BIGINT"/>
-        <result column="user_id" property="userId" jdbcType="OTHER" typeHandler="com.bwbcomeon.evidence.typehandler.UUIDTypeHandler"/>
+        <result column="sys_user_id" property="sysUserId" jdbcType="BIGINT"/>
         <result column="role" property="role" jdbcType="VARCHAR"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, project_id, user_id, role, created_at
+        id, project_id, sys_user_id, role, created_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -29,27 +29,27 @@
         ORDER BY created_at DESC
     </select>
 
-    <select id="selectByUserId" resultMap="BaseResultMap">
+    <select id="selectBySysUserId" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM auth_project_acl
-        WHERE user_id = #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        WHERE sys_user_id = #{sysUserId}
         ORDER BY created_at DESC
     </select>
 
-    <select id="selectByProjectIdAndUserId" resultMap="BaseResultMap">
+    <select id="selectByProjectIdAndSysUserId" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM auth_project_acl
         WHERE project_id = #{projectId}
-        AND user_id = #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        AND sys_user_id = #{sysUserId}
     </select>
 
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.AuthProjectAcl" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO auth_project_acl (project_id, user_id, role, created_at)
+        INSERT INTO auth_project_acl (project_id, sys_user_id, role, created_at)
         VALUES (
             #{projectId},
-            #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler},
+            #{sysUserId},
             #{role},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP)
         )
@@ -68,10 +68,10 @@
         WHERE id = #{id}
     </delete>
 
-    <delete id="deleteByProjectIdAndUserId">
+    <delete id="deleteByProjectIdAndSysUserId">
         DELETE FROM auth_project_acl
         WHERE project_id = #{projectId}
-        AND user_id = #{userId, jdbcType=OTHER, typeHandler=com.bwbcomeon.evidence.typehandler.UUIDTypeHandler}
+        AND sys_user_id = #{sysUserId}
     </delete>
 
 </mapper>

@@ -29,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.util.List;
-import java.util.UUID;
 
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -60,7 +59,7 @@ public class ProjectController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
-        List<ProjectVO> list = projectService.listVisibleProjects(user.getUsername(), user.getRoleCode());
+        List<ProjectVO> list = projectService.listVisibleProjects(user.getId(), user.getRoleCode());
         return Result.success(list);
     }
 
@@ -76,7 +75,7 @@ public class ProjectController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
-        ProjectVO vo = projectService.getProjectDetail(projectId, user.getUsername(), user.getRoleCode());
+        ProjectVO vo = projectService.getProjectDetail(projectId, user.getId(), user.getRoleCode());
         return Result.success(vo);
     }
 
@@ -94,13 +93,9 @@ public class ProjectController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
-        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (currentUserId == null) {
-            return Result.error(403, "无法解析当前用户");
-        }
-        logger.info("Create project request: code={}, name={}, userId={}", body.getCode(), body.getName(), currentUserId);
+        logger.info("Create project request: code={}, name={}, userId={}", body.getCode(), body.getName(), user.getId());
         ProjectVO vo = projectService.createProject(
-                currentUserId,
+                user.getId(),
                 body.getCode(),
                 body.getName(),
                 body.getDescription());
@@ -145,11 +140,9 @@ public class ProjectController {
             @RequestParam("file") MultipartFile file) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        UUID operatorUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (operatorUserId == null) return Result.error(403, "无法解析当前用户");
         if (file == null || file.isEmpty()) return Result.error(400, "请选择文件");
         try {
-            ProjectImportResult result = projectService.importProjectsFromExcel(file.getInputStream(), operatorUserId, user.getRoleCode());
+            ProjectImportResult result = projectService.importProjectsFromExcel(file.getInputStream(), user.getId(), user.getRoleCode());
             return Result.success(result);
         } catch (Exception e) {
             logger.warn("Import projects failed", e);
@@ -167,13 +160,13 @@ public class ProjectController {
             @PathVariable Long projectId) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        List<ProjectMemberVO> list = projectService.listMembers(projectId, user.getUsername(), user.getRoleCode());
+        List<ProjectMemberVO> list = projectService.listMembers(projectId, user.getId(), user.getRoleCode());
         return Result.success(list);
     }
 
     /**
      * 添加或调整项目成员（仅 owner 或 SYSTEM_ADMIN）
-     * POST /api/projects/{projectId}/members  body: { userId(UUID), role(owner|editor|viewer) }
+     * POST /api/projects/{projectId}/members  body: { userId(sys_user.id), role(owner|editor|viewer) }
      */
     @PostMapping("/{projectId}/members")
     public Result<Void> addOrUpdateMember(
@@ -182,9 +175,7 @@ public class ProjectController {
             @RequestBody AddProjectMemberRequest body) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        UUID operatorUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (operatorUserId == null) return Result.error(403, "无法解析当前用户");
-        projectService.addOrUpdateMember(projectId, operatorUserId, user.getRoleCode(), body);
+        projectService.addOrUpdateMember(projectId, user.getId(), user.getRoleCode(), body);
         return Result.success(null);
     }
 
@@ -196,12 +187,10 @@ public class ProjectController {
     public Result<Void> removeMember(
             HttpServletRequest request,
             @PathVariable Long projectId,
-            @PathVariable UUID userId) {
+            @PathVariable Long userId) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        UUID operatorUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (operatorUserId == null) return Result.error(403, "无法解析当前用户");
-        projectService.removeMember(projectId, userId, operatorUserId, user.getRoleCode());
+        projectService.removeMember(projectId, userId, user.getId(), user.getRoleCode());
         return Result.success(null);
     }
 }

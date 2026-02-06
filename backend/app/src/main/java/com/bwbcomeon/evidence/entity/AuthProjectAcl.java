@@ -2,10 +2,9 @@ package com.bwbcomeon.evidence.entity;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
- * 项目权限表
+ * 项目权限表（用户为 sys_user.id）
  */
 @Data
 public class AuthProjectAcl {
@@ -20,9 +19,9 @@ public class AuthProjectAcl {
     private Long projectId;
 
     /**
-     * 授权用户
+     * 授权用户 sys_user.id
      */
-    private UUID userId;
+    private Long sysUserId;
 
     /**
      * 项目角色：owner / editor / viewer

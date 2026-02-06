@@ -9,8 +9,6 @@ import com.bwbcomeon.evidence.mapper.ProjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
-
 /**
  * 权限校验工具类
  */
@@ -30,7 +28,7 @@ public class PermissionUtil {
      * @param requireUploadPermission 是否需要上传权限（EDITOR及以上）
      * @throws BusinessException 如果权限不足
      */
-    public void checkProjectPermission(Long projectId, UUID userId, boolean requireUploadPermission) {
+    public void checkProjectPermission(Long projectId, Long userId, boolean requireUploadPermission) {
         // 检查项目是否存在
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
@@ -38,12 +36,12 @@ public class PermissionUtil {
         }
 
         // 检查用户是否是项目创建者（owner权限）
-        if (project.getCreatedBy().equals(userId)) {
+        if (userId != null && userId.equals(project.getCreatedByUserId())) {
             return; // 项目创建者拥有所有权限
         }
 
         // 检查用户是否是项目成员
-        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndUserId(projectId, userId);
+        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, userId);
         if (acl == null) {
             throw new BusinessException(403, "No permission to access this project");
         }
@@ -61,14 +59,14 @@ public class PermissionUtil {
     /**
      * 检查用户是否有项目访问权限
      */
-    public void checkProjectAccess(Long projectId, UUID userId) {
+    public void checkProjectAccess(Long projectId, Long userId) {
         checkProjectPermission(projectId, userId, false);
     }
 
     /**
      * 检查用户是否有项目上传权限
      */
-    public void checkProjectUploadPermission(Long projectId, UUID userId) {
+    public void checkProjectUploadPermission(Long projectId, Long userId) {
         checkProjectPermission(projectId, userId, true);
     }
 
@@ -76,7 +74,7 @@ public class PermissionUtil {
      * 检查用户是否是ADMIN（当前未实现ADMIN角色，返回false）
      * TODO: 后续需要实现ADMIN角色检查
      */
-    public boolean isAdmin(UUID userId) {
+    public boolean isAdmin(Long userId) {
         // TODO: 实现ADMIN角色检查逻辑
         return false;
     }
@@ -85,11 +83,11 @@ public class PermissionUtil {
      * 检查当前用户是否有权作废该项目下的证据（仅项目责任人：SYSTEM_ADMIN / 项目创建人 / ACL owner）
      *
      * @param projectId 项目ID
-     * @param userId    当前用户 UUID（auth_user.id）
+     * @param userId    当前用户 sys_user.id
      * @param roleCode  sys_user.role_code（SYSTEM_ADMIN 则直接通过）
      * @throws BusinessException 无权限时 403
      */
-    public void checkCanInvalidate(Long projectId, UUID userId, String roleCode) {
+    public void checkCanInvalidate(Long projectId, Long userId, String roleCode) {
         checkCanArchive(projectId, userId, roleCode);
     }
 
@@ -98,11 +96,11 @@ public class PermissionUtil {
      * SYSTEM_ADMIN / 项目创建人 / ACL owner；PMO 不自动放行。
      *
      * @param projectId 项目ID
-     * @param userId    当前用户 UUID（auth_user.id）
+     * @param userId    当前用户 sys_user.id
      * @param roleCode  sys_user.role_code（SYSTEM_ADMIN 则直接通过）
      * @throws BusinessException 无权限时 403
      */
-    public void checkCanArchive(Long projectId, UUID userId, String roleCode) {
+    public void checkCanArchive(Long projectId, Long userId, String roleCode) {
         if (roleCode != null && "SYSTEM_ADMIN".equals(roleCode)) {
             return;
         }
@@ -110,10 +108,10 @@ public class PermissionUtil {
         if (project == null) {
             throw new BusinessException(404, "项目不存在");
         }
-        if (userId != null && userId.equals(project.getCreatedBy())) {
+        if (userId != null && userId.equals(project.getCreatedByUserId())) {
             return;
         }
-        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndUserId(projectId, userId);
+        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, userId);
         if (acl != null && "owner".equals(acl.getRole())) {
             return;
         }
@@ -123,7 +121,7 @@ public class PermissionUtil {
     /**
      * 检查当前用户是否可管理项目成员（超级管理员 SYSTEM_ADMIN、PMO、本项目负责人 owner）
      */
-    public void checkCanManageMembers(Long projectId, UUID userId, String roleCode) {
+    public void checkCanManageMembers(Long projectId, Long userId, String roleCode) {
         if (roleCode != null && ("SYSTEM_ADMIN".equals(roleCode) || "PMO".equals(roleCode))) {
             return;
         }
@@ -131,10 +129,10 @@ public class PermissionUtil {
         if (project == null) {
             throw new BusinessException(404, "项目不存在");
         }
-        if (userId != null && userId.equals(project.getCreatedBy())) {
+        if (userId != null && userId.equals(project.getCreatedByUserId())) {
             return;
         }
-        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndUserId(projectId, userId);
+        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, userId);
         if (acl != null && "owner".equals(acl.getRole())) {
             return;
         }
@@ -144,7 +142,7 @@ public class PermissionUtil {
     /**
      * 检查当前用户是否可上传证据（SYSTEM_ADMIN / 项目创建人 / ACL owner 或 editor；viewer 不可）
      */
-    public void checkCanUpload(Long projectId, UUID userId, String roleCode) {
+    public void checkCanUpload(Long projectId, Long userId, String roleCode) {
         if (roleCode != null && "SYSTEM_ADMIN".equals(roleCode)) {
             return;
         }
@@ -154,7 +152,7 @@ public class PermissionUtil {
     /**
      * 检查当前用户是否可提交证据（与上传权限一致：owner/editor 或 SYSTEM_ADMIN）
      */
-    public void checkCanSubmit(Long projectId, UUID userId, String roleCode) {
+    public void checkCanSubmit(Long projectId, Long userId, String roleCode) {
         checkCanUpload(projectId, userId, roleCode);
     }
 
@@ -164,7 +162,7 @@ public class PermissionUtil {
      * PMO 仅 canManageMembers 默认 true，证据位仅当该项目 created_by/owner/editor 时按角色给；
      * 其他按 created_by/ACL owner/editor/viewer 计算。
      */
-    public PermissionBits computeProjectPermissionBits(Long projectId, UUID userId, String roleCode) {
+    public PermissionBits computeProjectPermissionBits(Long projectId, Long userId, String roleCode) {
         if (roleCode != null && "SYSTEM_ADMIN".equals(roleCode)) {
             return PermissionBits.all(true);
         }
@@ -175,8 +173,8 @@ public class PermissionUtil {
         if (project == null) {
             return PermissionBits.all(false);
         }
-        boolean isCreatedBy = userId != null && userId.equals(project.getCreatedBy());
-        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndUserId(projectId, userId);
+        boolean isCreatedBy = userId != null && userId.equals(project.getCreatedByUserId());
+        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, userId);
         String projectRole = isCreatedBy ? "owner" : (acl != null ? acl.getRole() : null);
 
         boolean canManageMembers;

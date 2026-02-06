@@ -2,10 +2,9 @@ package com.bwbcomeon.evidence.entity;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
- * ???
+ * 项目
  */
 @Data
 public class Project {
@@ -35,9 +34,9 @@ public class Project {
     private String status;
 
     /**
-     * ???
+     * 创建人 sys_user.id
      */
-    private UUID createdBy;
+    private Long createdByUserId;
 
     /**
      * ????

@@ -4,7 +4,6 @@ import com.bwbcomeon.evidence.entity.AuditOperationLog;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 操作审计日志表Mapper
@@ -19,7 +18,7 @@ public interface AuditOperationLogMapper {
     /**
      * 根据操作人查询日志列表
      */
-    List<AuditOperationLog> selectByActorUserId(@Param("actorUserId") UUID actorUserId);
+    List<AuditOperationLog> selectByActorUserId(@Param("actorUserId") Long actorUserId);
 
     /**
      * 根据目标类型和目标ID查询日志列表

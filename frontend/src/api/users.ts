@@ -7,10 +7,10 @@ interface ApiResult<T> {
 }
 
 export interface AuthUserSimpleVO {
-  id: string
+  id: number
   username: string
   displayName?: string
 }
 
-/** 用户列表（auth_user），用于成员选择器等 */
+/** 用户列表（sys_user），用于成员选择器等 */
 export const getUsers = () => http.get<ApiResult<AuthUserSimpleVO[]>>('/users')

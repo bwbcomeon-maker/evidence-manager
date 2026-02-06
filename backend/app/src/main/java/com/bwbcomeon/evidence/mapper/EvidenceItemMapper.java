@@ -4,7 +4,6 @@ import com.bwbcomeon.evidence.entity.EvidenceItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 证据元数据表 Mapper
@@ -29,7 +28,7 @@ public interface EvidenceItemMapper {
     /**
      * 根据创建人查询证据列表
      */
-    List<EvidenceItem> selectByCreatedBy(@Param("createdBy") UUID createdBy);
+    List<EvidenceItem> selectByCreatedBy(@Param("createdByUserId") Long createdByUserId);
 
     /**
      * 查询所有证据
@@ -73,7 +72,7 @@ public interface EvidenceItemMapper {
      * @param projectIds 可见项目ID列表（非空）
      * @param projectId 按项目筛选（可选，与 projectIds 取交集）
      * @param status 状态（可选；不传时默认排除 invalid）
-     * @param createdBy 上传人 UUID（可选，uploader=me 时传入）
+     * @param createdByUserId 上传人 sys_user.id（可选，uploader=me 时传入）
      * @param createdAfter 创建时间下限（可选，recentDays 时传入）
      * @param fileCategory 文件大类：image/document/video（可选，映射到 content_type）
      * @param nameLike 标题模糊（可选）
@@ -84,7 +83,7 @@ public interface EvidenceItemMapper {
             @Param("projectIds") List<Long> projectIds,
             @Param("projectId") Long projectId,
             @Param("status") String status,
-            @Param("createdBy") UUID createdBy,
+            @Param("createdByUserId") Long createdByUserId,
             @Param("createdAfter") java.time.OffsetDateTime createdAfter,
             @Param("fileCategory") String fileCategory,
             @Param("nameLike") String nameLike,
@@ -96,7 +95,7 @@ public interface EvidenceItemMapper {
             @Param("projectIds") List<Long> projectIds,
             @Param("projectId") Long projectId,
             @Param("status") String status,
-            @Param("createdBy") UUID createdBy,
+            @Param("createdByUserId") Long createdByUserId,
             @Param("createdAfter") java.time.OffsetDateTime createdAfter,
             @Param("fileCategory") String fileCategory,
             @Param("nameLike") String nameLike
@@ -124,7 +123,7 @@ public interface EvidenceItemMapper {
             @Param("evidenceStatus") String evidenceStatus,
             @Param("invalidTime") java.time.OffsetDateTime invalidTime,
             @Param("invalidReason") String invalidReason,
-            @Param("invalidBy") java.util.UUID invalidBy,
+            @Param("invalidByUserId") Long invalidByUserId,
             @Param("invalidAt") java.time.OffsetDateTime invalidAt
     );
 }

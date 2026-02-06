@@ -6,12 +6,12 @@ import com.bwbcomeon.evidence.dto.ProjectImportResult;
 import com.bwbcomeon.evidence.dto.ProjectVO;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
-import com.bwbcomeon.evidence.entity.AuthUser;
 import com.bwbcomeon.evidence.entity.Project;
+import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
-import com.bwbcomeon.evidence.mapper.AuthUserMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
+import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.apache.poi.ss.usermodel.Cell;
@@ -29,7 +29,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -49,7 +48,7 @@ public class ProjectService {
     private AuthProjectAclMapper authProjectAclMapper;
 
     @Autowired
-    private AuthUserMapper authUserMapper;
+    private SysUserMapper sysUserMapper;
 
     @Autowired
     private EvidenceService evidenceService;
@@ -63,7 +62,7 @@ public class ProjectService {
     /**
      * PMO Excel 批量导入项目（最小版）：模板列 项目令号、项目名称、项目描述；按 code upsert；仅 SYSTEM_ADMIN/PMO 可调。
      */
-    public ProjectImportResult importProjectsFromExcel(InputStream inputStream, UUID operatorUserId, String roleCode) {
+    public ProjectImportResult importProjectsFromExcel(InputStream inputStream, Long operatorUserId, String roleCode) {
         if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
             throw new BusinessException(403, "仅 SYSTEM_ADMIN 或 PMO 可导入项目");
         }
@@ -99,11 +98,11 @@ public class ProjectService {
                         project.setName(nameVal);
                         project.setDescription(descVal);
                         project.setStatus(STATUS_ACTIVE);
-                        project.setCreatedBy(operatorUserId);
+                        project.setCreatedByUserId(operatorUserId);
                         projectMapper.insert(project);
                         AuthProjectAcl acl = new AuthProjectAcl();
                         acl.setProjectId(project.getId());
-                        acl.setUserId(operatorUserId);
+                        acl.setSysUserId(operatorUserId);
                         acl.setRole(ROLE_OWNER);
                         authProjectAclMapper.insert(acl);
                         details.add(new ProjectImportResult.RowResult(rowNum, code, true, "已新建"));
@@ -135,14 +134,14 @@ public class ProjectService {
     /**
      * 创建项目，并写入一条 owner ACL（项目令号由调用方传入，不自动生成）
      *
-     * @param userId      当前用户 UUID（auth_user.id）
+     * @param userId      当前用户 sys_user.id
      * @param code        项目令号（必填，唯一）
      * @param name        项目名称（必填）
      * @param description 项目描述（可选）
      * @return 新建项目的基本信息
      */
     @Transactional(rollbackFor = Exception.class)
-    public ProjectVO createProject(UUID userId, String code, String name, String description) {
+    public ProjectVO createProject(Long userId, String code, String name, String description) {
         String codeTrim = code != null ? code.trim() : "";
         if (codeTrim.isEmpty()) {
             throw new BusinessException(400, "项目令号不能为空");
@@ -155,12 +154,12 @@ public class ProjectService {
         project.setName(name != null ? name.trim() : "");
         project.setDescription(description != null ? description.trim() : null);
         project.setStatus(STATUS_ACTIVE);
-        project.setCreatedBy(userId);
+        project.setCreatedByUserId(userId);
         projectMapper.insert(project);
 
         AuthProjectAcl acl = new AuthProjectAcl();
         acl.setProjectId(project.getId());
-        acl.setUserId(userId);
+        acl.setSysUserId(userId);
         acl.setRole(ROLE_OWNER);
         authProjectAclMapper.insert(acl);
 
@@ -170,8 +169,8 @@ public class ProjectService {
     /**
      * 当前用户可见的项目列表（SYSTEM_ADMIN 全部；普通用户：自己创建的 + ACL 可见）
      */
-    public List<ProjectVO> listVisibleProjects(String username, String roleCode) {
-        List<Long> visibleIds = evidenceService.getVisibleProjectIds(username, roleCode);
+    public List<ProjectVO> listVisibleProjects(Long currentUserId, String roleCode) {
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
         if (visibleIds.isEmpty()) {
             return new ArrayList<>();
         }
@@ -186,8 +185,8 @@ public class ProjectService {
     /**
      * 项目详情（做可见性校验，不可见返回 403），并返回当前用户是否可作废证据 canInvalidate
      */
-    public ProjectVO getProjectDetail(Long projectId, String username, String roleCode) {
-        List<Long> visibleIds = evidenceService.getVisibleProjectIds(username, roleCode);
+    public ProjectVO getProjectDetail(Long projectId, Long currentUserId, String roleCode) {
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
         if (!visibleIds.contains(projectId)) {
             throw new BusinessException(403, "无权限访问该项目");
         }
@@ -196,37 +195,36 @@ public class ProjectService {
             throw new BusinessException(404, "项目不存在");
         }
         ProjectVO vo = toVO(project);
-        UUID userId = evidenceService.resolveCreatedByUuid(username);
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(projectId, userId, roleCode);
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(projectId, currentUserId, roleCode);
         vo.setPermissions(bits);
         vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
         vo.setCanManageMembers(Boolean.TRUE.equals(bits.getCanManageMembers()));
         vo.setCanUpload(Boolean.TRUE.equals(bits.getCanUpload()));
-        UUID pmUserId = resolveCurrentPmUserId(projectId, project);
+        Long pmUserId = resolveCurrentPmUserId(projectId, project);
         if (pmUserId != null) {
-            vo.setCurrentPmUserId(pmUserId.toString());
-            AuthUser pmUser = authUserMapper.selectById(pmUserId);
-            vo.setCurrentPmDisplayName(pmUser != null ? pmUser.getDisplayName() : null);
+            vo.setCurrentPmUserId(pmUserId);
+            SysUser pmUser = sysUserMapper.selectById(pmUserId);
+            vo.setCurrentPmDisplayName(pmUser != null ? pmUser.getRealName() : null);
         }
         return vo;
     }
 
-    /** 当前项目经理：ACL 中 role=owner 的用户（V1 唯一）；若无则取 project.created_by */
-    private UUID resolveCurrentPmUserId(Long projectId, Project project) {
+    /** 当前项目经理：ACL 中 role=owner 的用户（V1 唯一）；若无则取 project.created_by_user_id */
+    private Long resolveCurrentPmUserId(Long projectId, Project project) {
         List<AuthProjectAcl> acls = authProjectAclMapper.selectByProjectId(projectId);
         for (AuthProjectAcl acl : acls) {
             if (ROLE_OWNER.equals(acl.getRole())) {
-                return acl.getUserId();
+                return acl.getSysUserId();
             }
         }
-        return project.getCreatedBy();
+        return project.getCreatedByUserId();
     }
 
     /**
-     * 项目成员列表（可见项目即可查看；成员来自 auth_project_acl + auth_user）
+     * 项目成员列表（可见项目即可查看；成员来自 auth_project_acl + sys_user）
      */
-    public List<ProjectMemberVO> listMembers(Long projectId, String username, String roleCode) {
-        List<Long> visibleIds = evidenceService.getVisibleProjectIds(username, roleCode);
+    public List<ProjectMemberVO> listMembers(Long projectId, Long currentUserId, String roleCode) {
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
         if (!visibleIds.contains(projectId)) {
             throw new BusinessException(403, "无权限访问该项目");
         }
@@ -238,21 +236,20 @@ public class ProjectService {
         if (acls.isEmpty()) {
             return new ArrayList<>();
         }
-        List<UUID> userIds = acls.stream().map(AuthProjectAcl::getUserId).distinct().collect(Collectors.toList());
-        List<AuthUser> users = authUserMapper.selectByIds(userIds);
-        java.util.Map<UUID, AuthUser> userMap = users.stream().collect(Collectors.toMap(AuthUser::getId, u -> u));
-        UUID currentAuthUserId = evidenceService.resolveCreatedByUuid(username);
+        List<Long> userIds = acls.stream().map(AuthProjectAcl::getSysUserId).distinct().collect(Collectors.toList());
+        List<SysUser> users = sysUserMapper.selectByIds(userIds);
+        java.util.Map<Long, SysUser> userMap = users.stream().collect(Collectors.toMap(SysUser::getId, u -> u));
         List<ProjectMemberVO> result = new ArrayList<>(acls.size());
         for (AuthProjectAcl acl : acls) {
-            AuthUser u = userMap.get(acl.getUserId());
+            SysUser u = userMap.get(acl.getSysUserId());
             ProjectMemberVO vo = new ProjectMemberVO(
-                    acl.getUserId(),
+                    acl.getSysUserId(),
                     acl.getRole(),
                     u != null ? u.getUsername() : null,
-                    u != null ? u.getDisplayName() : null,
+                    u != null ? u.getRealName() : null,
                     null
             );
-            vo.setIsCurrentUser(currentAuthUserId != null && currentAuthUserId.equals(acl.getUserId()));
+            vo.setIsCurrentUser(currentUserId != null && currentUserId.equals(acl.getSysUserId()));
             result.add(vo);
         }
         return result;
@@ -263,7 +260,7 @@ public class ProjectService {
      * V1：每项目最多一个 owner；分配 PM = 事务内删旧 owner + 增新 owner。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void addOrUpdateMember(Long projectId, UUID operatorUserId, String roleCode, AddProjectMemberRequest body) {
+    public void addOrUpdateMember(Long projectId, Long operatorUserId, String roleCode, AddProjectMemberRequest body) {
         if (body == null || body.getUserId() == null) {
             throw new BusinessException(400, "userId 不能为空");
         }
@@ -279,18 +276,18 @@ public class ProjectService {
         if (project == null) {
             throw new BusinessException(404, "项目不存在");
         }
-        if (authUserMapper.selectById(body.getUserId()) == null) {
+        if (sysUserMapper.selectById(body.getUserId()) == null) {
             throw new BusinessException(400, "用户不存在");
         }
-        UUID targetUserId = body.getUserId();
-        AuthProjectAcl existing = authProjectAclMapper.selectByProjectIdAndUserId(projectId, targetUserId);
+        Long targetUserId = body.getUserId();
+        AuthProjectAcl existing = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, targetUserId);
 
         if (ROLE_OWNER.equals(role)) {
             // 每项目唯一 owner：先移除其他所有 owner，再设目标用户为 owner（同一事务）
             List<AuthProjectAcl> acls = authProjectAclMapper.selectByProjectId(projectId);
             for (AuthProjectAcl acl : acls) {
-                if (ROLE_OWNER.equals(acl.getRole()) && !acl.getUserId().equals(targetUserId)) {
-                    authProjectAclMapper.deleteByProjectIdAndUserId(projectId, acl.getUserId());
+                if (ROLE_OWNER.equals(acl.getRole()) && !acl.getSysUserId().equals(targetUserId)) {
+                    authProjectAclMapper.deleteByProjectIdAndSysUserId(projectId, acl.getSysUserId());
                 }
             }
         }
@@ -301,7 +298,7 @@ public class ProjectService {
         } else {
             AuthProjectAcl acl = new AuthProjectAcl();
             acl.setProjectId(projectId);
-            acl.setUserId(targetUserId);
+            acl.setSysUserId(targetUserId);
             acl.setRole(role);
             authProjectAclMapper.insert(acl);
         }
@@ -311,7 +308,7 @@ public class ProjectService {
      * 移除项目成员（仅 owner 或 SYSTEM_ADMIN）；不允许移除最后一个 owner
      */
     @Transactional(rollbackFor = Exception.class)
-    public void removeMember(Long projectId, UUID memberUserId, UUID operatorUserId, String roleCode) {
+    public void removeMember(Long projectId, Long memberUserId, Long operatorUserId, String roleCode) {
         if (memberUserId == null) {
             throw new BusinessException(400, "userId 不能为空");
         }
@@ -325,21 +322,21 @@ public class ProjectService {
         }
         List<AuthProjectAcl> acls = authProjectAclMapper.selectByProjectId(projectId);
         long ownerCount = acls.stream().filter(a -> "owner".equals(a.getRole())).count();
-        if (project.getCreatedBy().equals(memberUserId)) {
+        if (project.getCreatedByUserId().equals(memberUserId)) {
             if (ownerCount <= 1) {
                 throw new BusinessException(400, "不能移除项目创建人（至少保留一名 owner）");
             }
         } else {
-            AuthProjectAcl target = authProjectAclMapper.selectByProjectIdAndUserId(projectId, memberUserId);
+            AuthProjectAcl target = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, memberUserId);
             if (target != null && "owner".equals(target.getRole()) && ownerCount <= 1) {
                 throw new BusinessException(400, "至少保留一名 owner");
             }
         }
-        authProjectAclMapper.deleteByProjectIdAndUserId(projectId, memberUserId);
+        authProjectAclMapper.deleteByProjectIdAndSysUserId(projectId, memberUserId);
     }
 
-    private boolean isProjectOwnerAcl(Long projectId, UUID userId) {
-        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndUserId(projectId, userId);
+    private boolean isProjectOwnerAcl(Long projectId, Long userId) {
+        AuthProjectAcl acl = authProjectAclMapper.selectByProjectIdAndSysUserId(projectId, userId);
         return acl != null && "owner".equals(acl.getRole());
     }
 

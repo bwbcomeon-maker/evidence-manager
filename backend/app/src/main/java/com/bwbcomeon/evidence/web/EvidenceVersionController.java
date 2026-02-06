@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.UUID;
 
 /**
  * 证据版本控制器（下载）及全局证据列表查询
@@ -57,7 +56,7 @@ public class EvidenceVersionController {
         }
         PageResult<EvidenceListItemVO> data = evidenceService.pageEvidence(
                 page, pageSize, projectId, status, uploader, recentDays, fileCategory, nameLike,
-                user.getId(), user.getUsername(), user.getRoleCode());
+                user.getId(), user.getRoleCode());
         return Result.success(data);
     }
 
@@ -71,7 +70,7 @@ public class EvidenceVersionController {
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        EvidenceListItemVO data = evidenceService.getEvidenceById(id, user.getUsername(), user.getRoleCode());
+        EvidenceListItemVO data = evidenceService.getEvidenceById(id, user.getId(), user.getRoleCode());
         return Result.success(data);
     }
 
@@ -85,7 +84,7 @@ public class EvidenceVersionController {
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        evidenceService.submitEvidence(id, user.getUsername(), user.getRoleCode());
+        evidenceService.submitEvidence(id, user.getId(), user.getRoleCode());
         return Result.success(null);
     }
 
@@ -99,7 +98,7 @@ public class EvidenceVersionController {
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        evidenceService.archiveEvidence(id, user.getUsername(), user.getRoleCode());
+        evidenceService.archiveEvidence(id, user.getId(), user.getRoleCode());
         return Result.success(null);
     }
 
@@ -116,7 +115,7 @@ public class EvidenceVersionController {
         if (user == null) return Result.error(401, "未登录");
         String invalidReason = body != null ? body.get("invalidReason") : null;
         com.bwbcomeon.evidence.dto.InvalidateAuditInfo info =
-                evidenceService.invalidateEvidence(id, user.getUsername(), user.getRoleCode(), invalidReason);
+                evidenceService.invalidateEvidence(id, user.getId(), user.getRoleCode(), invalidReason);
         String detail = (invalidReason != null && !invalidReason.isBlank()) ? "作废原因: " + invalidReason : "证据作废";
         authService.recordAudit(request, "EVIDENCE_INVALIDATE", true, user.getId(), null, null, detail,
                 "EVIDENCE", id, info.getProjectId(), info.getBeforeData(), info.getAfterData());
@@ -138,12 +137,8 @@ public class EvidenceVersionController {
         if (user == null) {
             throw new UnauthorizedException("未登录");
         }
-        UUID currentUserId = evidenceService.resolveCreatedByUuid(user.getUsername());
-        if (currentUserId == null) {
-            throw new ForbiddenException("无法解析当前用户");
-        }
-        logger.info("Download version file request: versionId={}, userId={}", versionId, currentUserId);
-        Resource resource = evidenceService.downloadVersionFile(versionId, currentUserId);
+        logger.info("Download version file request: versionId={}, userId={}", versionId, user.getId());
+        Resource resource = evidenceService.downloadVersionFile(versionId, user.getId());
         
         // 获取原始文件名和Content-Type
         String originalFilename = evidenceService.getVersionOriginalFilename(versionId);

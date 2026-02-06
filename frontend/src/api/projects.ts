@@ -21,14 +21,14 @@ export interface ProjectVO {
   canInvalidate?: boolean
   canManageMembers?: boolean
   canUpload?: boolean
-  /** 当前项目经理 userId（UUID 字符串） */
-  currentPmUserId?: string
+  /** 当前项目经理 sys_user.id */
+  currentPmUserId?: number
   /** 当前项目经理展示名 */
   currentPmDisplayName?: string
 }
 
 export interface ProjectMemberVO {
-  userId: string
+  userId: number
   role: string
   username?: string
   displayName?: string
@@ -37,7 +37,7 @@ export interface ProjectMemberVO {
 }
 
 export interface AddProjectMemberBody {
-  userId: string
+  userId: number
   role: 'owner' | 'editor' | 'viewer'
 }
 
@@ -50,7 +50,7 @@ export const addOrUpdateProjectMember = (projectId: number, body: AddProjectMemb
   http.post<ApiResult<unknown>>(`/projects/${projectId}/members`, body)
 
 /** 移除项目成员 */
-export const removeProjectMember = (projectId: number, userId: string) =>
+export const removeProjectMember = (projectId: number, userId: number) =>
   http.delete<ApiResult<unknown>>(`/projects/${projectId}/members/${userId}`)
 
 interface ApiResult<T> {

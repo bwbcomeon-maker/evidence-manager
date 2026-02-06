@@ -4,7 +4,6 @@ import com.bwbcomeon.evidence.entity.Project;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 项目表Mapper
@@ -24,7 +23,7 @@ public interface ProjectMapper {
     /**
      * 根据创建人查询项目列表
      */
-    List<Project> selectByCreatedBy(@Param("createdBy") UUID createdBy);
+    List<Project> selectByCreatedBy(@Param("createdByUserId") Long createdByUserId);
 
     /**
      * 查询所有项目

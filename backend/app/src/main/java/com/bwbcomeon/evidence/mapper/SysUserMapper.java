@@ -24,6 +24,12 @@ public interface SysUserMapper {
     /** 根据登录账号查询用户（仅未删除） */
     SysUser selectByUsername(@Param("username") String username);
 
+    /** 根据ID列表批量查询（用于成员列表展示） */
+    List<SysUser> selectByIds(@Param("ids") List<Long> ids);
+
+    /** 查询所有未删除用户（用于成员选择器等，按 id 升序） */
+    List<SysUser> selectAll();
+
     /**
      * 分页查询用户（支持 keyword/roleCode/enabled，按创建时间倒序）
      * @param keyword 关键词（匹配 username / real_name）

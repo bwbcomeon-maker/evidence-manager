@@ -4,8 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 /**
  * 项目成员（ACL + 用户信息）
  */
@@ -13,7 +11,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ProjectMemberVO {
-    private UUID userId;
+    private Long userId;
     private String role;
     private String username;
     private String displayName;

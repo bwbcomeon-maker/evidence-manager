@@ -300,7 +300,7 @@ async function onAddConfirm(action: string): Promise<boolean> {
   }
   try {
     const res = await addOrUpdateProjectMember(projectId.value, {
-      userId: addForm.value.userId,
+      userId: Number(addForm.value.userId),
       role: addForm.value.role
     })
     if (res.code === 0) {

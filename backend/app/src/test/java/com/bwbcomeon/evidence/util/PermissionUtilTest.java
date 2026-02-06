@@ -13,8 +13,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,14 +20,15 @@ import static org.mockito.Mockito.when;
 
 /**
  * P1 回归：checkCanArchive 与 checkCanInvalidate 同源，editor/viewer 调接口应 403。
+ * A 方案：userId 为 sys_user.id (Long)。
  */
 @ExtendWith(MockitoExtension.class)
 class PermissionUtilTest {
 
     private static final Long PROJECT_ID = 1L;
-    private static final UUID CREATED_BY = UUID.fromString("a0000000-0000-0000-0000-000000000001");
-    private static final UUID EDITOR_USER = UUID.fromString("b0000000-0000-0000-0000-000000000001");
-    private static final UUID VIEWER_USER = UUID.fromString("c0000000-0000-0000-0000-000000000001");
+    private static final Long CREATED_BY_USER_ID = 100L;
+    private static final Long EDITOR_USER_ID = 101L;
+    private static final Long VIEWER_USER_ID = 102L;
 
     @Mock
     private ProjectMapper projectMapper;
@@ -46,7 +45,7 @@ class PermissionUtilTest {
     void setUp() {
         project = new Project();
         project.setId(PROJECT_ID);
-        project.setCreatedBy(CREATED_BY);
+        project.setCreatedByUserId(CREATED_BY_USER_ID);
     }
 
     @Test
@@ -54,11 +53,11 @@ class PermissionUtilTest {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
         AuthProjectAcl editorAcl = new AuthProjectAcl();
         editorAcl.setProjectId(PROJECT_ID);
-        editorAcl.setUserId(EDITOR_USER);
+        editorAcl.setSysUserId(EDITOR_USER_ID);
         editorAcl.setRole("editor");
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(EDITOR_USER))).thenReturn(editorAcl);
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(editorAcl);
 
-        assertThatThrownBy(() -> permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER, "PROJECT_EDITOR"))
+        assertThatThrownBy(() -> permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER_ID, "PROJECT_EDITOR"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("仅项目责任人可归档证据");
     }
@@ -68,25 +67,25 @@ class PermissionUtilTest {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
         AuthProjectAcl viewerAcl = new AuthProjectAcl();
         viewerAcl.setProjectId(PROJECT_ID);
-        viewerAcl.setUserId(VIEWER_USER);
+        viewerAcl.setSysUserId(VIEWER_USER_ID);
         viewerAcl.setRole("viewer");
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(VIEWER_USER))).thenReturn(viewerAcl);
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(VIEWER_USER_ID))).thenReturn(viewerAcl);
 
-        assertThatThrownBy(() -> permissionUtil.checkCanArchive(PROJECT_ID, VIEWER_USER, null))
+        assertThatThrownBy(() -> permissionUtil.checkCanArchive(PROJECT_ID, VIEWER_USER_ID, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("仅项目责任人可归档证据");
     }
 
     @Test
     void checkCanArchive_system_admin_passes() {
-        permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER, "SYSTEM_ADMIN");
+        permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER_ID, "SYSTEM_ADMIN");
         // no throw
     }
 
     @Test
     void checkCanArchive_created_by_passes() {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
-        permissionUtil.checkCanArchive(PROJECT_ID, CREATED_BY, "PMO");
+        permissionUtil.checkCanArchive(PROJECT_ID, CREATED_BY_USER_ID, "PMO");
         // no throw: created_by is always allowed
     }
 
@@ -95,10 +94,10 @@ class PermissionUtilTest {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
         AuthProjectAcl ownerAcl = new AuthProjectAcl();
         ownerAcl.setProjectId(PROJECT_ID);
-        ownerAcl.setUserId(EDITOR_USER);
+        ownerAcl.setSysUserId(EDITOR_USER_ID);
         ownerAcl.setRole("owner");
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(EDITOR_USER))).thenReturn(ownerAcl);
-        permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER, "PMO");
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(ownerAcl);
+        permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER_ID, "PMO");
         // no throw
     }
 
@@ -106,7 +105,7 @@ class PermissionUtilTest {
 
     @Test
     void computeProjectPermissionBits_system_admin_all_true() {
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER, "SYSTEM_ADMIN");
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER_ID, "SYSTEM_ADMIN");
         assertThat(bits.getCanUpload()).isTrue();
         assertThat(bits.getCanSubmit()).isTrue();
         assertThat(bits.getCanArchive()).isTrue();
@@ -116,7 +115,7 @@ class PermissionUtilTest {
 
     @Test
     void computeProjectPermissionBits_auditor_all_false() {
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER, "AUDITOR");
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER_ID, "AUDITOR");
         assertThat(bits.getCanUpload()).isFalse();
         assertThat(bits.getCanSubmit()).isFalse();
         assertThat(bits.getCanArchive()).isFalse();
@@ -127,8 +126,8 @@ class PermissionUtilTest {
     @Test
     void computeProjectPermissionBits_pmo_no_project_role_only_can_manage_members() {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(EDITOR_USER))).thenReturn(null);
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER, "PMO");
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(null);
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER_ID, "PMO");
         assertThat(bits.getCanUpload()).isFalse();
         assertThat(bits.getCanSubmit()).isFalse();
         assertThat(bits.getCanArchive()).isFalse();
@@ -141,10 +140,10 @@ class PermissionUtilTest {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
         AuthProjectAcl ownerAcl = new AuthProjectAcl();
         ownerAcl.setProjectId(PROJECT_ID);
-        ownerAcl.setUserId(EDITOR_USER);
+        ownerAcl.setSysUserId(EDITOR_USER_ID);
         ownerAcl.setRole("owner");
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(EDITOR_USER))).thenReturn(ownerAcl);
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER, null);
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(ownerAcl);
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER_ID, null);
         assertThat(bits.getCanUpload()).isTrue();
         assertThat(bits.getCanSubmit()).isTrue();
         assertThat(bits.getCanArchive()).isTrue();
@@ -157,10 +156,10 @@ class PermissionUtilTest {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
         AuthProjectAcl editorAcl = new AuthProjectAcl();
         editorAcl.setProjectId(PROJECT_ID);
-        editorAcl.setUserId(EDITOR_USER);
+        editorAcl.setSysUserId(EDITOR_USER_ID);
         editorAcl.setRole("editor");
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(EDITOR_USER))).thenReturn(editorAcl);
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER, null);
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(editorAcl);
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, EDITOR_USER_ID, null);
         assertThat(bits.getCanUpload()).isTrue();
         assertThat(bits.getCanSubmit()).isTrue();
         assertThat(bits.getCanArchive()).isFalse();
@@ -173,10 +172,10 @@ class PermissionUtilTest {
         when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
         AuthProjectAcl viewerAcl = new AuthProjectAcl();
         viewerAcl.setProjectId(PROJECT_ID);
-        viewerAcl.setUserId(VIEWER_USER);
+        viewerAcl.setSysUserId(VIEWER_USER_ID);
         viewerAcl.setRole("viewer");
-        when(authProjectAclMapper.selectByProjectIdAndUserId(eq(PROJECT_ID), eq(VIEWER_USER))).thenReturn(viewerAcl);
-        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, VIEWER_USER, null);
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(VIEWER_USER_ID))).thenReturn(viewerAcl);
+        PermissionBits bits = permissionUtil.computeProjectPermissionBits(PROJECT_ID, VIEWER_USER_ID, null);
         assertThat(bits.getCanUpload()).isFalse();
         assertThat(bits.getCanSubmit()).isFalse();
         assertThat(bits.getCanArchive()).isFalse();

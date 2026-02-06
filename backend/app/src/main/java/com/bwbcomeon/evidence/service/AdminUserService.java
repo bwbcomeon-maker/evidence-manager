@@ -1,10 +1,8 @@
 package com.bwbcomeon.evidence.service;
 
 import com.bwbcomeon.evidence.dto.*;
-import com.bwbcomeon.evidence.entity.AuthUser;
 import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.exception.BusinessException;
-import com.bwbcomeon.evidence.mapper.AuthUserMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.web.AuthInterceptor;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -44,13 +41,11 @@ public class AdminUserService {
     private static final String ADMIN_USERNAME = "admin";
 
     private final SysUserMapper sysUserMapper;
-    private final AuthUserMapper authUserMapper;
     private final AuthService authService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public AdminUserService(SysUserMapper sysUserMapper, AuthUserMapper authUserMapper, AuthService authService) {
+    public AdminUserService(SysUserMapper sysUserMapper, AuthService authService) {
         this.sysUserMapper = sysUserMapper;
-        this.authUserMapper = authUserMapper;
         this.authService = authService;
     }
 
@@ -141,15 +136,6 @@ public class AdminUserService {
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         sysUserMapper.insert(user);
-
-        // 同步写入 auth_user，便于创建项目/证据时 resolveCreatedByUuid 能解析到当前用户
-        AuthUser authUser = new AuthUser();
-        authUser.setUsername(username);
-        authUser.setDisplayName(user.getRealName() != null && !user.getRealName().isBlank() ? user.getRealName() : username);
-        authUser.setEmail(user.getEmail());
-        authUser.setIsActive(Boolean.TRUE.equals(user.getEnabled()));
-        authUser.setCreatedAt(OffsetDateTime.now());
-        authUserMapper.insert(authUser);
 
         authService.recordAudit(request, "USER_CREATE", true, currentUserId(request),
                 null, null, "userId=" + user.getId() + ",username=" + username);

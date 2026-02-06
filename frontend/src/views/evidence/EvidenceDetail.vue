@@ -13,11 +13,11 @@
             </van-tag>
           </template>
         </van-cell>
-        <van-cell title="上传人" :value="evidence.createdBy || '—'" />
+        <van-cell title="上传人" :value="evidence.createdByUserId != null ? String(evidence.createdByUserId) : '—'" />
         <van-cell title="上传时间" :value="formatDateTime(evidence.createdAt)" />
-        <template v-if="effectiveStatus === 'INVALID' && (evidence.invalidReason || evidence.invalidBy || evidence.invalidAt)">
+        <template v-if="effectiveStatus === 'INVALID' && (evidence.invalidReason || evidence.invalidByUserId != null || evidence.invalidAt)">
           <van-cell title="作废原因" :value="evidence.invalidReason || '—'" />
-          <van-cell title="作废人" :value="evidence.invalidBy || '—'" />
+          <van-cell title="作废人" :value="evidence.invalidByUserId != null ? String(evidence.invalidByUserId) : '—'" />
           <van-cell title="作废时间" :value="evidence.invalidAt ? formatDateTime(evidence.invalidAt) : '—'" />
         </template>
         <van-cell v-if="evidence.latestVersion" title="文件名" :value="evidence.latestVersion.originalFilename" />

@@ -2,7 +2,6 @@ package com.bwbcomeon.evidence.entity;
 
 import lombok.Data;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
 /**
  * 证据版本表
@@ -50,9 +49,9 @@ public class EvidenceVersion {
     private String contentType;
 
     /**
-     * 上传人ID
+     * 上传人 sys_user.id
      */
-    private UUID uploaderId;
+    private Long uploaderUserId;
 
     /**
      * 版本备注
