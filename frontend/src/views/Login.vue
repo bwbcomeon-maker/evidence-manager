@@ -107,9 +107,8 @@ const onSubmit = async () => {
       showToast(res.message || '登录失败')
     }
   } catch (e: unknown) {
-    const msg = (e as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
-      || (e as Error)?.message
-      || '登录失败'
+    const err = e as { response?: { data?: { message?: string } }; message?: string }
+    const msg = err?.response?.data?.message ?? err?.message ?? '用户名或密码错误'
     showToast(msg)
   } finally {
     loading.value = false

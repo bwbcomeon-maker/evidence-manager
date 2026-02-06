@@ -8,10 +8,10 @@
       placeholder
       @click-left="showBack ? onBack() : undefined"
     />
-    <main class="layout-content">
-      <router-view />
+    <main class="layout-content" :class="{ 'layout-content--with-tabbar': showTabbar }">
+      <router-view :key="route.fullPath" />
     </main>
-    <van-tabbar v-if="showTabbar" route placeholder>
+    <van-tabbar v-if="showTabbar" route placeholder class="main-tabbar">
       <van-tabbar-item to="/home" icon="home-o">首页</van-tabbar-item>
       <van-tabbar-item to="/projects" icon="apps-o">项目</van-tabbar-item>
       <van-tabbar-item to="/evidence" icon="description">证据</van-tabbar-item>
@@ -66,7 +66,16 @@ function onBack() {
 }
 .layout-content {
   flex: 1;
+  min-height: 0;
   padding-bottom: env(safe-area-inset-bottom, 0);
+}
+/* 有 Tabbar 时预留底部高度，避免空态/列表内容覆盖 Tabbar 导致点击被吞 */
+.layout-content--with-tabbar {
+  padding-bottom: calc(var(--van-tabbar-height, 50px) + env(safe-area-inset-bottom, 0));
+}
+/* 保证 Tabbar 始终在内容层之上，避免空态区域遮挡（Vant 默认 z-index 仅 1） */
+.main-tabbar {
+  z-index: 10;
 }
 /* 返回文字强化：仅字重，不新增颜色/阴影 */
 :deep(.van-nav-bar__text) {

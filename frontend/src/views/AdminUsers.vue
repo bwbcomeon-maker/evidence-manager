@@ -24,20 +24,22 @@
           v-for="u in list"
           :key="u.id"
           :title="u.username"
-          :label="`${u.realName || '-'} · ${roleLabel(u.roleCode)} · ${u.enabled ? '启用' : '禁用'}`"
+          :label="`${u.realName || '-'} · ${roleLabel(u.roleCode)} · ${u.enabled ? '启用' : '禁用'}${isSelf(u) ? ' · 当前登录' : ''}`"
         >
           <template #right-icon>
             <van-switch
+              v-if="!isSelf(u)"
               :model-value="u.enabled"
               size="22"
               @update:model-value="(v: boolean) => toggleEnable(u, v)"
             />
+            <span v-else class="self-hint">不可操作</span>
           </template>
           <template #value>
             <div class="cell-actions">
-              <van-button size="small" type="primary" plain @click="openEdit(u)">编辑</van-button>
-              <van-button size="small" @click="openResetPwd(u)">重置密码</van-button>
-              <van-button size="small" type="danger" plain @click="confirmDelete(u)">删除</van-button>
+              <van-button size="small" type="primary" plain @click="openEdit(u)">{{ isSelf(u) ? '查看' : '编辑' }}</van-button>
+              <van-button v-if="!isSelf(u)" size="small" @click="openResetPwd(u)">重置密码</van-button>
+              <van-button v-if="!isSelf(u)" size="small" type="danger" plain @click="confirmDelete(u)">删除</van-button>
             </div>
           </template>
         </van-cell>
@@ -52,10 +54,13 @@
       :style="{ height: '70%' }"
     >
       <van-nav-bar
-        :title="editingId ? '编辑用户' : '新增用户'"
+        :title="editingId ? (isEditingSelf ? '查看自己的账号' : '编辑用户') : '新增用户'"
         left-arrow
         @click-left="showFormPopup = false"
       />
+      <van-notice-bar v-if="isEditingSelf" left-icon="info-o" class="self-notice">
+        管理员模块不允许编辑自己的账号，如需修改请由其他管理员操作或使用自助改密。
+      </van-notice-bar>
       <van-form @submit="onFormSubmit" class="form-body">
         <van-cell-group inset>
           <van-field
@@ -74,26 +79,26 @@
             label="密码"
             placeholder="不填则默认 Init@12345"
           />
-          <van-field v-model="form.realName" name="realName" label="姓名" placeholder="请输入" />
-          <van-field v-model="form.phone" name="phone" label="手机号" placeholder="请输入" />
-          <van-field v-model="form.email" name="email" label="邮箱" placeholder="请输入" />
+          <van-field v-model="form.realName" name="realName" label="姓名" placeholder="请输入" :disabled="isEditingSelf" />
+          <van-field v-model="form.phone" name="phone" label="手机号" placeholder="请输入" :disabled="isEditingSelf" />
+          <van-field v-model="form.email" name="email" label="邮箱" placeholder="请输入" :disabled="isEditingSelf" />
           <van-field
             v-model="form.roleCode"
-            is-link
-            readonly
+            :readonly="isEditingSelf"
+            :is-link="!isEditingSelf"
             name="roleCode"
             label="角色"
             placeholder="请选择"
             :rules="[{ required: true, message: '请选择角色' }]"
-            @click="showRolePicker = true"
+            @click="openRolePickerIfNotSelf"
           />
           <van-field name="enabled" label="启用">
             <template #input>
-              <van-switch v-model="form.enabled" />
+              <van-switch v-model="form.enabled" :disabled="isEditingSelf" />
             </template>
           </van-field>
         </van-cell-group>
-        <div class="form-footer">
+        <div v-if="!isEditingSelf" class="form-footer">
           <van-button round block type="primary" native-type="submit" :loading="formLoading">
             保存
           </van-button>
@@ -133,6 +138,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { showToast } from 'vant'
+import { useAuthStore } from '@/stores/auth'
 import {
   getAdminUserPage,
   createAdminUser,
@@ -145,6 +151,14 @@ import {
   type CreateUserBody,
   type UpdateUserBody
 } from '@/api/adminUsers'
+
+const auth = useAuthStore()
+/** 当前登录用户是否为某行用户（自己）；用于禁止自我操作的前端防呆 */
+function isSelf(u: AdminUserItem): boolean {
+  const me = auth.currentUser
+  if (!me) return false
+  return me.id === u.id || (me.username && u.username && me.username === u.username)
+}
 
 const keyword = ref('')
 const filterRoleCode = ref('')
@@ -168,6 +182,8 @@ const pageSize = 10
 const showFormPopup = ref(false)
 const formLoading = ref(false)
 const editingId = ref<number | null>(null)
+/** 当前编辑的是自己时，表单只读（仅查看），不展示保存按钮 */
+const isEditingSelf = ref(false)
 const form = reactive<CreateUserBody & { realName?: string; phone?: string; email?: string }>({
   username: '',
   password: '',
@@ -238,6 +254,7 @@ function loadFirstPage() {
 
 function openAdd() {
   editingId.value = null
+  isEditingSelf.value = false
   form.username = ''
   form.password = ''
   form.realName = ''
@@ -250,6 +267,7 @@ function openAdd() {
 
 function openEdit(u: AdminUserItem) {
   editingId.value = u.id
+  isEditingSelf.value = isSelf(u)
   form.username = u.username
   form.realName = u.realName ?? ''
   form.phone = u.phone ?? ''
@@ -259,12 +277,17 @@ function openEdit(u: AdminUserItem) {
   showFormPopup.value = true
 }
 
+function openRolePickerIfNotSelf() {
+  if (!isEditingSelf.value) showRolePicker.value = true
+}
+
 function onRoleConfirm({ selectedOptions }: { selectedOptions: { value: string }[] }) {
   if (selectedOptions?.[0]) form.roleCode = selectedOptions[0].value
   showRolePicker.value = false
 }
 
 async function onFormSubmit() {
+  if (isEditingSelf.value) return
   formLoading.value = true
   try {
     if (editingId.value) {
@@ -313,6 +336,7 @@ async function toggleEnable(u: AdminUserItem, enabled: boolean) {
 }
 
 async function openResetPwd(u: AdminUserItem) {
+  if (isSelf(u)) return
   try {
     const res = await resetAdminUserPassword(u.id) as { code: number; data?: { newPassword: string } }
     if (res.code === 0 && res.data?.newPassword) {
@@ -392,5 +416,12 @@ onMounted(() => {
   word-break: break-all;
   font-family: monospace;
   font-size: 14px;
+}
+.self-hint {
+  font-size: 12px;
+  color: #969799;
+}
+.self-notice {
+  margin: 0 16px 8px;
 }
 </style>

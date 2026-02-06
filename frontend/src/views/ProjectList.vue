@@ -239,7 +239,7 @@ const onCreateSubmit = async () => {
     createLoading.value = false
   }
 }
-direction
+
 onMounted(() => {
   loadProjects()
 })

@@ -18,10 +18,18 @@ import java.util.stream.Collectors;
 
 /**
  * 管理员-用户管理服务（仅 SYSTEM_ADMIN 可访问，由 AdminInterceptor 保证）
- * 所有写操作均写 audit_log
+ * 所有写操作均写 audit_log。
+ * 安全规则：禁止对“自己”执行禁用/启用/删除/改角色/重置密码等；admin 禁止修改 admin 自己任何字段。
  */
 @Service
 public class AdminUserService {
+
+    /** 禁止自我操作时返回的 HTTP 状态码（全系统统一） */
+    public static final int SELF_OPERATION_FORBIDDEN_CODE = 403;
+    /** 禁止自我操作时的提示文案 */
+    public static final String SELF_OPERATION_FORBIDDEN_MESSAGE = "不允许对自己的账号执行该操作（请联系其他管理员）";
+    /** 审计：拦截到自我管理被禁止时使用的 action */
+    public static final String AUDIT_ACTION_SELF_OPERATION_FORBIDDEN = "SELF_OPERATION_FORBIDDEN";
 
     /** V1：系统级角色 SYSTEM_ADMIN / PMO / AUDITOR；PROJECT_* 保留仅作存量兼容，不再参与权限判断 */
     public static final Set<String> VALID_ROLE_CODES = Set.of(
@@ -30,6 +38,7 @@ public class AdminUserService {
     );
     private static final String DEFAULT_PASSWORD = "Init@12345";
     private static final String CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final String ADMIN_USERNAME = "admin";
 
     private final SysUserMapper sysUserMapper;
     private final AuthService authService;
@@ -40,9 +49,50 @@ public class AdminUserService {
         this.authService = authService;
     }
 
+    private static AuthUserVO currentUser(HttpServletRequest request) {
+        return (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+    }
+
     private static Long currentUserId(HttpServletRequest request) {
-        AuthUserVO u = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        AuthUserVO u = currentUser(request);
         return u != null ? u.getId() : null;
+    }
+
+    private static String currentUsername(HttpServletRequest request) {
+        AuthUserVO u = currentUser(request);
+        return u != null ? u.getUsername() : null;
+    }
+
+    /**
+     * 禁止 admin 对 admin 自己执行任何管理操作（优先级最高）。
+     * 违反时写审计并抛出 BusinessException(403)。
+     */
+    private void assertNotAdminSelfOperation(HttpServletRequest request, SysUser targetUser) {
+        String current = currentUsername(request);
+        if (current == null || targetUser == null) return;
+        if (!ADMIN_USERNAME.equalsIgnoreCase(current.trim())) return;
+        if (!ADMIN_USERNAME.equalsIgnoreCase(targetUser.getUsername() != null ? targetUser.getUsername().trim() : "")) return;
+        authService.recordAudit(request, AUDIT_ACTION_SELF_OPERATION_FORBIDDEN, false, currentUserId(request),
+                null, null, "actor=admin,target=admin,reason=admin cannot manage admin");
+        throw new BusinessException(SELF_OPERATION_FORBIDDEN_CODE, SELF_OPERATION_FORBIDDEN_MESSAGE);
+    }
+
+    /**
+     * 禁止任何登录用户对“自己”执行禁用/启用/删除/改角色/重置密码等操作。
+     * 违反时写审计并抛出 BusinessException(403)。
+     */
+    private void assertNotSelfOperation(HttpServletRequest request, SysUser targetUser) {
+        Long cid = currentUserId(request);
+        String cname = currentUsername(request);
+        if (targetUser == null) return;
+        boolean byId = cid != null && targetUser.getId() != null && cid.equals(targetUser.getId());
+        boolean byUsername = cname != null && targetUser.getUsername() != null
+                && cname.trim().equalsIgnoreCase(targetUser.getUsername().trim());
+        if (byId || byUsername) {
+            authService.recordAudit(request, AUDIT_ACTION_SELF_OPERATION_FORBIDDEN, false, cid,
+                    null, null, "actor=" + cname + ",targetUserId=" + targetUser.getId() + ",reason=self operation forbidden");
+            throw new BusinessException(SELF_OPERATION_FORBIDDEN_CODE, SELF_OPERATION_FORBIDDEN_MESSAGE);
+        }
     }
 
     /** 校验 roleCode 属于固定集合 */
@@ -109,6 +159,7 @@ public class AdminUserService {
 
     /**
      * 修改用户（不修改 password/username），写 audit USER_UPDATE
+     * 禁止操作自己（含 admin 不能改 admin）
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminUserListItemVO update(HttpServletRequest request, Long id, AdminUserUpdateRequest req) {
@@ -116,6 +167,8 @@ public class AdminUserService {
         if (user == null || Boolean.TRUE.equals(user.getIsDeleted())) {
             throw new BusinessException(404, "用户不存在");
         }
+        assertNotAdminSelfOperation(request, user);
+        assertNotSelfOperation(request, user);
         if (req.getRoleCode() != null && !req.getRoleCode().isBlank()) {
             validateRoleCode(req.getRoleCode());
         }
@@ -135,6 +188,7 @@ public class AdminUserService {
 
     /**
      * 启用/禁用，写 audit USER_ENABLE
+     * 禁止操作自己（含 admin 不能禁用/启用自己）
      */
     @Transactional(rollbackFor = Exception.class)
     public void setEnabled(HttpServletRequest request, Long id, boolean enabled) {
@@ -142,6 +196,8 @@ public class AdminUserService {
         if (user == null || Boolean.TRUE.equals(user.getIsDeleted())) {
             throw new BusinessException(404, "用户不存在");
         }
+        assertNotAdminSelfOperation(request, user);
+        assertNotSelfOperation(request, user);
         sysUserMapper.setEnabled(id, enabled);
         authService.recordAudit(request, "USER_ENABLE", true, currentUserId(request),
                 null, null, "userId=" + id + ",enabled=" + enabled);
@@ -149,6 +205,7 @@ public class AdminUserService {
 
     /**
      * 重置密码为随机 8-12 位（数字+字母），返回明文一次，写 audit USER_RESET_PWD
+     * 禁止操作自己（含 admin 不能重置自己密码，应走自助改密）
      */
     @Transactional(rollbackFor = Exception.class)
     public ResetPasswordVO resetPassword(HttpServletRequest request, Long id) {
@@ -156,6 +213,8 @@ public class AdminUserService {
         if (user == null || Boolean.TRUE.equals(user.getIsDeleted())) {
             throw new BusinessException(404, "用户不存在");
         }
+        assertNotAdminSelfOperation(request, user);
+        assertNotSelfOperation(request, user);
         String newPassword = randomPassword(8, 12);
         String hash = passwordEncoder.encode(newPassword);
         sysUserMapper.resetPassword(id, hash);
@@ -166,22 +225,21 @@ public class AdminUserService {
 
     /**
      * 逻辑删除，写 audit USER_DELETE；不能删除自己，不能删除系统内唯一管理员
+     * 禁止操作自己（统一 403 + SELF_OPERATION_FORBIDDEN 审计）
      */
     @Transactional(rollbackFor = Exception.class)
     public void logicalDelete(HttpServletRequest request, Long id) {
-        Long actorId = currentUserId(request);
-        if (actorId != null && actorId.equals(id)) {
-            throw new BusinessException(400, "不能删除当前登录账号");
-        }
         SysUser user = sysUserMapper.selectById(id);
         if (user == null || Boolean.TRUE.equals(user.getIsDeleted())) {
             throw new BusinessException(404, "用户不存在");
         }
+        assertNotAdminSelfOperation(request, user);
+        assertNotSelfOperation(request, user);
         if ("SYSTEM_ADMIN".equals(user.getRoleCode()) && sysUserMapper.countByRoleCodeAndNotDeleted("SYSTEM_ADMIN") <= 1) {
             throw new BusinessException(400, "不能删除系统内唯一管理员");
         }
         sysUserMapper.logicalDelete(id);
-        authService.recordAudit(request, "USER_DELETE", true, actorId, null, null, "userId=" + id);
+        authService.recordAudit(request, "USER_DELETE", true, currentUserId(request), null, null, "userId=" + id);
     }
 
     private static AdminUserListItemVO toListItemVO(SysUser u) {

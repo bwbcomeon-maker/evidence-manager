@@ -5,35 +5,42 @@
         class="home-entry home-entry--projects"
         icon="apps-o"
         text="项目列表"
-        to="/projects"
+        @click="go('/projects')"
       />
       <van-grid-item
         class="home-entry home-entry--evidence"
         icon="description"
         text="证据管理"
-        to="/evidence"
+        @click="go('/evidence')"
       />
       <van-grid-item
         v-if="auth.isAdmin"
         class="home-entry home-entry--admin"
         icon="manager-o"
         text="用户管理"
-        to="/admin/users"
+        @click="go('/admin/users')"
       />
     </van-grid>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+const router = useRouter()
 const auth = useAuthStore()
+
+function go(path: string) {
+  router.push(path)
+}
 </script>
 
 <style scoped>
 .home-page {
   padding: 16px;
   min-height: 100vh;
+  box-sizing: border-box;
 }
 
 /* 锤子式：留白+对齐+内容权重，无装饰线/阴影；强调在功能块内部 */
