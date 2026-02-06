@@ -158,7 +158,7 @@ public class PermissionUtil {
 
     /**
      * V1 统一计算项目内权限位（与 checkCan* 同源，供接口返回 permissions）
-     * SYSTEM_ADMIN 全 true；AUDITOR/PROJECT_AUDITOR 全 false；
+     * SYSTEM_ADMIN 全 true；AUDITOR 全 false；
      * PMO 仅 canManageMembers 默认 true，证据位仅当该项目 created_by/owner/editor 时按角色给；
      * 其他按 created_by/ACL owner/editor/viewer 计算。
      */
@@ -166,7 +166,7 @@ public class PermissionUtil {
         if (roleCode != null && "SYSTEM_ADMIN".equals(roleCode)) {
             return PermissionBits.all(true);
         }
-        if (roleCode != null && ("AUDITOR".equals(roleCode) || "PROJECT_AUDITOR".equals(roleCode))) {
+        if (roleCode != null && "AUDITOR".equals(roleCode)) {
             return PermissionBits.all(false);
         }
         Project project = projectMapper.selectById(projectId);

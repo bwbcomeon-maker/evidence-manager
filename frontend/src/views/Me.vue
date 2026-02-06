@@ -19,10 +19,7 @@ const roleLabels: Record<string, string> = {
   SYSTEM_ADMIN: '系统管理员',
   PMO: 'PMO（治理）',
   AUDITOR: '审计',
-  PROJECT_OWNER: '项目负责人',
-  PROJECT_EDITOR: '项目编辑',
-  PROJECT_VIEWER: '项目查看',
-  PROJECT_AUDITOR: '项目审计'
+  USER: '普通用户'
 }
 
 function roleLabel(code: string) {

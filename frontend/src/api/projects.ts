@@ -53,6 +53,25 @@ export const addOrUpdateProjectMember = (projectId: number, body: AddProjectMemb
 export const removeProjectMember = (projectId: number, userId: number) =>
   http.delete<ApiResult<unknown>>(`/projects/${projectId}/members/${userId}`)
 
+/** 批量分配结果（成功数、失败数、失败原因列表） */
+export interface BatchAssignResult {
+  successCount: number
+  failCount: number
+  errors: string[]
+}
+
+/** 批量将一人分配至多个项目（仅 PMO/系统管理员）body: { userId, projectIds, role? } */
+export const batchAssignUserToProjects = (body: {
+  userId: number
+  projectIds: number[]
+  role?: 'owner' | 'editor' | 'viewer'
+}) =>
+  http.post<ApiResult<BatchAssignResult>>('/projects/batch-members', body)
+
+/** 批量为一个项目添加多名成员（含项目经理 owner）body: { members: [{ userId, role }, ...] } */
+export const batchAddProjectMembers = (projectId: number, body: { members: AddProjectMemberBody[] }) =>
+  http.post<ApiResult<BatchAssignResult>>(`/projects/${projectId}/members/batch`, body)
+
 interface ApiResult<T> {
   code: number
   message: string

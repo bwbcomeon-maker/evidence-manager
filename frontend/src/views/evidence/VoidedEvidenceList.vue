@@ -24,7 +24,7 @@ const allowed = ref(true)
 /** AUDITOR 仅只读入口，无操作位 */
 const isAuditorOnly = computed(() => {
   const code = auth.currentUser?.roleCode
-  return code === 'AUDITOR' || code === 'PROJECT_AUDITOR'
+  return code === 'AUDITOR'
 })
 
 onMounted(() => {

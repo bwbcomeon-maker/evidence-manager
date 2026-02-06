@@ -19,8 +19,8 @@ import AdminUsers from '@/views/AdminUsers.vue'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 
-/** V1：作废证据/审计入口 = SYSTEM_ADMIN + AUDITOR；PROJECT_AUDITOR 短期兼容（迁移后为 AUDITOR） */
-const VOIDED_EVIDENCE_ROLES = ['SYSTEM_ADMIN', 'AUDITOR', 'PROJECT_AUDITOR']
+/** 作废证据/审计入口 = SYSTEM_ADMIN + AUDITOR */
+const VOIDED_EVIDENCE_ROLES = ['SYSTEM_ADMIN', 'AUDITOR']
 
 const router = createRouter({
   history: createWebHistory(),
@@ -137,7 +137,7 @@ router.beforeEach(async (to) => {
 
   const auth = useAuthStore()
 
-  // 作废证据页：需登录 + 需角色 SYSTEM_ADMIN / AUDITOR（PROJECT_AUDITOR 短期兼容）
+  // 作废证据页：需登录 + 需角色 SYSTEM_ADMIN / AUDITOR
   if (to.path === '/evidence/voided') {
     const user = await auth.fetchMe()
     if (!user) return { path: '/login', query: { redirect: to.fullPath } }

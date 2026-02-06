@@ -31,10 +31,9 @@ public class AdminUserService {
     /** 审计：拦截到自我管理被禁止时使用的 action */
     public static final String AUDIT_ACTION_SELF_OPERATION_FORBIDDEN = "SELF_OPERATION_FORBIDDEN";
 
-    /** V1：系统级角色 SYSTEM_ADMIN / PMO / AUDITOR；PROJECT_* 保留仅作存量兼容，不再参与权限判断 */
+    /** 系统级角色：SYSTEM_ADMIN / PMO / AUDITOR / USER（已废弃的 PROJECT_* 已迁移为 USER 并移除） */
     public static final Set<String> VALID_ROLE_CODES = Set.of(
-            "SYSTEM_ADMIN", "PMO", "AUDITOR",
-            "PROJECT_OWNER", "PROJECT_EDITOR", "PROJECT_VIEWER", "PROJECT_AUDITOR"
+            "SYSTEM_ADMIN", "PMO", "AUDITOR", "USER"
     );
     private static final String DEFAULT_PASSWORD = "Init@12345";
     private static final String CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

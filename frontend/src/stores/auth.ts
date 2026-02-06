@@ -8,10 +8,10 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = computed(() => !!currentUser.value)
   const isAdmin = computed(() => currentUser.value?.roleCode === 'SYSTEM_ADMIN')
 
-  /** V1：是否可访问「作废证据」入口：SYSTEM_ADMIN / AUDITOR（PROJECT_AUDITOR 短期兼容） */
+  /** 是否可访问「作废证据」入口：SYSTEM_ADMIN / AUDITOR */
   const canAccessVoidedEvidence = computed(() => {
     const code = currentUser.value?.roleCode
-    return !!code && ['SYSTEM_ADMIN', 'AUDITOR', 'PROJECT_AUDITOR'].includes(code)
+    return !!code && ['SYSTEM_ADMIN', 'AUDITOR'].includes(code)
   })
 
   async function fetchMe() {

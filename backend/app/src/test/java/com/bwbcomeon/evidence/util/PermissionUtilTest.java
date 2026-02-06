@@ -57,7 +57,7 @@ class PermissionUtilTest {
         editorAcl.setRole("editor");
         when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(editorAcl);
 
-        assertThatThrownBy(() -> permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER_ID, "PROJECT_EDITOR"))
+        assertThatThrownBy(() -> permissionUtil.checkCanArchive(PROJECT_ID, EDITOR_USER_ID, "USER"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("仅项目责任人可归档证据");
     }

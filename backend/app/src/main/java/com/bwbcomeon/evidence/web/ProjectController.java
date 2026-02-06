@@ -2,12 +2,14 @@ package com.bwbcomeon.evidence.web;
 
 import com.bwbcomeon.evidence.dto.AddProjectMemberRequest;
 import com.bwbcomeon.evidence.dto.AuthUserVO;
+import com.bwbcomeon.evidence.dto.BatchAddProjectMembersRequest;
+import com.bwbcomeon.evidence.dto.BatchAssignResult;
+import com.bwbcomeon.evidence.dto.BatchAssignUserToProjectsRequest;
 import com.bwbcomeon.evidence.dto.CreateProjectRequest;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
 import com.bwbcomeon.evidence.dto.ProjectVO;
 import com.bwbcomeon.evidence.dto.Result;
-import com.bwbcomeon.evidence.service.EvidenceService;
 import com.bwbcomeon.evidence.service.ProjectService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -44,9 +46,6 @@ public class ProjectController {
 
     @Autowired
     private ProjectService projectService;
-
-    @Autowired
-    private EvidenceService evidenceService;
 
     /**
      * 项目列表（当前用户可见）
@@ -148,6 +147,37 @@ public class ProjectController {
             logger.warn("Import projects failed", e);
             return Result.error(400, e.getMessage() != null ? e.getMessage() : "导入失败");
         }
+    }
+
+    /**
+     * 批量将一人分配至多个项目（仅 PMO / 系统管理员）
+     * POST /api/projects/batch-members  body: { userId, projectIds: [id,...], role?: "owner"|"editor"|"viewer" }
+     * 响应：{ successCount, failCount, errors: ["项目1: ...", ...] }
+     */
+    @PostMapping("/batch-members")
+    public Result<BatchAssignResult> batchAssignUserToProjects(
+            HttpServletRequest request,
+            @RequestBody @Valid BatchAssignUserToProjectsRequest body) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        BatchAssignResult result = projectService.batchAssignUserToProjects(body, user.getId(), user.getRoleCode());
+        return Result.success(result);
+    }
+
+    /**
+     * 批量为一个项目添加/调整多名成员（含项目经理 owner）
+     * POST /api/projects/{projectId}/members/batch  body: { members: [ { userId, role }, ... ] }
+     * 响应：{ successCount, failCount, errors }
+     */
+    @PostMapping("/{projectId}/members/batch")
+    public Result<BatchAssignResult> batchAddProjectMembers(
+            HttpServletRequest request,
+            @PathVariable Long projectId,
+            @RequestBody @Valid BatchAddProjectMembersRequest body) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        BatchAssignResult result = projectService.batchAddProjectMembers(projectId, body, user.getId(), user.getRoleCode());
+        return Result.success(result);
     }
 
     /**

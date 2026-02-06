@@ -28,7 +28,7 @@ public class SysUser {
     /** 邮箱 */
     private String email;
 
-    /** 角色编码（SYSTEM_ADMIN/PROJECT_OWNER/PROJECT_EDITOR/PROJECT_VIEWER/PROJECT_AUDITOR） */
+    /** 角色编码（SYSTEM_ADMIN/PMO/AUDITOR/USER） */
     private String roleCode;
 
     /** 是否启用（禁用不可登录） */

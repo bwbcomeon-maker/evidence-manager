@@ -1,6 +1,9 @@
 package com.bwbcomeon.evidence.service;
 
 import com.bwbcomeon.evidence.dto.AddProjectMemberRequest;
+import com.bwbcomeon.evidence.dto.BatchAddProjectMembersRequest;
+import com.bwbcomeon.evidence.dto.BatchAssignResult;
+import com.bwbcomeon.evidence.dto.BatchAssignUserToProjectsRequest;
 import com.bwbcomeon.evidence.dto.PermissionBits;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
 import com.bwbcomeon.evidence.dto.ProjectVO;
@@ -253,6 +256,71 @@ public class ProjectService {
             result.add(vo);
         }
         return result;
+    }
+
+    /**
+     * 批量将一人分配至多个项目（仅 PMO / SYSTEM_ADMIN）。
+     * 按项目逐个执行，单项目失败不影响其他，返回成功数、失败数及失败原因。
+     */
+    public BatchAssignResult batchAssignUserToProjects(BatchAssignUserToProjectsRequest request,
+                                                       Long operatorUserId, String roleCode) {
+        if (request == null || request.getUserId() == null || request.getProjectIds() == null || request.getProjectIds().isEmpty()) {
+            throw new BusinessException(400, "userId 与 projectIds 不能为空");
+        }
+        if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
+            throw new BusinessException(403, "仅 PMO 或系统管理员可批量分配用户到多项目");
+        }
+        String role = request.getRole() != null ? request.getRole().trim().toLowerCase() : "editor";
+        if (!ACL_ROLES.contains(role)) {
+            throw new BusinessException(400, "role 必须为 owner / editor / viewer");
+        }
+        if (request.getUserId().equals(operatorUserId)) {
+            throw new BusinessException(403, "不能为自己批量分配项目");
+        }
+        if (sysUserMapper.selectById(request.getUserId()) == null) {
+            throw new BusinessException(400, "用户不存在");
+        }
+        AddProjectMemberRequest body = new AddProjectMemberRequest();
+        body.setUserId(request.getUserId());
+        body.setRole(role);
+        int successCount = 0;
+        List<String> errors = new ArrayList<>();
+        for (Long projectId : request.getProjectIds()) {
+            try {
+                addOrUpdateMember(projectId, operatorUserId, roleCode, body);
+                successCount++;
+            } catch (BusinessException e) {
+                errors.add("项目" + projectId + ": " + (e.getMessage() != null ? e.getMessage() : "失败"));
+            }
+        }
+        return BatchAssignResult.of(successCount, errors.size(), errors);
+    }
+
+    /**
+     * 批量为一个项目添加/调整多名成员（含项目经理 owner）。
+     * 仅对当前项目有管理成员权限的用户可调用；逐条执行，单条失败不影响其他。
+     */
+    public BatchAssignResult batchAddProjectMembers(Long projectId, BatchAddProjectMembersRequest request,
+                                                    Long operatorUserId, String roleCode) {
+        if (request == null || request.getMembers() == null || request.getMembers().isEmpty()) {
+            throw new BusinessException(400, "members 不能为空");
+        }
+        permissionUtil.checkCanManageMembers(projectId, operatorUserId, roleCode);
+        int successCount = 0;
+        List<String> errors = new ArrayList<>();
+        for (AddProjectMemberRequest one : request.getMembers()) {
+            if (one == null || one.getUserId() == null) {
+                errors.add("成员项缺少 userId");
+                continue;
+            }
+            try {
+                addOrUpdateMember(projectId, operatorUserId, roleCode, one);
+                successCount++;
+            } catch (BusinessException e) {
+                errors.add("用户" + one.getUserId() + ": " + (e.getMessage() != null ? e.getMessage() : "失败"));
+            }
+        }
+        return BatchAssignResult.of(successCount, errors.size(), errors);
     }
 
     /**
