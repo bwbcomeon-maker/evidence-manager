@@ -13,11 +13,13 @@ import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.AuthUser;
 import com.bwbcomeon.evidence.entity.Project;
+import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
 import com.bwbcomeon.evidence.mapper.AuthUserMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceVersionMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
+import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.FileStorageUtil;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.slf4j.Logger;
@@ -26,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -70,6 +73,9 @@ public class EvidenceService {
 
     @Autowired
     private AuthProjectAclMapper authProjectAclMapper;
+
+    @Autowired
+    private SysUserMapper sysUserMapper;
 
     @Autowired
     private PermissionUtil permissionUtil;
@@ -339,11 +345,30 @@ public class EvidenceService {
     }
 
     /**
-     * 根据 sys_user 用户名解析为 auth_user UUID（用于 uploader=me 等）
+     * 根据 sys_user 用户名解析为 auth_user UUID（用于创建项目、证据等）。
+     * 若 auth_user 无该用户，则从 sys_user 同步一条（懒同步），保证仅存在于 sys_user 的用户也能正常创建项目。
      */
+    @Transactional(rollbackFor = Exception.class)
     public UUID resolveCreatedByUuid(String username) {
         if (username == null || username.isBlank()) return null;
         AuthUser u = authUserMapper.selectByUsername(username);
+        if (u != null) return u.getId();
+        SysUser sysUser = sysUserMapper.selectByUsername(username);
+        if (sysUser == null) return null;
+        AuthUser authUser = new AuthUser();
+        authUser.setUsername(username);
+        authUser.setDisplayName(sysUser.getRealName() != null && !sysUser.getRealName().isBlank() ? sysUser.getRealName() : username);
+        authUser.setEmail(sysUser.getEmail());
+        authUser.setIsActive(Boolean.TRUE.equals(sysUser.getEnabled()));
+        authUser.setCreatedAt(OffsetDateTime.now());
+        try {
+            authUserMapper.insert(authUser);
+        } catch (DuplicateKeyException e) {
+            // 并发时可能已被其他请求插入，重新查询
+            u = authUserMapper.selectByUsername(username);
+            return u != null ? u.getId() : null;
+        }
+        u = authUserMapper.selectByUsername(username);
         return u != null ? u.getId() : null;
     }
 

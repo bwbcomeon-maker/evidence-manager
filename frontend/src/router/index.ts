@@ -7,6 +7,7 @@ import ProjectMembers from '@/views/ProjectMembers.vue'
 import EvidenceUpload from '@/views/EvidenceUpload.vue'
 import EvidenceList from '@/views/EvidenceList.vue'
 import EvidenceHome from '@/views/evidence/EvidenceHome.vue'
+import EvidenceByProject from '@/views/evidence/EvidenceByProject.vue'
 import MyEvidenceList from '@/views/evidence/MyEvidenceList.vue'
 import RecentEvidenceList from '@/views/evidence/RecentEvidenceList.vue'
 import VoidedEvidenceList from '@/views/evidence/VoidedEvidenceList.vue'
@@ -57,25 +58,31 @@ const router = createRouter({
           path: 'evidence/my',
           name: 'MyEvidenceList',
           component: MyEvidenceList,
-          meta: { title: '我上传的证据', showTabbar: false, showBack: true }
+          meta: { title: '我上传的证据', showTabbar: true, showBack: true }
         },
         {
           path: 'evidence/recent',
           name: 'RecentEvidenceList',
           component: RecentEvidenceList,
-          meta: { title: '最近上传的证据', showTabbar: false, showBack: true }
+          meta: { title: '最近上传的证据', showTabbar: true, showBack: true }
         },
         {
           path: 'evidence/voided',
           name: 'VoidedEvidenceList',
           component: VoidedEvidenceList,
-          meta: { title: '作废证据', showTabbar: false, showBack: true }
+          meta: { title: '作废证据', showTabbar: true, showBack: true }
         },
         {
           path: 'evidence/type',
           name: 'EvidenceTypeList',
           component: EvidenceTypeList,
-          meta: { title: '按文件类型查看', showTabbar: false, showBack: true }
+          meta: { title: '按文件类型查看', showTabbar: true, showBack: true }
+        },
+        {
+          path: 'evidence/by-project',
+          name: 'EvidenceByProject',
+          component: EvidenceByProject,
+          meta: { title: '按项目查看证据', showTabbar: true, showBack: true }
         },
         {
           path: 'evidence/detail/:id',

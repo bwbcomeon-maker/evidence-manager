@@ -11,17 +11,17 @@
     <main class="layout-content" :class="{ 'layout-content--with-tabbar': showTabbar }">
       <router-view :key="route.fullPath" />
     </main>
-    <van-tabbar v-if="showTabbar" route placeholder class="main-tabbar">
-      <van-tabbar-item to="/home" icon="home-o">首页</van-tabbar-item>
-      <van-tabbar-item to="/projects" icon="apps-o">项目</van-tabbar-item>
-      <van-tabbar-item to="/evidence" icon="description">证据</van-tabbar-item>
-      <van-tabbar-item to="/me" icon="user-o">我的</van-tabbar-item>
+    <van-tabbar v-if="showTabbar" v-model="activeTab" placeholder class="main-tabbar" @change="onTabChange">
+      <van-tabbar-item name="home" icon="home-o">首页</van-tabbar-item>
+      <van-tabbar-item name="projects" icon="apps-o">项目</van-tabbar-item>
+      <van-tabbar-item name="evidence" icon="description">证据</van-tabbar-item>
+      <van-tabbar-item name="me" icon="user-o">我的</van-tabbar-item>
     </van-tabbar>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -35,6 +35,33 @@ onMounted(() => {
 
 const showBack = computed(() => !!route.meta.showBack)
 const showTabbar = computed(() => !!route.meta.showTabbar)
+
+/** 由路由 path 推导当前 Tab（单一真相源），使 /evidence、/evidence/by-project 等均高亮「证据」 */
+const activeTab = ref<'home' | 'projects' | 'evidence' | 'me'>('home')
+watch(
+  () => route.path,
+  (path) => {
+    if (path.startsWith('/projects')) activeTab.value = 'projects'
+    else if (path.startsWith('/evidence')) activeTab.value = 'evidence'
+    else if (path.startsWith('/me')) activeTab.value = 'me'
+    else activeTab.value = 'home'
+  },
+  { immediate: true }
+)
+const tabPathMap: Record<string, string> = {
+  home: '/home',
+  projects: '/projects',
+  evidence: '/evidence',
+  me: '/me'
+}
+function onTabChange(nameOrIndex: string | number) {
+  const tabNames = ['home', 'projects', 'evidence', 'me'] as const
+  const name = typeof nameOrIndex === 'number' ? tabNames[nameOrIndex] : nameOrIndex
+  const path = tabPathMap[name]
+  if (!path) return
+  activeTab.value = name
+  if (route.path !== path) router.push(path)
+}
 
 function onBack() {
   const fromProject = route.query.fromProject as string | undefined

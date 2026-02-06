@@ -1,7 +1,7 @@
 <template>
   <div class="evidence-page">
     <van-cell-group inset>
-      <van-cell title="按项目查看证据" is-link to="/projects" />
+      <van-cell title="按项目查看证据" is-link to="/evidence/by-project" />
     </van-cell-group>
   </div>
 </template>
