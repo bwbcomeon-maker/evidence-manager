@@ -31,7 +31,7 @@
                 :label="m.username && (m.displayName || '') !== m.username ? `@${m.username}` : undefined"
               >
                 <template #value>
-                  <van-tag plain type="primary">{{ memberRoleLabel(m.role) }}</van-tag>
+                  <span class="member-role-desc">{{ memberRoleLabel(m.role) }}</span>
                 </template>
               </van-cell>
             </van-cell-group>
@@ -873,6 +873,12 @@ onMounted(() => {
 }
 .members-loading {
   padding: 16px 0;
+}
+
+/* 成员角色以描述文字展示，避免像按钮 */
+.member-role-desc {
+  font-size: 14px;
+  color: var(--van-text-color);
 }
 
 .evidence-section {
