@@ -28,12 +28,9 @@
         <van-cell
           v-for="m in sortedMembers"
           :key="m.userId"
-          :title="m.displayName || m.username || m.userId"
+          :title="`${m.displayName || m.username || m.userId} (${roleDisplayName(m.role)})`"
           :label="m.username"
         >
-          <template #value>
-            <span class="role-readonly">{{ roleDisplayName(m.role) }}</span>
-          </template>
           <template #right-icon>
             <div class="cell-actions">
               <van-button
@@ -429,11 +426,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.role-readonly {
-  color: var(--van-text-color);
-  font-size: 14px;
 }
 
 .van-cell {
