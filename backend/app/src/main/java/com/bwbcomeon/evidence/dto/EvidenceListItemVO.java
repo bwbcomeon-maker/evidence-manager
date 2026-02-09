@@ -82,6 +82,8 @@ public class EvidenceListItemVO {
     private String invalidReason;
     /** 作废人 sys_user.id（INVALID 时有值） */
     private Long invalidByUserId;
+    /** 作废人展示名（realName 或 username，INVALID 时有值） */
+    private String invalidByDisplayName;
     /** 作废时间（INVALID 时有值） */
     private OffsetDateTime invalidAt;
 }

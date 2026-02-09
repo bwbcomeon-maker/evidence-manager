@@ -42,6 +42,8 @@ export interface EvidenceListItem {
   /** 作废原因/人/时间（INVALID 时有值） */
   invalidReason?: string
   invalidByUserId?: number
+  /** 作废人展示名（后端可选返回） */
+  invalidByDisplayName?: string
   invalidAt?: string
   latestVersion: {
     versionId: number

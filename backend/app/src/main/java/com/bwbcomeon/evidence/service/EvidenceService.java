@@ -459,6 +459,20 @@ public class EvidenceService {
         vo.setUpdatedAt(item.getUpdatedAt());
         vo.setInvalidReason(item.getInvalidReason());
         vo.setInvalidByUserId(item.getInvalidByUserId());
+        if (item.getInvalidByUserId() != null) {
+            SysUser invalidator = sysUserMapper.selectById(item.getInvalidByUserId());
+            String displayName = null;
+            if (invalidator != null) {
+                if (invalidator.getRealName() != null && !invalidator.getRealName().isBlank()) {
+                    displayName = invalidator.getRealName();
+                } else if (invalidator.getUsername() != null && !invalidator.getUsername().isBlank()) {
+                    displayName = invalidator.getUsername();
+                } else {
+                    displayName = "用户" + item.getInvalidByUserId();
+                }
+            }
+            vo.setInvalidByDisplayName(displayName);
+        }
         vo.setInvalidAt(item.getInvalidAt());
         PermissionBits bits = permissionUtil.computeProjectPermissionBits(item.getProjectId(), userId, roleCode);
         vo.setPermissions(bits);

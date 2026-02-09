@@ -239,13 +239,16 @@
       />
     </van-dialog>
 
-    <!-- 业务类型选择器 -->
+    <!-- 业务类型选择器（支持鼠标滚轮滚动） -->
     <van-popup v-model:show="showBizTypePicker" position="bottom">
-      <van-picker
-        :columns="bizTypePickerOptions"
-        @confirm="onBizTypeConfirm"
-        @cancel="showBizTypePicker = false"
-      />
+      <div class="picker-wheel-wrap" @wheel.prevent="onBizTypePickerWheel">
+        <van-picker
+          :model-value="[uploadForm.type]"
+          :columns="bizTypePickerOptions"
+          @confirm="onBizTypeConfirm"
+          @cancel="showBizTypePicker = false"
+        />
+      </div>
     </van-popup>
   </div>
 </template>
@@ -661,6 +664,17 @@ const onBizTypeConfirm = ({ selectedOptions }: any) => {
   showBizTypePicker.value = false
 }
 
+/** 业务类型选择器滚轮：向上滚上一项，向下滚下一项 */
+function onBizTypePickerWheel(e: WheelEvent) {
+  const opts = bizTypePickerOptions
+  const idx = opts.findIndex((c) => c.value === uploadForm.value.type)
+  const cur = idx < 0 ? 0 : idx
+  const next = e.deltaY > 0 ? cur + 1 : cur - 1
+  const newIdx = Math.max(0, Math.min(next, opts.length - 1))
+  if (newIdx === cur) return
+  uploadForm.value.type = opts[newIdx].value
+}
+
 // 上传证据（成功后切到阶段2，不关闭弹窗）
 const handleUpload = async () => {
   if (!uploadForm.value.name.trim()) {
@@ -1001,5 +1015,9 @@ onMounted(() => {
 
 .member-entry-btn {
   min-width: 160px;
+}
+
+.picker-wheel-wrap {
+  touch-action: pan-y;
 }
 </style>

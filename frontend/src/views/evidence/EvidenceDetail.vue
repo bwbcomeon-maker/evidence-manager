@@ -5,7 +5,7 @@
         <van-cell title="证据标题" :value="evidence.title || '—'" />
         <van-cell title="业务类型" :value="bizTypeLabel(evidence.bizType)" />
         <van-cell title="备注" :value="evidence.note || '—'" />
-        <van-cell title="文件类型" :value="evidence.contentType || '—'" />
+        <van-cell title="文件类型" :value="fileTypeDisplay(evidence)" />
         <van-cell title="当前状态">
           <template #value>
             <van-tag :type="statusTagType(effectiveStatus)">
@@ -17,7 +17,7 @@
         <van-cell title="上传时间" :value="formatDateTime(evidence.createdAt)" />
         <template v-if="effectiveStatus === 'INVALID' && (evidence.invalidReason || evidence.invalidByUserId != null || evidence.invalidAt)">
           <van-cell title="作废原因" :value="evidence.invalidReason || '—'" />
-          <van-cell title="作废人" :value="evidence.invalidByUserId != null ? String(evidence.invalidByUserId) : '—'" />
+          <van-cell title="作废人" :value="invalidatorDisplayName()" />
           <van-cell title="作废时间" :value="evidence.invalidAt ? formatDateTime(evidence.invalidAt) : '—'" />
         </template>
         <van-cell v-if="evidence.latestVersion" title="文件名" :value="evidence.latestVersion.originalFilename" />
@@ -87,6 +87,22 @@ function bizTypeLabel(bizType: string | undefined) {
   return BIZ_TYPE_LABELS[bizType] ?? bizType
 }
 
+/** 文件类型友好展示：将 MIME 转为可读名称，有文件名时附带扩展名 */
+function fileTypeDisplay(e: EvidenceListItem | null): string {
+  if (!e) return '—'
+  const ct = (e.contentType || '').toLowerCase()
+  let label = '—'
+  if (ct.includes('pdf')) label = 'PDF'
+  else if (ct.includes('wordprocessingml')) label = 'Word'
+  else if (ct.includes('spreadsheetml')) label = 'Excel'
+  else if (ct.includes('image')) label = '图片'
+  else if (ct) label = e.contentType!
+  const fn = e.latestVersion?.originalFilename
+  const ext = fn?.includes('.') ? fn.slice(fn.lastIndexOf('.')) : ''
+  if (label !== '—' && ext) return `${label} (${ext})`
+  return label
+}
+
 /** 上传人展示名：优先用接口返回的 createdByDisplayName，否则用用户列表按 id 解析 */
 function uploaderDisplayName(): string {
   const e = evidence.value
@@ -95,6 +111,16 @@ function uploaderDisplayName(): string {
   if (e.createdByUserId == null) return '—'
   const u = userList.value.find((x) => x.id === e.createdByUserId)
   return u ? (u.displayName || u.username || String(u.id)) : String(e.createdByUserId)
+}
+
+/** 作废人展示名：优先用接口返回的 invalidByDisplayName，否则用用户列表按 invalidByUserId 解析 */
+function invalidatorDisplayName(): string {
+  const e = evidence.value
+  if (!e) return '—'
+  if (e.invalidByUserId == null) return '—'
+  if (e.invalidByDisplayName) return e.invalidByDisplayName
+  const u = userList.value.find((x) => x.id === e.invalidByUserId)
+  return u ? (u.displayName || u.username || String(u.id)) : String(e.invalidByUserId)
 }
 
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
@@ -120,8 +146,10 @@ async function fetchDetail() {
     const res = await getEvidenceById(evidenceId.value) as { code: number; data?: EvidenceListItem }
     if (res?.code === 0 && res.data) {
       evidence.value = res.data
-      // 若接口未返回上传人展示名，拉取用户列表用于兜底展示
-      if (res.data.createdByUserId != null && !res.data.createdByDisplayName && userList.value.length === 0) {
+      const needUserList =
+        (res.data.createdByUserId != null && !res.data.createdByDisplayName) ||
+        (res.data.invalidByUserId != null && !res.data.invalidByDisplayName)
+      if (needUserList && userList.value.length === 0) {
         try {
           const r = await getUsers() as { code: number; data?: AuthUserSimpleVO[] }
           if (r?.code === 0 && r.data) userList.value = r.data
