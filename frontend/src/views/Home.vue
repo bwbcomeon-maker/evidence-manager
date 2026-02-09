@@ -14,6 +14,13 @@
         @click="go('/evidence')"
       />
       <van-grid-item
+        v-if="canBatchAssign"
+        class="home-entry home-entry--batch-assign"
+        icon="friends-o"
+        text="批量分配项目"
+        @click="go('/batch-assign-projects')"
+      />
+      <van-grid-item
         v-if="auth.isAdmin"
         class="home-entry home-entry--admin"
         icon="manager-o"
@@ -25,11 +32,18 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+/** 仅系统管理员、PMO 可批量分配项目 */
+const canBatchAssign = computed(() => {
+  const code = auth.currentUser?.roleCode
+  return code === 'SYSTEM_ADMIN' || code === 'PMO'
+})
 
 function go(path: string) {
   router.push(path)
@@ -50,6 +64,7 @@ function go(path: string) {
 
 .home-entry--evidence :deep(.van-grid-item__text),
 .home-entry--projects :deep(.van-grid-item__text),
+.home-entry--batch-assign :deep(.van-grid-item__text),
 .home-entry--admin :deep(.van-grid-item__text) {
   font-weight: 600;
   color: var(--van-text-color, #323233);

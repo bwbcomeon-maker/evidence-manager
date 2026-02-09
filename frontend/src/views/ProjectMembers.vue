@@ -280,6 +280,16 @@ function onEditRoleConfirm({ selectedOptions }: { selectedOptions: { text: strin
 
 async function onEditConfirm(action: string): Promise<boolean> {
   if (action !== 'confirm') return true
+  if (editForm.value.role === 'owner') {
+    try {
+      await showConfirmDialog({
+        title: '确认变更负责人',
+        message: '负责人变更后，原负责人将从项目成员中移除，不再保留为项目成员。是否确认变更？'
+      })
+    } catch {
+      return false
+    }
+  }
   try {
     const res = await addOrUpdateProjectMember(projectId.value, {
       userId: editForm.value.userId,
@@ -353,6 +363,16 @@ async function onAddConfirm(action: string): Promise<boolean> {
   if (!addForm.value.userId) {
     showTip('请选择用户')
     return false
+  }
+  if (addForm.value.role === 'owner') {
+    try {
+      await showConfirmDialog({
+        title: '确认变更负责人',
+        message: '负责人变更后，原负责人将从项目成员中移除，不再保留为项目成员。是否确认变更？'
+      })
+    } catch {
+      return false
+    }
   }
   try {
     const res = await addOrUpdateProjectMember(projectId.value, {

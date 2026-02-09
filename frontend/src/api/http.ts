@@ -15,9 +15,14 @@ const http = axios.create({
   }
 })
 
-// 请求拦截器
+// 请求拦截器：上传 FormData 时不要带 Content-Type，由浏览器自动设置 multipart/form-data 和 boundary
 http.interceptors.request.use(
-  (config) => config,
+  (config) => {
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers['Content-Type']
+    }
+    return config
+  },
   (error) => Promise.reject(error)
 )
 

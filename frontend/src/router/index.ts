@@ -16,6 +16,7 @@ import EvidenceDetail from '@/views/evidence/EvidenceDetail.vue'
 import Me from '@/views/Me.vue'
 import Login from '@/views/Login.vue'
 import AdminUsers from '@/views/AdminUsers.vue'
+import BatchAssignProjects from '@/views/BatchAssignProjects.vue'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 
@@ -119,6 +120,12 @@ const router = createRouter({
           name: 'EvidenceList',
           component: EvidenceList,
           meta: { title: '证据列表', showTabbar: false, showBack: true }
+        },
+        {
+          path: 'batch-assign-projects',
+          name: 'BatchAssignProjects',
+          component: BatchAssignProjects,
+          meta: { title: '批量分配项目', showTabbar: false, showBack: true }
         },
         {
           path: 'admin/users',

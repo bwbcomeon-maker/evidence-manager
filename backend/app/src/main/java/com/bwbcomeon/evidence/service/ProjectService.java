@@ -103,11 +103,7 @@ public class ProjectService {
                         project.setStatus(STATUS_ACTIVE);
                         project.setCreatedByUserId(operatorUserId);
                         projectMapper.insert(project);
-                        AuthProjectAcl acl = new AuthProjectAcl();
-                        acl.setProjectId(project.getId());
-                        acl.setSysUserId(operatorUserId);
-                        acl.setRole(ROLE_OWNER);
-                        authProjectAclMapper.insert(acl);
+                        // 批量导入的项目不自动添加操作人为成员，成员需后续在成员管理中分配
                         details.add(new ProjectImportResult.RowResult(rowNum, code, true, "已新建"));
                     }
                 } catch (Exception e) {
@@ -180,9 +176,24 @@ public class ProjectService {
         List<Project> projects = projectMapper.selectByIds(visibleIds);
         List<ProjectVO> result = new ArrayList<>(projects.size());
         for (Project p : projects) {
-            result.add(toVO(p));
+            ProjectVO vo = toVO(p);
+            Long pmUserId = resolveAclOwnerUserId(p.getId());
+            if (pmUserId != null) {
+                vo.setCurrentPmUserId(pmUserId);
+                SysUser pmUser = sysUserMapper.selectById(pmUserId);
+                vo.setCurrentPmDisplayName(pmUser != null ? resolveUserDisplayName(pmUser) : null);
+            }
+            result.add(vo);
         }
         return result;
+    }
+
+    /** 用户展示名：real_name 非空用 real_name，否则用 username */
+    private static String resolveUserDisplayName(SysUser user) {
+        if (user == null) return null;
+        String real = user.getRealName();
+        if (real != null && !real.isBlank()) return real.trim();
+        return user.getUsername() != null ? user.getUsername() : null;
     }
 
     /**
@@ -203,16 +214,27 @@ public class ProjectService {
         vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
         vo.setCanManageMembers(Boolean.TRUE.equals(bits.getCanManageMembers()));
         vo.setCanUpload(Boolean.TRUE.equals(bits.getCanUpload()));
-        Long pmUserId = resolveCurrentPmUserId(projectId, project);
+        Long pmUserId = resolveAclOwnerUserId(projectId);
         if (pmUserId != null) {
             vo.setCurrentPmUserId(pmUserId);
             SysUser pmUser = sysUserMapper.selectById(pmUserId);
-            vo.setCurrentPmDisplayName(pmUser != null ? pmUser.getRealName() : null);
+            vo.setCurrentPmDisplayName(pmUser != null ? resolveUserDisplayName(pmUser) : null);
         }
         return vo;
     }
 
-    /** 当前项目经理：ACL 中 role=owner 的用户（V1 唯一）；若无则取 project.created_by_user_id */
+    /** 仅 ACL 中 role=owner 的用户（用于展示「项目经理」；无则视为未分配） */
+    private Long resolveAclOwnerUserId(Long projectId) {
+        List<AuthProjectAcl> acls = authProjectAclMapper.selectByProjectId(projectId);
+        for (AuthProjectAcl acl : acls) {
+            if (ROLE_OWNER.equals(acl.getRole())) {
+                return acl.getSysUserId();
+            }
+        }
+        return null;
+    }
+
+    /** 当前项目经理：ACL 中 role=owner 的用户（V1 唯一）；若无则取 project.created_by_user_id（用于权限等逻辑） */
     private Long resolveCurrentPmUserId(Long projectId, Project project) {
         List<AuthProjectAcl> acls = authProjectAclMapper.selectByProjectId(projectId);
         for (AuthProjectAcl acl : acls) {

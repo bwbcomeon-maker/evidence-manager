@@ -16,10 +16,15 @@
             v-for="project in projects"
             :key="project.id"
             :title="project.name"
-            :label="project.description"
             is-link
             @click="goToDetail(project.id)"
           >
+            <template #label>
+              <div v-if="project.description" class="project-desc">{{ project.description }}</div>
+              <div class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
+                项目经理：{{ project.currentPmDisplayName || '未分配' }}
+              </div>
+            </template>
             <template #value>
               <van-tag :type="project.status === 'active' ? 'success' : 'default'">
                 {{ project.status === 'active' ? '进行中' : '已归档' }}
@@ -71,7 +76,7 @@
     <van-popup v-model:show="showImport" position="bottom" round :style="{ padding: '16px', maxHeight: '80vh' }">
       <div class="import-form">
         <h3 class="form-title">批量导入项目</h3>
-        <p class="import-tip">仅 SYSTEM_ADMIN / PMO 可导入。模板列：项目令号、项目名称、项目描述。</p>
+        <p class="import-tip">仅 系统管理员 / PMO 可导入。模板列：项目令号、项目名称、项目描述。</p>
         <a :href="importTemplateUrl" target="_blank" rel="noopener" class="download-link">下载模板</a>
         <van-field name="file" label="选择文件">
           <template #input>
@@ -173,7 +178,8 @@ const loadProjects = async () => {
         code: p.code,
         name: p.name,
         description: p.description ?? '',
-        status: p.status
+        status: p.status,
+        currentPmDisplayName: p.currentPmDisplayName
       }))
     } else {
       listError.value = res.message || '加载失败'
@@ -274,5 +280,18 @@ onMounted(() => {
 
 .form-actions .mt {
   margin-top: 8px;
+}
+
+.project-desc {
+  margin-bottom: 2px;
+}
+.project-pm {
+  font-size: 12px;
+}
+.project-pm-assigned {
+  color: var(--van-green, #07c160);
+}
+.project-pm-unassigned {
+  color: var(--van-red, #ee0a24);
 }
 </style>
