@@ -203,7 +203,7 @@ public class AdminUserService {
     }
 
     /**
-     * 重置密码为随机 8-12 位（数字+字母），返回明文一次，写 audit USER_RESET_PWD
+     * 重置密码为固定 123456，返回明文供前端展示，写 audit USER_RESET_PWD
      * 禁止操作自己（含 admin 不能重置自己密码，应走自助改密）
      */
     @Transactional(rollbackFor = Exception.class)
@@ -214,7 +214,7 @@ public class AdminUserService {
         }
         assertNotAdminSelfOperation(request, user);
         assertNotSelfOperation(request, user);
-        String newPassword = randomPassword(8, 12);
+        String newPassword = "123456";
         String hash = passwordEncoder.encode(newPassword);
         sysUserMapper.resetPassword(id, hash);
         authService.recordAudit(request, "USER_RESET_PWD", true, currentUserId(request),

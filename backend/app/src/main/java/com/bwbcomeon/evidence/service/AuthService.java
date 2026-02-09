@@ -4,6 +4,7 @@ import com.bwbcomeon.evidence.dto.AuthUserVO;
 import com.bwbcomeon.evidence.dto.LoginRequest;
 import com.bwbcomeon.evidence.entity.AuditLog;
 import com.bwbcomeon.evidence.entity.SysUser;
+import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.exception.UnauthorizedException;
 import com.bwbcomeon.evidence.mapper.AuditLogMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
@@ -84,6 +85,63 @@ public class AuthService {
         }
 
         recordAudit(request, "LOGOUT", true, userId, ip, userAgent, null);
+    }
+
+    /**
+     * 验证当前用户密码是否正确（仅校验，不修改），用于修改密码前第一步校验
+     * @param userId 当前登录用户 ID
+     * @param password 待验证的密码
+     * @throws UnauthorizedException 密码错误时抛出，message 为「原始密码不正确」
+     */
+    public void verifyPassword(Long userId, String password) {
+        if (userId == null) {
+            throw new UnauthorizedException("未登录");
+        }
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null || Boolean.FALSE.equals(user.getEnabled()) || Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new UnauthorizedException("用户不存在或已禁用");
+        }
+        String pwd = (password != null) ? password.trim() : null;
+        if (pwd == null || pwd.isEmpty() || user.getPasswordHash() == null
+                || !passwordEncoder.matches(pwd, user.getPasswordHash())) {
+            throw new BusinessException(400, "原始密码不正确");
+        }
+    }
+
+    /**
+     * 自助修改密码：校验原密码后更新为新密码
+     * @param userId 当前登录用户 ID
+     * @param oldPassword 原密码
+     * @param newPassword 新密码
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        if (userId == null) {
+            throw new UnauthorizedException("未登录");
+        }
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null || Boolean.FALSE.equals(user.getEnabled()) || Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new UnauthorizedException("用户不存在或已禁用");
+        }
+        String oldPwd = (oldPassword != null) ? oldPassword.trim() : null;
+        if (oldPwd == null || oldPwd.isEmpty() || user.getPasswordHash() == null
+                || !passwordEncoder.matches(oldPwd, user.getPasswordHash())) {
+            throw new BusinessException(400, "原始密码不正确");
+        }
+        String newPwd = (newPassword != null) ? newPassword.trim() : null;
+        if (newPwd == null || newPwd.isEmpty()) {
+            throw new BusinessException(400, "新密码不能为空");
+        }
+        if (newPwd.length() > 72) {
+            throw new BusinessException(400, "新密码过长");
+        }
+        String newHash;
+        try {
+            newHash = passwordEncoder.encode(newPwd);
+        } catch (Exception e) {
+            throw new BusinessException(400, "新密码无效");
+        }
+        sysUserMapper.resetPassword(userId, newHash);
     }
 
     /**

@@ -2,7 +2,7 @@
   <div class="project-list">
     <div class="content">
       <div class="toolbar">
-        <van-button type="primary" size="small" @click="showCreate = true">新建项目</van-button>
+        <van-button v-if="canCreateProject" type="primary" size="small" @click="showCreate = true">新建项目</van-button>
         <van-button v-if="canImportProjects" type="primary" size="small" plain @click="showImport = true">批量导入</van-button>
       </div>
       <van-pull-refresh v-model="loading" @refresh="onRefresh">
@@ -111,6 +111,11 @@ interface Project {
 
 const router = useRouter()
 const auth = useAuthStore()
+/** 仅管理员、PMO 可新建项目 */
+const canCreateProject = computed(() => {
+  const code = auth.currentUser?.roleCode
+  return code === 'SYSTEM_ADMIN' || code === 'PMO'
+})
 const canImportProjects = computed(() => {
   const code = auth.currentUser?.roleCode
   return code === 'SYSTEM_ADMIN' || code === 'PMO'
@@ -220,7 +225,7 @@ const onCreateSubmit = async () => {
       description: createForm.value.description?.trim() || undefined
     })
     if (res.code !== 0) {
-      showToast(res.message || '创建失败')
+      showToast(res.message || (res.code === 403 ? '仅管理员或 PMO 可创建项目' : '创建失败'))
       return
     }
     const data = res.data as ProjectVO

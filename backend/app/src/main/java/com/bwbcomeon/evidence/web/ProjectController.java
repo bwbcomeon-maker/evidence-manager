@@ -92,6 +92,10 @@ public class ProjectController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
+        String roleCode = user.getRoleCode();
+        if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
+            return Result.error(403, "仅管理员或 PMO 可创建项目");
+        }
         logger.info("Create project request: code={}, name={}, userId={}", body.getCode(), body.getName(), user.getId());
         ProjectVO vo = projectService.createProject(
                 user.getId(),
