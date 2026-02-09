@@ -25,7 +25,7 @@
             <van-loading v-if="membersLoading" class="members-loading" size="20" vertical>加载中...</van-loading>
             <van-cell-group v-else-if="members.length">
               <van-cell
-                v-for="m in members"
+                v-for="m in sortedMembers"
                 :key="m.userId"
                 :title="m.displayName || m.username || String(m.userId)"
                 :label="m.username && (m.displayName || '') !== m.username ? `@${m.username}` : undefined"
@@ -322,6 +322,18 @@ const memberRoleLabels: Record<string, string> = {
   editor: '编辑',
   viewer: '查看'
 }
+/** 角色排序权重：负责人 > 编辑 > 查看 */
+const memberRoleOrder: Record<string, number> = {
+  owner: 0,
+  editor: 1,
+  viewer: 2
+}
+/** 按负责人、编辑、查看顺序排列的成员列表 */
+const sortedMembers = computed(() => {
+  return [...members.value].sort(
+    (a, b) => (memberRoleOrder[a.role] ?? 99) - (memberRoleOrder[b.role] ?? 99)
+  )
+})
 function memberRoleLabel(role: string): string {
   return memberRoleLabels[role] || role
 }

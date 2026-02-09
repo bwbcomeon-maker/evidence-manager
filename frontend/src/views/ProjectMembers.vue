@@ -1,7 +1,7 @@
 <template>
   <div class="project-members">
     <van-nav-bar
-      :title="projectName ? `成员管理 - ${projectName}` : '成员管理'"
+      :title="projectName ? `${projectName} - 成员管理` : '成员管理'"
       left-arrow
       left-text="返回"
       fixed
@@ -26,7 +26,7 @@
       </div>
       <van-cell-group v-if="members.length">
         <van-cell
-          v-for="m in members"
+          v-for="m in sortedMembers"
           :key="m.userId"
           :title="m.displayName || m.username || m.userId"
           :label="m.username"
@@ -84,18 +84,24 @@
       />
     </van-dialog>
     <van-popup v-model:show="showUserPicker" position="bottom">
-      <van-picker
-        :columns="userPickerColumns"
-        @confirm="onUserConfirm"
-        @cancel="showUserPicker = false"
-      />
+      <div class="picker-wheel-wrap" @wheel.prevent="onUserPickerWheel">
+        <van-picker
+          :model-value="addForm.userId ? [addForm.userId] : []"
+          :columns="userPickerColumns"
+          @confirm="onUserConfirm"
+          @cancel="showUserPicker = false"
+        />
+      </div>
     </van-popup>
     <van-popup v-model:show="showRolePicker" position="bottom">
-      <van-picker
-        :columns="rolePickerColumns"
-        @confirm="onRoleConfirm"
-        @cancel="showRolePicker = false"
-      />
+      <div class="picker-wheel-wrap" @wheel.prevent="(e) => onRolePickerWheel(e, 'add')">
+        <van-picker
+          :model-value="[addForm.role]"
+          :columns="rolePickerColumns"
+          @confirm="onRoleConfirm"
+          @cancel="showRolePicker = false"
+        />
+      </div>
     </van-popup>
 
     <!-- 编辑成员角色弹窗 -->
@@ -119,11 +125,14 @@
       />
     </van-dialog>
     <van-popup v-model:show="showEditRolePicker" position="bottom">
-      <van-picker
-        :columns="rolePickerColumns"
-        @confirm="onEditRoleConfirm"
-        @cancel="showEditRolePicker = false"
-      />
+      <div class="picker-wheel-wrap" @wheel.prevent="(e) => onRolePickerWheel(e, 'edit')">
+        <van-picker
+          :model-value="[editForm.role]"
+          :columns="rolePickerColumns"
+          @confirm="onEditRoleConfirm"
+          @cancel="showEditRolePicker = false"
+        />
+      </div>
     </van-popup>
   </div>
 </template>
@@ -170,6 +179,17 @@ const roleDisplayMap: Record<string, string> = {
   editor: '编辑',
   viewer: '查看'
 }
+
+/** 角色排序权重：负责人 > 编辑 > 查看 */
+const roleOrder: Record<string, number> = {
+  owner: 0,
+  editor: 1,
+  viewer: 2
+}
+/** 按负责人、编辑、查看顺序排列的成员列表 */
+const sortedMembers = computed(() =>
+  [...members.value].sort((a, b) => (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99))
+)
 
 /** 当前项目经理展示名（成员中 role=owner 的 displayName） */
 const currentPmDisplayName = computed(() => {
@@ -299,6 +319,38 @@ function onRoleConfirm({ selectedOptions }: { selectedOptions: { text: string; v
   showRolePicker.value = false
 }
 
+/** 角色选择器滚轮：向上滚上一项，向下滚下一项 */
+function onRolePickerWheel(e: WheelEvent, formType: 'add' | 'edit') {
+  const form = formType === 'add' ? addForm.value : editForm.value
+  const cols = rolePickerColumns
+  const idx = cols.findIndex((c) => c.value === form.role)
+  const cur = idx < 0 ? 0 : idx
+  const next = e.deltaY > 0 ? cur + 1 : cur - 1
+  const newIdx = Math.max(0, Math.min(next, cols.length - 1))
+  if (newIdx === cur) return
+  const opt = rolePickerColumns[newIdx]
+  if (formType === 'add') {
+    addForm.value.role = opt.value as 'owner' | 'editor' | 'viewer'
+    addForm.value.roleLabel = opt.text
+  } else {
+    editForm.value.role = opt.value as 'owner' | 'editor' | 'viewer'
+    editForm.value.roleLabel = opt.text
+  }
+}
+
+/** 用户选择器滚轮：向上滚上一项，向下滚下一项 */
+function onUserPickerWheel(e: WheelEvent) {
+  const cols = userPickerColumns.value
+  if (!cols.length) return
+  const idx = cols.findIndex((c) => c.value === addForm.value.userId)
+  const cur = idx < 0 ? 0 : idx
+  const next = e.deltaY > 0 ? cur + 1 : cur - 1
+  const newIdx = Math.max(0, Math.min(next, cols.length - 1))
+  const opt = cols[newIdx]
+  addForm.value.userId = opt.value
+  addForm.value.userLabel = opt.text
+}
+
 async function onAddConfirm(action: string): Promise<boolean> {
   if (action !== 'confirm') return true
   if (!addForm.value.userId) {
@@ -386,5 +438,10 @@ onMounted(() => {
 
 .van-cell {
   align-items: center;
+}
+
+/* 选择器容器：支持滚轮滚动选项，且不阻挡触摸滑动 */
+.picker-wheel-wrap {
+  touch-action: pan-y;
 }
 </style>
