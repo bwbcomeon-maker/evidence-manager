@@ -12,10 +12,12 @@ import com.bwbcomeon.evidence.entity.EvidenceVersion;
 import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.Project;
+import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceVersionMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
+import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.FileStorageUtil;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.slf4j.Logger;
@@ -64,6 +66,9 @@ public class EvidenceService {
 
     @Autowired
     private AuthProjectAclMapper authProjectAclMapper;
+
+    @Autowired
+    private SysUserMapper sysUserMapper;
 
     @Autowired
     private PermissionUtil permissionUtil;
@@ -238,8 +243,10 @@ public class EvidenceService {
      * @return 证据列表
      */
     public List<EvidenceListItemVO> listEvidences(Long projectId, String nameLike, String status, String bizType, String contentType, Long userId, String roleCode) {
-        // 1. 权限校验
-        permissionUtil.checkProjectAccess(projectId, userId);
+        // 1. 权限校验：SYSTEM_ADMIN/PMO 可见全部项目（与 getVisibleProjectIds 一致），其余须为项目创建人或 ACL 成员
+        if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
+            permissionUtil.checkProjectAccess(projectId, userId);
+        }
 
         // 2. bizType规范化处理（如果传入，转换为大写以匹配数据库存储格式）
         String normalizedBizType = null;
@@ -420,16 +427,34 @@ public class EvidenceService {
         if (item == null) {
             throw new BusinessException(404, "证据不存在");
         }
-        permissionUtil.checkProjectAccess(item.getProjectId(), userId);
+        if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
+            permissionUtil.checkProjectAccess(item.getProjectId(), userId);
+        }
         EvidenceListItemVO vo = new EvidenceListItemVO();
         vo.setEvidenceId(item.getId());
         vo.setProjectId(item.getProjectId());
         vo.setTitle(item.getTitle());
         vo.setBizType(item.getBizType());
+        vo.setNote(item.getNote());
         vo.setContentType(item.getContentType());
         vo.setStatus(item.getStatus());
         vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
         vo.setCreatedByUserId(item.getCreatedByUserId());
+        if (item.getCreatedByUserId() != null) {
+            // selectById 不过滤 is_deleted，故即使用户已在「用户管理」中逻辑删除，仍可查到并展示历史上传人姓名
+            SysUser creator = sysUserMapper.selectById(item.getCreatedByUserId());
+            String displayName = null;
+            if (creator != null) {
+                if (creator.getRealName() != null && !creator.getRealName().isBlank()) {
+                    displayName = creator.getRealName();
+                } else if (creator.getUsername() != null && !creator.getUsername().isBlank()) {
+                    displayName = creator.getUsername();
+                } else {
+                    displayName = "用户" + item.getCreatedByUserId();
+                }
+            }
+            vo.setCreatedByDisplayName(displayName);
+        }
         vo.setCreatedAt(item.getCreatedAt());
         vo.setUpdatedAt(item.getUpdatedAt());
         vo.setInvalidReason(item.getInvalidReason());
@@ -529,22 +554,24 @@ public class EvidenceService {
 
     /**
      * 下载证据版本文件
-     * 
+     *
      * @param versionId 版本ID
      * @param userId 当前用户ID
+     * @param roleCode 当前用户角色（SYSTEM_ADMIN/PMO 可见全部项目）
      * @return 文件资源
      * @throws BusinessException 如果版本不存在、文件不存在或权限不足
      */
-    public Resource downloadVersionFile(Long versionId, Long userId) {
+    public Resource downloadVersionFile(Long versionId, Long userId, String roleCode) {
         // 1. 查询版本记录
         EvidenceVersion version = evidenceVersionMapper.selectById(versionId);
         if (version == null) {
             throw new BusinessException(404, "Version not found");
         }
 
-        // 2. 权限校验：检查用户是否有项目访问权限
-        // TODO: ADMIN 可下载全部，当前未实现 ADMIN 角色检查
-        permissionUtil.checkProjectAccess(version.getProjectId(), userId);
+        // 2. 权限校验：SYSTEM_ADMIN/PMO 可访问全部项目，其余须为项目创建人或 ACL 成员
+        if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
+            permissionUtil.checkProjectAccess(version.getProjectId(), userId);
+        }
 
         // 3. 构建文件完整路径
         String filePath = version.getFilePath();

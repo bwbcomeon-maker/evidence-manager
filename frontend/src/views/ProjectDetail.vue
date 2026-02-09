@@ -19,6 +19,24 @@
             </van-cell>
             <van-cell title="创建时间" :value="project.createdAt" />
           </van-cell-group>
+          <!-- 项目成员列表 -->
+          <div class="members-section">
+            <div class="members-section-title">项目成员</div>
+            <van-loading v-if="membersLoading" class="members-loading" size="20" vertical>加载中...</van-loading>
+            <van-cell-group v-else-if="members.length">
+              <van-cell
+                v-for="m in members"
+                :key="m.userId"
+                :title="m.displayName || m.username || String(m.userId)"
+                :label="m.username && (m.displayName || '') !== m.username ? `@${m.username}` : undefined"
+              >
+                <template #value>
+                  <van-tag plain type="primary">{{ memberRoleLabel(m.role) }}</van-tag>
+                </template>
+              </van-cell>
+            </van-cell-group>
+            <van-empty v-else description="暂无成员" :image-size="60" />
+          </div>
         </van-tab>
 
         <!-- 证据 Tab -->
@@ -90,8 +108,8 @@
         </van-tab>
       </van-tabs>
 
-      <!-- 成员管理入口：底部居中按钮，仅在有权限时显示 -->
-      <div v-if="project?.canManageMembers" class="member-entry-wrap">
+      <!-- 成员管理入口：仅在「详情」Tab 显示，证据 Tab 不显示 -->
+      <div v-if="project?.canManageMembers && activeTab === 0" class="member-entry-wrap">
         <van-button type="primary" class="member-entry-btn" @click="goToMembers">
           成员管理
         </van-button>
@@ -269,7 +287,7 @@ import {
   invalidateEvidence,
   type EvidenceListItem
 } from '@/api/evidence'
-import { getProjectDetail } from '@/api/projects'
+import { getProjectDetail, getProjectMembers, type ProjectMemberVO } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
@@ -295,6 +313,18 @@ const project = ref<Project | null>(null)
 const projectLoading = ref(false)
 const projectError = ref('')
 const activeTab = ref(0)
+
+// 项目成员列表（详情 Tab 展示）
+const members = ref<ProjectMemberVO[]>([])
+const membersLoading = ref(false)
+const memberRoleLabels: Record<string, string> = {
+  owner: '负责人',
+  editor: '编辑',
+  viewer: '查看'
+}
+function memberRoleLabel(role: string): string {
+  return memberRoleLabels[role] || role
+}
 
 // 证据列表相关
 const evidenceList = ref<EvidenceListItem[]>([])
@@ -445,6 +475,7 @@ const loadProject = async () => {
         currentPmUserId: p.currentPmUserId,
         currentPmDisplayName: p.currentPmDisplayName
       }
+      loadMembers()
     } else {
       projectError.value = res.message || '加载失败'
     }
@@ -455,6 +486,21 @@ const loadProject = async () => {
     }
   } finally {
     projectLoading.value = false
+  }
+}
+
+// 加载项目成员列表（详情页展示）
+const loadMembers = async () => {
+  if (!projectId.value) return
+  membersLoading.value = true
+  try {
+    const res = await getProjectMembers(projectId.value)
+    if (res.code === 0 && res.data) members.value = res.data
+    else members.value = []
+  } catch {
+    members.value = []
+  } finally {
+    membersLoading.value = false
   }
 }
 
@@ -801,6 +847,20 @@ onMounted(() => {
 
 .content {
   padding: 0;
+}
+
+.members-section {
+  margin-top: 16px;
+  padding: 0 16px 16px;
+}
+.members-section-title {
+  font-size: 14px;
+  color: var(--van-gray-7);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.members-loading {
+  padding: 16px 0;
 }
 
 .evidence-section {

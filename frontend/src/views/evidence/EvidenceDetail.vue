@@ -2,9 +2,9 @@
   <div class="evidence-detail">
     <template v-if="evidence">
       <van-cell-group inset>
-        <van-cell title="证据标题" :value="evidence.title" />
-        <van-cell title="项目ID" :value="String(evidence.projectId)" />
-        <van-cell title="业务类型" :value="evidence.bizType" />
+        <van-cell title="证据标题" :value="evidence.title || '—'" />
+        <van-cell title="业务类型" :value="bizTypeLabel(evidence.bizType)" />
+        <van-cell title="备注" :value="evidence.note || '—'" />
         <van-cell title="文件类型" :value="evidence.contentType || '—'" />
         <van-cell title="当前状态">
           <template #value>
@@ -13,7 +13,7 @@
             </van-tag>
           </template>
         </van-cell>
-        <van-cell title="上传人" :value="evidence.createdByUserId != null ? String(evidence.createdByUserId) : '—'" />
+        <van-cell title="上传人" :value="uploaderDisplayName()" />
         <van-cell title="上传时间" :value="formatDateTime(evidence.createdAt)" />
         <template v-if="effectiveStatus === 'INVALID' && (evidence.invalidReason || evidence.invalidByUserId != null || evidence.invalidAt)">
           <van-cell title="作废原因" :value="evidence.invalidReason || '—'" />
@@ -62,9 +62,11 @@ import {
   submitEvidence,
   archiveEvidence,
   invalidateEvidence,
+  BIZ_TYPE_LABELS,
   type EvidenceListItem
 } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
+import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 import { formatDateTime } from '@/utils/format'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
 
@@ -76,6 +78,24 @@ const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
 const showInvalidateReasonDialog = ref(false)
 const invalidateReasonText = ref('')
+/** 用户列表（用于兜底：接口未返回 createdByDisplayName 时按 userId 解析展示名） */
+const userList = ref<AuthUserSimpleVO[]>([])
+
+/** 业务类型中文展示 */
+function bizTypeLabel(bizType: string | undefined) {
+  if (!bizType) return '—'
+  return BIZ_TYPE_LABELS[bizType] ?? bizType
+}
+
+/** 上传人展示名：优先用接口返回的 createdByDisplayName，否则用用户列表按 id 解析 */
+function uploaderDisplayName(): string {
+  const e = evidence.value
+  if (!e) return '—'
+  if (e.createdByDisplayName) return e.createdByDisplayName
+  if (e.createdByUserId == null) return '—'
+  const u = userList.value.find((x) => x.id === e.createdByUserId)
+  return u ? (u.displayName || u.username || String(u.id)) : String(e.createdByUserId)
+}
 
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
 const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
@@ -98,7 +118,20 @@ function initFromState() {
 async function fetchDetail() {
   try {
     const res = await getEvidenceById(evidenceId.value) as { code: number; data?: EvidenceListItem }
-    if (res?.code === 0 && res.data) evidence.value = res.data
+    if (res?.code === 0 && res.data) {
+      evidence.value = res.data
+      // 若接口未返回上传人展示名，拉取用户列表用于兜底展示
+      if (res.data.createdByUserId != null && !res.data.createdByDisplayName && userList.value.length === 0) {
+        try {
+          const r = await getUsers() as { code: number; data?: AuthUserSimpleVO[] }
+          if (r?.code === 0 && r.data) userList.value = r.data
+        } catch {
+          // ignore
+        }
+      }
+    } else {
+      evidence.value = null
+    }
   } catch {
     evidence.value = null
   }
@@ -233,7 +266,8 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
 
 onMounted(() => {
   initFromState()
-  if (!evidence.value) fetchDetail()
+  // 始终拉取详情，以获取备注、上传人展示名、业务类型等完整数据
+  fetchDetail()
 })
 </script>
 

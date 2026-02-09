@@ -12,15 +12,29 @@ export interface PermissionBits {
   canManageMembers?: boolean
 }
 
+/** 业务类型代码与中文映射（与上传页一致） */
+export const BIZ_TYPE_LABELS: Record<string, string> = {
+  PLAN: '方案',
+  REPORT: '报告',
+  MINUTES: '纪要',
+  TEST: '测试',
+  ACCEPTANCE: '验收',
+  OTHER: '其他'
+}
+
 export interface EvidenceListItem {
   evidenceId: number
   projectId: number
   title: string
   bizType: string
+  /** 备注（上传时填写） */
+  note?: string
   contentType: string
   status: string
   evidenceStatus?: EvidenceStatus
   createdByUserId?: number
+  /** 上传人展示名（后端返回） */
+  createdByDisplayName?: string
   createdAt: string
   updatedAt: string
   permissions?: PermissionBits

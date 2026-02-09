@@ -1,9 +1,12 @@
 <template>
   <div class="project-members">
     <van-nav-bar
-      :title="`成员管理 - ${projectName}`"
+      :title="projectName ? `成员管理 - ${projectName}` : '成员管理'"
       left-arrow
-      @click-left="router.back()"
+      left-text="返回"
+      fixed
+      placeholder
+      @click-left="onBack"
     />
     <van-loading v-if="loading" class="loading" vertical>加载中...</van-loading>
     <template v-else>
@@ -140,6 +143,10 @@ import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => Number(route.params.id))
+
+function onBack() {
+  router.replace(`/projects/${projectId.value}`)
+}
 
 const projectName = ref('')
 const canManageMembers = ref(false)

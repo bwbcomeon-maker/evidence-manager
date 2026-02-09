@@ -106,7 +106,7 @@ const router = createRouter({
           path: 'projects/:id/members',
           name: 'ProjectMembers',
           component: ProjectMembers,
-          meta: { title: '成员管理', showTabbar: false, showBack: true }
+          meta: { title: '成员管理', showTabbar: false, showBack: true, hideLayoutNav: true }
         },
         {
           path: 'projects/:id/upload',

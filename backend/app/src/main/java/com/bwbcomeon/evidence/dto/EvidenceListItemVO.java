@@ -25,9 +25,14 @@ public class EvidenceListItemVO {
     private String title;
 
     /**
-     * 业务证据类型
+     * 业务证据类型（代码：PLAN/REPORT/...）
      */
     private String bizType;
+
+    /**
+     * 备注（上传时填写）
+     */
+    private String note;
 
     /**
      * 文件类型（MIME类型）
@@ -48,6 +53,11 @@ public class EvidenceListItemVO {
      * 创建人 sys_user.id
      */
     private Long createdByUserId;
+
+    /**
+     * 创建人展示名（realName 或 username）
+     */
+    private String createdByDisplayName;
 
     /**
      * 创建时间

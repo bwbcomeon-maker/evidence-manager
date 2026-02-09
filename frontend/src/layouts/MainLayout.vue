@@ -1,6 +1,7 @@
 <template>
   <div class="main-layout">
     <van-nav-bar
+      v-if="!hideLayoutNav"
       :title="(route.meta.title as string) || '证据管理'"
       :left-arrow="showBack"
       :left-text="showBack ? '返回' : ''"
@@ -35,6 +36,8 @@ onMounted(() => {
 
 const showBack = computed(() => !!route.meta.showBack)
 const showTabbar = computed(() => !!route.meta.showTabbar)
+/** 为 true 时由页面自绘导航栏，布局不渲染顶部栏（避免成员管理等页出现双栏） */
+const hideLayoutNav = computed(() => !!route.meta.hideLayoutNav)
 
 /** 由路由 path 推导当前 Tab（单一真相源），使 /evidence、/evidence/by-project 等均高亮「证据」 */
 const activeTab = ref<'home' | 'projects' | 'evidence' | 'me'>('home')

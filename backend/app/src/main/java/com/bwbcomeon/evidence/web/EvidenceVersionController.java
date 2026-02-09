@@ -138,7 +138,7 @@ public class EvidenceVersionController {
             throw new UnauthorizedException("未登录");
         }
         logger.info("Download version file request: versionId={}, userId={}", versionId, user.getId());
-        Resource resource = evidenceService.downloadVersionFile(versionId, user.getId());
+        Resource resource = evidenceService.downloadVersionFile(versionId, user.getId(), user.getRoleCode());
         
         // 获取原始文件名和Content-Type
         String originalFilename = evidenceService.getVersionOriginalFilename(versionId);
