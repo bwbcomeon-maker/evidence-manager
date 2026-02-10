@@ -107,8 +107,12 @@ const onSubmit = async () => {
       showToast(res.message || '登录失败')
     }
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } }; message?: string }
-    const msg = err?.response?.data?.message ?? err?.message ?? '用户名或密码错误'
+    const err = e as { response?: { data?: { message?: string }; status?: number }; message?: string; code?: string }
+    const msg =
+      err?.response?.data?.message ??
+      (err?.response ? undefined : '网络错误，请确认后端已启动（端口 8081）') ??
+      (err?.code === 'ECONNABORTED' ? '请求超时' : err?.message) ??
+      '用户名或密码错误'
     showToast(msg)
   } finally {
     loading.value = false

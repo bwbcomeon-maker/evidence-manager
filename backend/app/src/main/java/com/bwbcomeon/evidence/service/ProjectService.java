@@ -30,7 +30,10 @@ import java.io.InputStream;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -167,21 +170,35 @@ public class ProjectService {
 
     /**
      * 当前用户可见的项目列表（SYSTEM_ADMIN 全部；普通用户：自己创建的 + ACL 可见）
+     * 使用批量查询避免 N+1，并用只读事务统一连接，减少超时与 SqlSession 未同步告警。
      */
+    @Transactional(readOnly = true)
     public List<ProjectVO> listVisibleProjects(Long currentUserId, String roleCode) {
         List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
         if (visibleIds.isEmpty()) {
             return new ArrayList<>();
         }
         List<Project> projects = projectMapper.selectByIds(visibleIds);
+        List<AuthProjectAcl> allAcls = authProjectAclMapper.selectByProjectIds(visibleIds);
+        Map<Long, Long> projectIdToOwnerUserId = new HashMap<>();
+        for (AuthProjectAcl acl : allAcls) {
+            if (ROLE_OWNER.equals(acl.getRole())) {
+                projectIdToOwnerUserId.putIfAbsent(acl.getProjectId(), acl.getSysUserId());
+            }
+        }
+        Set<Long> ownerUserIds = new HashSet<>(projectIdToOwnerUserId.values());
+        List<SysUser> ownerUsers = ownerUserIds.isEmpty() ? new ArrayList<>() : sysUserMapper.selectByIds(new ArrayList<>(ownerUserIds));
+        Map<Long, String> userIdToDisplayName = new HashMap<>();
+        for (SysUser u : ownerUsers) {
+            userIdToDisplayName.put(u.getId(), resolveUserDisplayName(u));
+        }
         List<ProjectVO> result = new ArrayList<>(projects.size());
         for (Project p : projects) {
             ProjectVO vo = toVO(p);
-            Long pmUserId = resolveAclOwnerUserId(p.getId());
+            Long pmUserId = projectIdToOwnerUserId.get(p.getId());
             if (pmUserId != null) {
                 vo.setCurrentPmUserId(pmUserId);
-                SysUser pmUser = sysUserMapper.selectById(pmUserId);
-                vo.setCurrentPmDisplayName(pmUser != null ? resolveUserDisplayName(pmUser) : null);
+                vo.setCurrentPmDisplayName(userIdToDisplayName.get(pmUserId));
             }
             result.add(vo);
         }

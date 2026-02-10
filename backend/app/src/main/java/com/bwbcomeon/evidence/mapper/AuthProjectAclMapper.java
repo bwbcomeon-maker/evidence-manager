@@ -21,6 +21,11 @@ public interface AuthProjectAclMapper {
     List<AuthProjectAcl> selectByProjectId(@Param("projectId") Long projectId);
 
     /**
+     * 根据多个项目ID批量查询权限列表（用于列表页避免 N+1）
+     */
+    List<AuthProjectAcl> selectByProjectIds(@Param("projectIds") List<Long> projectIds);
+
+    /**
      * 根据用户ID查询权限列表
      */
     List<AuthProjectAcl> selectBySysUserId(@Param("sysUserId") Long sysUserId);

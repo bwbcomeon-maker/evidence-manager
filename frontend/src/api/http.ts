@@ -8,7 +8,7 @@ if (baseURL !== '/api' && !baseURL.endsWith('/api')) {
 
 const http = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 30000,
   withCredentials: true, // 必须：Session 登录需携带 Cookie
   headers: {
     'Content-Type': 'application/json'

@@ -29,6 +29,17 @@
         ORDER BY created_at DESC
     </select>
 
+    <select id="selectByProjectIds" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM auth_project_acl
+        WHERE project_id IN
+        <foreach collection="projectIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY project_id, created_at DESC
+    </select>
+
     <select id="selectBySysUserId" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
