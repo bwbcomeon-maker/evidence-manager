@@ -62,21 +62,40 @@
       </div>
     </template>
 
-    <van-popup v-model:show="showUserPicker" position="bottom">
-      <van-picker
-        :model-value="form.userId != null ? [form.userId] : []"
-        :columns="userPickerColumns"
-        @confirm="onUserConfirm"
-        @cancel="showUserPicker = false"
-      />
+    <van-popup v-model:show="showUserPicker" position="bottom" :style="{ height: '50vh' }">
+      <div class="picker-header">
+        <span class="picker-cancel" @click="showUserPicker = false">取消</span>
+        <span class="picker-title">选择用户</span>
+        <span class="picker-placeholder"></span>
+      </div>
+      <div class="picker-list">
+        <van-cell
+          v-for="u in userList"
+          :key="u.id"
+          :title="`${u.displayName || u.username} (${u.username})`"
+          :class="{ 'picker-cell--active': form.userId === u.id }"
+          clickable
+          @click="onUserSelect(u)"
+        />
+        <van-empty v-if="userList.length === 0" description="暂无用户" />
+      </div>
     </van-popup>
-    <van-popup v-model:show="showRolePicker" position="bottom">
-      <van-picker
-        :model-value="[form.role]"
-        :columns="rolePickerColumns"
-        @confirm="onRoleConfirm"
-        @cancel="showRolePicker = false"
-      />
+    <van-popup v-model:show="showRolePicker" position="bottom" :style="{ height: '40vh' }">
+      <div class="picker-header">
+        <span class="picker-cancel" @click="showRolePicker = false">取消</span>
+        <span class="picker-title">选择角色</span>
+        <span class="picker-placeholder"></span>
+      </div>
+      <div class="picker-list picker-list--role">
+        <van-cell
+          v-for="item in roleOptions"
+          :key="item.value"
+          :title="item.text"
+          :class="{ 'picker-cell--active': form.role === item.value }"
+          clickable
+          @click="onRoleSelect(item)"
+        />
+      </div>
     </van-popup>
   </div>
 </template>
@@ -105,10 +124,10 @@ const selectedProjectIds = ref<number[]>([])
 const showUserPicker = ref(false)
 const showRolePicker = ref(false)
 
-const rolePickerColumns = [
-  { text: '负责人', value: 'owner' },
-  { text: '编辑', value: 'editor' },
-  { text: '查看', value: 'viewer' }
+const roleOptions = [
+  { text: '负责人', value: 'owner' as const },
+  { text: '编辑', value: 'editor' as const },
+  { text: '查看', value: 'viewer' as const }
 ]
 
 const form = ref<{
@@ -121,10 +140,6 @@ const form = ref<{
   role: 'editor',
   roleLabel: '编辑'
 })
-
-const userPickerColumns = computed(() =>
-  userList.value.map(u => ({ text: `${u.displayName || u.username} (${u.username})`, value: u.id }))
-)
 
 function toggleProject(id: number) {
   const idx = selectedProjectIds.value.indexOf(id)
@@ -139,21 +154,15 @@ function onBack() {
   router.replace('/home')
 }
 
-function onUserConfirm({ selectedOptions }: { selectedOptions: { text: string; value: number }[] }) {
-  const o = selectedOptions[0]
-  if (o) {
-    form.value.userId = o.value
-    form.value.userLabel = o.text
-  }
+function onUserSelect(u: AuthUserSimpleVO) {
+  form.value.userId = u.id
+  form.value.userLabel = `${u.displayName || u.username} (${u.username})`
   showUserPicker.value = false
 }
 
-function onRoleConfirm({ selectedOptions }: { selectedOptions: { text: string; value: string }[] }) {
-  const o = selectedOptions[0]
-  if (o) {
-    form.value.role = o.value as 'owner' | 'editor' | 'viewer'
-    form.value.roleLabel = o.text
-  }
+function onRoleSelect(item: { text: string; value: 'owner' | 'editor' | 'viewer' }) {
+  form.value.role = item.value
+  form.value.roleLabel = item.text
   showRolePicker.value = false
 }
 
@@ -237,5 +246,36 @@ onMounted(() => {
 }
 .submit-wrap {
   padding: 24px 16px;
+}
+
+.picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--van-cell-border-color);
+  font-size: 14px;
+}
+.picker-title {
+  font-weight: 500;
+}
+.picker-cancel {
+  color: var(--van-gray-6);
+  cursor: pointer;
+}
+.picker-placeholder {
+  width: 48px;
+}
+.picker-list {
+  overflow-y: auto;
+  max-height: calc(50vh - 48px);
+  -webkit-overflow-scrolling: touch;
+}
+.picker-cell--active {
+  color: var(--van-primary-color);
+  font-weight: 500;
+}
+.picker-list--role {
+  max-height: calc(40vh - 48px);
 }
 </style>
