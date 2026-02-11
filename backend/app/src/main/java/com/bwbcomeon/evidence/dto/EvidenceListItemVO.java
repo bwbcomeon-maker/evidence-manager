@@ -25,9 +25,14 @@ public class EvidenceListItemVO {
     private String title;
 
     /**
-     * 业务证据类型（代码：PLAN/REPORT/...）
+     * 所属阶段 ID delivery_stage.id
      */
-    private String bizType;
+    private Long stageId;
+
+    /**
+     * 证据类型编码，与 stage_evidence_template 对应
+     */
+    private String evidenceTypeCode;
 
     /**
      * 备注（上传时填写）
@@ -38,11 +43,6 @@ public class EvidenceListItemVO {
      * 文件类型（MIME类型）
      */
     private String contentType;
-
-    /**
-     * 证据状态（兼容旧字段）
-     */
-    private String status;
 
     /**
      * 证据生命周期状态：DRAFT/SUBMITTED/ARCHIVED/INVALID

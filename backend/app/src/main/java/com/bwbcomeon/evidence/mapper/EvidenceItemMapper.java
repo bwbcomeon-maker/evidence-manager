@@ -21,9 +21,9 @@ public interface EvidenceItemMapper {
     List<EvidenceItem> selectByProjectId(@Param("projectId") Long projectId);
 
     /**
-     * 根据项目ID和状态查询证据列表
+     * 根据项目ID和证据状态查询证据列表
      */
-    List<EvidenceItem> selectByProjectIdAndStatus(@Param("projectId") Long projectId, @Param("status") String status);
+    List<EvidenceItem> selectByProjectIdAndEvidenceStatus(@Param("projectId") Long projectId, @Param("evidenceStatus") String evidenceStatus);
 
     /**
      * 根据创建人查询证据列表
@@ -51,19 +51,19 @@ public interface EvidenceItemMapper {
     int deleteById(@Param("id") Long id);
 
     /**
-     * 根据项目ID和条件查询证据列表（支持名称模糊匹配、状态过滤、业务类型过滤、文件类型过滤）
+     * 根据项目ID和条件查询证据列表（支持名称模糊匹配、证据状态、证据类型、文件类型过滤）
      * @param projectId 项目ID
      * @param nameLike 证据名称模糊匹配（可选）
-     * @param status 证据状态（可选）
-     * @param bizType 业务证据类型（可选，如PLAN/REPORT/MINUTES/TEST/ACCEPTANCE/OTHER）
-     * @param contentType 文件类型（MIME类型，可选，如application/pdf）
+     * @param evidenceStatus 证据状态（可选，DRAFT/SUBMITTED/ARCHIVED/INVALID）
+     * @param evidenceTypeCode 证据类型编码（可选）
+     * @param contentType 文件类型（MIME类型，可选）
      * @return 证据列表
      */
     List<EvidenceItem> selectByProjectIdWithFilters(
             @Param("projectId") Long projectId,
             @Param("nameLike") String nameLike,
-            @Param("status") String status,
-            @Param("bizType") String bizType,
+            @Param("evidenceStatus") String evidenceStatus,
+            @Param("evidenceTypeCode") String evidenceTypeCode,
             @Param("contentType") String contentType
     );
 

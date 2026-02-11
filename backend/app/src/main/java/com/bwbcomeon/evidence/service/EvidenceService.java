@@ -48,13 +48,6 @@ import java.util.stream.Collectors;
 public class EvidenceService {
     private static final Logger logger = LoggerFactory.getLogger(EvidenceService.class);
 
-    /**
-     * 允许的业务证据类型集合
-     */
-    private static final Set<String> ALLOWED_BIZ_TYPES = Set.of(
-            "PLAN", "REPORT", "MINUTES", "TEST", "ACCEPTANCE", "OTHER"
-    );
-
     @Autowired
     private EvidenceItemMapper evidenceItemMapper;
 
@@ -81,17 +74,18 @@ public class EvidenceService {
 
     /**
      * 上传证据
-     * 
+     *
      * @param projectId 项目ID
      * @param name 证据名称
-     * @param type 业务证据类型（对应bizType字段）
+     * @param stageId 所属阶段 ID delivery_stage.id（必填）
+     * @param evidenceTypeCode 证据类型编码，须属于该阶段模板（必填）
      * @param remark 备注
      * @param file 文件
      * @param userId 当前用户ID
      * @return 证据响应
      */
     @Transactional(rollbackFor = Exception.class)
-    public EvidenceResponse uploadEvidence(Long projectId, String name, String type, String remark,
+    public EvidenceResponse uploadEvidence(Long projectId, String name, Long stageId, String evidenceTypeCode, String remark,
                                           MultipartFile file, Long userId, String roleCode) {
         // 1. 参数校验
         if (file == null || file.isEmpty()) {
@@ -100,17 +94,11 @@ public class EvidenceService {
         if (name == null || name.trim().isEmpty()) {
             throw new BusinessException(400, "Evidence name is required");
         }
-        
-        // bizType处理：规范化 + 校验允许值
-        String bizType;
-        if (type != null && !type.trim().isEmpty()) {
-            // 统一规范化：trim + toUpperCase
-            String normalizedType = type.trim().toUpperCase();
-            // 检查是否在允许值集合中，如果不在则使用 OTHER
-            bizType = ALLOWED_BIZ_TYPES.contains(normalizedType) ? normalizedType : "OTHER";
-        } else {
-            // 未传入时使用默认值
-            bizType = "OTHER";
+        if (stageId == null) {
+            throw new BusinessException(400, "stageId is required");
+        }
+        if (evidenceTypeCode == null || evidenceTypeCode.trim().isEmpty()) {
+            throw new BusinessException(400, "evidenceTypeCode is required");
         }
 
         // 2. 权限校验：editor/owner 或 SYSTEM_ADMIN 可上传，viewer 不可
@@ -130,9 +118,9 @@ public class EvidenceService {
             evidenceItem.setNote(remark);
             evidenceItem.setContentType(file.getContentType());
             evidenceItem.setSizeBytes(file.getSize());
-            evidenceItem.setStatus("active");
-            evidenceItem.setEvidenceStatus("DRAFT"); // 上传默认为草稿，由用户点击「提交」后变为 SUBMITTED
-            evidenceItem.setBizType(bizType); // 设置业务证据类型
+            evidenceItem.setEvidenceStatus("DRAFT");
+            evidenceItem.setStageId(stageId);
+            evidenceItem.setEvidenceTypeCode(evidenceTypeCode.trim());
             evidenceItem.setCreatedByUserId(userId);
             evidenceItem.setCreatedAt(OffsetDateTime.now());
             evidenceItem.setUpdatedAt(OffsetDateTime.now());
@@ -159,8 +147,8 @@ public class EvidenceService {
             evidenceItem.setEtag(etag);
             evidenceItemMapper.update(evidenceItem);
 
-            logger.info("Created evidence record: projectId={}, evidenceId={}, objectKey={}, bizType={}", 
-                       projectId, evidenceId, objectKey, bizType);
+            logger.info("Created evidence record: projectId={}, evidenceId={}, objectKey={}, stageId={}, evidenceTypeCode={}",
+                       projectId, evidenceId, objectKey, stageId, evidenceTypeCode);
 
             // 4. 创建版本记录（首次上传固定version_no=1）
             // 获取原始文件名
@@ -200,9 +188,9 @@ public class EvidenceService {
             response.setNote(evidenceItem.getNote());
             response.setContentType(evidenceItem.getContentType());
             response.setSizeBytes(evidenceItem.getSizeBytes());
-            // 兼容：前端统一读 evidenceStatus，旧逻辑若只读 status 则与 evidenceStatus 一致，避免列表误显示「已提交」
-            response.setStatus(evidenceItem.getEvidenceStatus() != null ? evidenceItem.getEvidenceStatus() : evidenceItem.getStatus());
             response.setEvidenceStatus(evidenceItem.getEvidenceStatus());
+            response.setStageId(evidenceItem.getStageId());
+            response.setEvidenceTypeCode(evidenceItem.getEvidenceTypeCode());
             response.setCreatedByUserId(evidenceItem.getCreatedByUserId());
             response.setCreatedAt(evidenceItem.getCreatedAt());
 
@@ -233,30 +221,24 @@ public class EvidenceService {
 
     /**
      * 按项目查询证据列表
-     * 
+     *
      * @param projectId 项目ID
      * @param nameLike 证据名称模糊匹配（可选）
-     * @param status 证据状态（可选）
-     * @param bizType 业务证据类型（可选，如PLAN/REPORT/MINUTES/TEST/ACCEPTANCE/OTHER）
-     * @param contentType 文件类型（MIME类型，可选，如application/pdf）
+     * @param evidenceStatus 证据状态（可选，DRAFT/SUBMITTED/ARCHIVED/INVALID）
+     * @param evidenceTypeCode 证据类型编码（可选）
+     * @param contentType 文件类型（MIME类型，可选）
      * @param userId 当前用户ID
      * @return 证据列表
      */
-    public List<EvidenceListItemVO> listEvidences(Long projectId, String nameLike, String status, String bizType, String contentType, Long userId, String roleCode) {
+    public List<EvidenceListItemVO> listEvidences(Long projectId, String nameLike, String evidenceStatus, String evidenceTypeCode, String contentType, Long userId, String roleCode) {
         // 1. 权限校验：SYSTEM_ADMIN/PMO 可见全部项目（与 getVisibleProjectIds 一致），其余须为项目创建人或 ACL 成员
         if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
             permissionUtil.checkProjectAccess(projectId, userId);
         }
 
-        // 2. bizType规范化处理（如果传入，转换为大写以匹配数据库存储格式）
-        String normalizedBizType = null;
-        if (bizType != null && !bizType.trim().isEmpty()) {
-            normalizedBizType = bizType.trim().toUpperCase();
-        }
-
-        // 3. 查询证据列表（带过滤条件）
+        // 2. 查询证据列表（带过滤条件）
         List<EvidenceItem> evidenceItems = evidenceItemMapper.selectByProjectIdWithFilters(
-                projectId, nameLike, status, normalizedBizType, contentType);
+                projectId, nameLike, evidenceStatus, evidenceTypeCode, contentType);
 
         if (evidenceItems.isEmpty()) {
             return new ArrayList<>();
@@ -280,10 +262,10 @@ public class EvidenceService {
             vo.setEvidenceId(item.getId());
             vo.setProjectId(item.getProjectId());
             vo.setTitle(item.getTitle());
-            vo.setBizType(item.getBizType());
+            vo.setStageId(item.getStageId());
+            vo.setEvidenceTypeCode(item.getEvidenceTypeCode());
             vo.setContentType(item.getContentType());
-            vo.setStatus(item.getStatus());
-            vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
+            vo.setEvidenceStatus(item.getEvidenceStatus());
             vo.setCreatedByUserId(item.getCreatedByUserId());
             vo.setCreatedAt(item.getCreatedAt());
             vo.setUpdatedAt(item.getUpdatedAt());
@@ -380,10 +362,10 @@ public class EvidenceService {
             vo.setEvidenceId(item.getId());
             vo.setProjectId(item.getProjectId());
             vo.setTitle(item.getTitle());
-            vo.setBizType(item.getBizType());
+            vo.setStageId(item.getStageId());
+            vo.setEvidenceTypeCode(item.getEvidenceTypeCode());
             vo.setContentType(item.getContentType());
-            vo.setStatus(item.getStatus());
-            vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
+            vo.setEvidenceStatus(item.getEvidenceStatus());
             vo.setCreatedByUserId(item.getCreatedByUserId());
             vo.setCreatedAt(item.getCreatedAt());
             vo.setUpdatedAt(item.getUpdatedAt());
@@ -409,16 +391,6 @@ public class EvidenceService {
         return new PageResult<>(total, records, page, pageSize);
     }
 
-    /** 兼容旧 status 字段映射到 evidence_status */
-    private static String resolveEvidenceStatusFromOld(String status) {
-        if (status == null || status.isBlank()) return "SUBMITTED";
-        switch (status.toLowerCase()) {
-            case "invalid": return "INVALID";
-            case "archived": return "ARCHIVED";
-            default: return "SUBMITTED";
-        }
-    }
-
     /**
      * 根据ID获取证据详情（含最新版本），校验项目访问权限，并返回当前用户是否可作废 canInvalidate
      */
@@ -434,11 +406,11 @@ public class EvidenceService {
         vo.setEvidenceId(item.getId());
         vo.setProjectId(item.getProjectId());
         vo.setTitle(item.getTitle());
-        vo.setBizType(item.getBizType());
+        vo.setStageId(item.getStageId());
+        vo.setEvidenceTypeCode(item.getEvidenceTypeCode());
         vo.setNote(item.getNote());
         vo.setContentType(item.getContentType());
-        vo.setStatus(item.getStatus());
-        vo.setEvidenceStatus(item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus()));
+        vo.setEvidenceStatus(item.getEvidenceStatus());
         vo.setCreatedByUserId(item.getCreatedByUserId());
         if (item.getCreatedByUserId() != null) {
             // selectById 不过滤 is_deleted，故即使用户已在「用户管理」中逻辑删除，仍可查到并展示历史上传人姓名
@@ -499,7 +471,7 @@ public class EvidenceService {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
         permissionUtil.checkCanSubmit(item.getProjectId(), userId, roleCode);
-        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus());
+        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : "SUBMITTED";
         EvidenceStatus currentStatus = EvidenceStatus.fromCode(current);
         currentStatus.validateTransition(EvidenceStatus.SUBMITTED);
         int n = evidenceItemMapper.updateEvidenceStatus(id, EvidenceStatus.SUBMITTED.getCode(), null, null, currentStatus.getCode());
@@ -514,7 +486,7 @@ public class EvidenceService {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
         permissionUtil.checkCanArchive(item.getProjectId(), userId, roleCode);
-        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus());
+        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : "SUBMITTED";
         EvidenceStatus currentStatus = EvidenceStatus.fromCode(current);
         currentStatus.validateTransition(EvidenceStatus.ARCHIVED);
         OffsetDateTime now = OffsetDateTime.now();
@@ -535,7 +507,7 @@ public class EvidenceService {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
         permissionUtil.checkCanInvalidate(item.getProjectId(), userId, roleCode);
-        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : resolveEvidenceStatusFromOld(item.getStatus());
+        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : "SUBMITTED";
         EvidenceStatus.fromCode(current).validateTransition(EvidenceStatus.INVALID);
         OffsetDateTime now = OffsetDateTime.now();
         String beforeData = buildEvidenceSnapshotJson(item.getId(), item.getProjectId(), current, null, null, null);

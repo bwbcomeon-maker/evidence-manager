@@ -18,6 +18,8 @@ public class ProjectVO {
     private String name;
     private String description;
     private String status;
+    /** 是否含采购 */
+    private Boolean hasProcurement;
     /** 创建时间（列表可无，详情展示用） */
     private String createdAt;
     /** V1 统一权限位（前端按钮只读此） */

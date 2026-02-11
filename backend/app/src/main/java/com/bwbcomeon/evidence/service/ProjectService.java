@@ -458,6 +458,7 @@ public class ProjectService {
         vo.setName(p.getName());
         vo.setDescription(p.getDescription());
         vo.setStatus(p.getStatus());
+        vo.setHasProcurement(Boolean.TRUE.equals(p.getHasProcurement()));
         vo.setCreatedAt(createdAtStr);
         return vo;
     }

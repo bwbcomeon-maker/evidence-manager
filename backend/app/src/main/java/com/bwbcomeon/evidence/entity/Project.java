@@ -29,9 +29,14 @@ public class Project {
     private String description;
 
     /**
-     * ?????active / archived
+     * 项目状态：active / archived
      */
     private String status;
+
+    /**
+     * 是否含采购（S1 比测报告 required_when=HAS_PROCUREMENT 时参与计算）
+     */
+    private Boolean hasProcurement;
 
     /**
      * 创建人 sys_user.id

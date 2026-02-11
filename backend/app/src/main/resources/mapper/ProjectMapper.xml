@@ -8,13 +8,14 @@
         <result column="name" property="name" jdbcType="VARCHAR"/>
         <result column="description" property="description" jdbcType="VARCHAR"/>
         <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="has_procurement" property="hasProcurement" jdbcType="BOOLEAN"/>
         <result column="created_by_user_id" property="createdByUserId" jdbcType="BIGINT"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, code, name, description, status, created_by_user_id, created_at, updated_at
+        id, code, name, description, status, has_procurement, created_by_user_id, created_at, updated_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -58,12 +59,13 @@
     </select>
 
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.Project" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO project (code, name, description, status, created_by_user_id, created_at, updated_at)
+        INSERT INTO project (code, name, description, status, has_procurement, created_by_user_id, created_at, updated_at)
         VALUES (
             #{code},
             #{name},
             #{description},
             COALESCE(#{status}, 'active'),
+            COALESCE(#{hasProcurement}, false),
             #{createdByUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
             COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
@@ -77,6 +79,7 @@
             <if test="name != null">name = #{name},</if>
             <if test="description != null">description = #{description},</if>
             <if test="status != null">status = #{status},</if>
+            <if test="hasProcurement != null">has_procurement = #{hasProcurement},</if>
             updated_at = CURRENT_TIMESTAMP
         </set>
         WHERE id = #{id}

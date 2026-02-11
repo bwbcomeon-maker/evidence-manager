@@ -39,14 +39,19 @@ public class EvidenceResponse {
     private Long sizeBytes;
 
     /**
-     * 状态（兼容旧字段）
-     */
-    private String status;
-
-    /**
      * 证据生命周期状态：DRAFT/SUBMITTED/ARCHIVED/INVALID
      */
     private String evidenceStatus;
+
+    /**
+     * 所属阶段 ID delivery_stage.id
+     */
+    private Long stageId;
+
+    /**
+     * 证据类型编码
+     */
+    private String evidenceTypeCode;
 
     /**
      * 上传人 sys_user.id

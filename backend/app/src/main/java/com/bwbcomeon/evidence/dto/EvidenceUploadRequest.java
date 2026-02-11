@@ -18,9 +18,14 @@ public class EvidenceUploadRequest {
     private String name;
 
     /**
-     * 证据类型
+     * 所属阶段 ID delivery_stage.id（必填）
      */
-    private String type;
+    private Long stageId;
+
+    /**
+     * 证据类型编码，须属于该阶段模板（必填）
+     */
+    private String evidenceTypeCode;
 
     /**
      * 备注（可选）

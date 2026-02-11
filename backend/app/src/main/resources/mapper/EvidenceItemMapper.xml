@@ -12,11 +12,11 @@
         <result column="content_type" property="contentType" jdbcType="VARCHAR"/>
         <result column="size_bytes" property="sizeBytes" jdbcType="BIGINT"/>
         <result column="etag" property="etag" jdbcType="VARCHAR"/>
-        <result column="status" property="status" jdbcType="VARCHAR"/>
         <result column="evidence_status" property="evidenceStatus" jdbcType="VARCHAR"/>
         <result column="archived_time" property="archivedTime" jdbcType="TIMESTAMP"/>
         <result column="invalid_time" property="invalidTime" jdbcType="TIMESTAMP"/>
-        <result column="biz_type" property="bizType" jdbcType="VARCHAR"/>
+        <result column="stage_id" property="stageId" jdbcType="BIGINT"/>
+        <result column="evidence_type_code" property="evidenceTypeCode" jdbcType="VARCHAR"/>
         <result column="created_by_user_id" property="createdByUserId" jdbcType="BIGINT"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
@@ -27,7 +27,7 @@
 
     <sql id="Base_Column_List">
         id, project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-        status, evidence_status, archived_time, invalid_time, biz_type, created_by_user_id, created_at, updated_at, invalid_reason, invalid_by_user_id, invalid_at
+        evidence_status, archived_time, invalid_time, stage_id, evidence_type_code, created_by_user_id, created_at, updated_at, invalid_reason, invalid_by_user_id, invalid_at
     </sql>
 
     <select id="selectById" resultMap="BaseResultMap">
@@ -45,12 +45,12 @@
         ORDER BY created_at DESC
     </select>
 
-    <select id="selectByProjectIdAndStatus" resultMap="BaseResultMap">
+    <select id="selectByProjectIdAndEvidenceStatus" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
         FROM evidence_item
         WHERE project_id = #{projectId}
-        AND status = #{status}
+        AND evidence_status = #{evidenceStatus}
         ORDER BY created_at DESC
     </select>
 
@@ -72,7 +72,7 @@
     <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.EvidenceItem" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO evidence_item (
             project_id, title, note, bucket, object_key, content_type, size_bytes, etag,
-            status, evidence_status, archived_time, invalid_time, biz_type, created_by_user_id, created_at, updated_at, invalid_reason, invalid_by_user_id, invalid_at
+            evidence_status, archived_time, invalid_time, stage_id, evidence_type_code, created_by_user_id, created_at, updated_at, invalid_reason, invalid_by_user_id, invalid_at
         )
         VALUES (
             #{projectId},
@@ -83,11 +83,11 @@
             #{contentType},
             #{sizeBytes},
             #{etag},
-            COALESCE(#{status}, 'active'),
-            COALESCE(#{evidenceStatus}, 'SUBMITTED'),
+            COALESCE(#{evidenceStatus}, 'DRAFT'),
             #{archivedTime},
             #{invalidTime},
-            COALESCE(#{bizType}, 'OTHER'),
+            #{stageId},
+            #{evidenceTypeCode},
             #{createdByUserId},
             COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
             COALESCE(#{updatedAt}, CURRENT_TIMESTAMP),
@@ -107,8 +107,6 @@
             <if test="contentType != null">content_type = #{contentType},</if>
             <if test="sizeBytes != null">size_bytes = #{sizeBytes},</if>
             <if test="etag != null">etag = #{etag},</if>
-            <if test="status != null">status = #{status},</if>
-            <if test="bizType != null">biz_type = #{bizType},</if>
             <if test="invalidReason != null">invalid_reason = #{invalidReason},</if>
             <if test="invalidByUserId != null">invalid_by_user_id = #{invalidByUserId},</if>
             <if test="invalidAt != null">invalid_at = #{invalidAt},</if>
@@ -130,11 +128,11 @@
         <if test="nameLike != null and nameLike != ''">
             AND title LIKE CONCAT('%', #{nameLike}, '%')
         </if>
-        <if test="status != null and status != ''">
-            AND status = #{status}
+        <if test="evidenceStatus != null and evidenceStatus != ''">
+            AND evidence_status = #{evidenceStatus}
         </if>
-        <if test="bizType != null and bizType != ''">
-            AND biz_type = #{bizType}
+        <if test="evidenceTypeCode != null and evidenceTypeCode != ''">
+            AND evidence_type_code = #{evidenceTypeCode}
         </if>
         <if test="contentType != null and contentType != ''">
             AND content_type = #{contentType}
@@ -156,10 +154,10 @@
         <!-- 按 evidence_status 筛选：未传 status 时默认排除 INVALID（已作废） -->
         <choose>
             <when test="status != null and status != ''">
-                AND COALESCE(evidence_status, status, '') = #{status}
+                AND evidence_status = #{status}
             </when>
             <otherwise>
-                AND COALESCE(evidence_status, 'SUBMITTED') != 'INVALID'
+                AND evidence_status != 'INVALID'
             </otherwise>
         </choose>
         <if test="createdByUserId != null">
@@ -215,7 +213,7 @@
             invalid_time = #{invalidTime},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = #{id}
-          AND COALESCE(evidence_status, status, '') = #{expectedCurrentStatus}
+          AND evidence_status = #{expectedCurrentStatus}
     </update>
 
     <!-- 作废证据：写入 evidence_status/invalid_time/invalid_reason/invalid_by/invalid_at（时间优先 invalid_at），状态保护：仅当未作废时更新 -->

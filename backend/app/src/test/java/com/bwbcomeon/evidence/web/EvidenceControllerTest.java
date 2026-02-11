@@ -84,14 +84,14 @@ class EvidenceControllerTest {
     void uploadEvidence_uses_current_user_id() {
         request.setAttribute(AuthInterceptor.REQUEST_CURRENT_USER,
                 new AuthUserVO(USER_A_ID, "userA", "User A", "USER", true));
-        when(evidenceService.uploadEvidence(eq(1L), eq("n"), eq("PLAN"), any(), any(), eq(USER_A_ID), eq("USER")))
+        when(evidenceService.uploadEvidence(eq(1L), eq("n"), eq(1L), eq("S1_START_PHOTO"), any(), any(), eq(USER_A_ID), eq("USER")))
                 .thenReturn(new EvidenceResponse());
 
         MockMultipartFile file = new MockMultipartFile("file", "t.txt", "text/plain", "hello".getBytes());
         Result<EvidenceResponse> result = evidenceController.uploadEvidence(
-                request, 1L, "n", "PLAN", null, file);
+                request, 1L, "n", 1L, "S1_START_PHOTO", null, file);
 
         assertThat(result.getCode()).isEqualTo(0);
-        verify(evidenceService).uploadEvidence(eq(1L), eq("n"), eq("PLAN"), any(), any(), eq(USER_A_ID), eq("USER"));
+        verify(evidenceService).uploadEvidence(eq(1L), eq("n"), eq(1L), eq("S1_START_PHOTO"), any(), any(), eq(USER_A_ID), eq("USER"));
     }
 }
