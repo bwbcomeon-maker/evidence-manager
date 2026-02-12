@@ -118,6 +118,7 @@ export interface StageItemVO {
 
 /** 阶段进度（stages[] 元素） */
 export interface StageVO {
+  stageId?: number
   stageCode: string
   stageName: string
   stageDescription?: string

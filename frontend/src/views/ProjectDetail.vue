@@ -99,7 +99,16 @@
                   <!-- 当前选中模板项的证据实例列表 -->
                   <div v-if="openedStageCode === s.stageCode && openedEvidenceTypeCode" class="evidence-by-type-list">
                     <div class="evidence-by-type-header">
-                      {{ getOpenedItemDisplayName(s) }} — 证据列表
+                      <span>{{ getOpenedItemDisplayName(s) }} — 证据列表</span>
+                      <van-button
+                        v-if="canUpload && s.stageId"
+                        size="small"
+                        type="primary"
+                        icon="plus"
+                        @click="openUploadForStage(s)"
+                      >
+                        上传
+                      </van-button>
                     </div>
                     <van-loading v-if="evidenceByTypeLoading" size="20" vertical>加载中...</van-loading>
                     <template v-else>
@@ -185,6 +194,12 @@
       <!-- 阶段1：表单 -->
       <template v-if="uploadPhase === 'form'">
         <van-cell-group inset>
+          <van-cell v-if="uploadContext" :title="'上传至'" :value="uploadContext.displayName" class="upload-context-cell" />
+          <van-cell v-else title="提示" class="upload-hint-cell">
+            <template #value>
+              <span class="upload-hint-text">请先在下方向某证据类型（如「启动现场照片」）点击展开，再点击该类型下的「上传」按钮</span>
+            </template>
+          </van-cell>
           <van-field
             v-model="uploadForm.name"
             name="name"
@@ -193,6 +208,7 @@
             :rules="[{ required: true, message: '请输入证据标题' }]"
           />
           <van-field
+            v-if="!uploadContext"
             :model-value="bizTypeMap[uploadForm.type] || '其他'"
             name="type"
             label="业务类型"
@@ -411,6 +427,9 @@ const showArchiveBlockDialog = ref(false)
 const archiveBlockMessage = ref('')
 const archiveBlockData = ref<ArchiveBlockVO | null>(null)
 
+/** 上传上下文：从某阶段某模板项点击「上传」时带入，用于提交时带 stageId + evidenceTypeCode */
+const uploadContext = ref<{ stageId: number; evidenceTypeCode: string; displayName: string } | null>(null)
+
 // 项目成员列表（详情 Tab 展示）
 const members = ref<ProjectMemberVO[]>([])
 const membersLoading = ref(false)
@@ -536,11 +555,27 @@ function openUploadDialog() {
   showUploadDialog.value = true
 }
 
+/** 从某阶段某模板项的证据列表点击「上传」：带上阶段与类型，打开上传弹窗 */
+function openUploadForStage(stage: StageVO) {
+  const code = openedEvidenceTypeCode.value
+  if (!code || stage.stageId == null) {
+    showToast('无法获取阶段或类型信息')
+    return
+  }
+  uploadContext.value = {
+    stageId: stage.stageId,
+    evidenceTypeCode: code,
+    displayName: getOpenedItemDisplayName(stage)
+  }
+  openUploadDialog()
+}
+
 // 关闭上传弹窗并重置
 function closeUploadDialog() {
   showUploadDialog.value = false
   uploadPhase.value = 'form'
   uploadResult.value = null
+  uploadContext.value = null
   resetUploadForm()
 }
 
@@ -769,8 +804,12 @@ function onBizTypePickerWheel(e: WheelEvent) {
   uploadForm.value.type = opts[newIdx].value
 }
 
-// 上传证据（成功后切到阶段2，不关闭弹窗）
+// 上传证据（阶段驱动：必须从某模板项「上传」带入 stageId + evidenceTypeCode）
 const handleUpload = async () => {
+  if (!uploadContext.value) {
+    showToast('请先点击下方某证据类型（如「启动现场照片」）旁的「上传」按钮')
+    return
+  }
   if (!uploadForm.value.name.trim()) {
     showToast('请输入证据标题')
     return
@@ -793,7 +832,8 @@ const handleUpload = async () => {
 
     const formData = new FormData()
     formData.append('name', uploadForm.value.name)
-    formData.append('type', uploadForm.value.type)
+    formData.append('stageId', String(uploadContext.value.stageId))
+    formData.append('evidenceTypeCode', uploadContext.value.evidenceTypeCode)
     if (uploadForm.value.remark) {
       formData.append('remark', uploadForm.value.remark)
     }
@@ -823,6 +863,8 @@ const handleUpload = async () => {
       }
       uploadPhase.value = 'result'
       showSuccessToast('上传成功')
+      loadEvidenceByType()
+      loadStageProgress()
       onRefresh()
     } else {
       showToast(response.message || '上传失败')
@@ -1299,9 +1341,20 @@ onMounted(() => {
   border-radius: 8px;
 }
 .evidence-by-type-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
   color: var(--van-gray-6);
   margin-bottom: 8px;
+}
+.upload-context-cell {
+  background: var(--van-gray-1);
+}
+.upload-hint-cell .upload-hint-text {
+  font-size: 12px;
+  color: var(--van-gray-6);
 }
 .all-evidence-header {
   display: flex;

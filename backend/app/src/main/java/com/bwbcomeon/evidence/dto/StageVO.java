@@ -8,6 +8,7 @@ import java.util.List;
  */
 @Data
 public class StageVO {
+    private Long stageId;
     private String stageCode;
     private String stageName;
     private String stageDescription;

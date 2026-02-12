@@ -45,12 +45,23 @@ public class StageProgressService {
     /**
      * 计算项目阶段进度与归档门禁（唯一口径入口）
      */
+    /** 单项目进度（如 GET stage-progress、阶段完成、归档）：会懒初始化 project_stage，需写事务 */
     public StageProgressVO computeStageProgress(Long projectId) {
+        return computeStageProgress(projectId, true);
+    }
+
+    /**
+     * 计算阶段进度。
+     * @param ensureStages true 时懒初始化 project_stage（INSERT）；false 时仅查询，用于只读事务（如列表批量）
+     */
+    public StageProgressVO computeStageProgress(Long projectId, boolean ensureStages) {
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
             return null;
         }
-        ensureProjectStages(projectId);
+        if (ensureStages) {
+            ensureProjectStages(projectId);
+        }
         boolean hasProcurement = Boolean.TRUE.equals(project.getHasProcurement());
 
         List<DeliveryStage> stages = deliveryStageMapper.selectAll();
@@ -163,6 +174,7 @@ public class StageProgressService {
             boolean canComplete = (stageX == stageY);
 
             StageVO vo = new StageVO();
+            vo.setStageId(stage.getId());
             vo.setStageCode(stage.getCode());
             vo.setStageName(stage.getName());
             vo.setStageDescription(stage.getDescription());
@@ -278,7 +290,8 @@ public class StageProgressService {
     }
 
     /**
-     * 批量计算阶段进度（用于列表扩展，避免 N+1）
+     * 批量计算阶段进度（用于列表扩展，避免 N+1）。
+     * 在只读事务中调用，不执行 ensureProjectStages（不 INSERT project_stage）。
      */
     public Map<Long, StageProgressVO> computeStageProgressBatch(List<Long> projectIds) {
         if (projectIds == null || projectIds.isEmpty()) {
@@ -286,7 +299,7 @@ public class StageProgressService {
         }
         Map<Long, StageProgressVO> map = new HashMap<>();
         for (Long id : projectIds) {
-            StageProgressVO vo = computeStageProgress(id);
+            StageProgressVO vo = computeStageProgress(id, false);
             if (vo != null) {
                 map.put(id, vo);
             }
