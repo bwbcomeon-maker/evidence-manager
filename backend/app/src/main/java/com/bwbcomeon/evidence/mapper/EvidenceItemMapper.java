@@ -129,9 +129,16 @@ public interface EvidenceItemMapper {
     );
 
     /**
-     * 按项目统计有效证据数（SUBMITTED/ARCHIVED），按 (stage_id, evidence_type_code) 分组
+     * 门禁口径：按项目统计有效证据数（仅 SUBMITTED + ARCHIVED，不含 DRAFT/INVALID），
+     * 按 (stage_id, evidence_type_code) 分组，用于阶段完成判断、归档门禁、keyMissing、completionPercent
      */
     List<EvidenceCountRow> countValidEvidenceByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 展示口径：按项目统计已上传证据数（DRAFT + SUBMITTED + ARCHIVED，不含 INVALID），
+     * 按 (stage_id, evidence_type_code) 分组，仅用于 UI 展示"已上传数量"，不影响门禁判断
+     */
+    List<EvidenceCountRow> countUploadedEvidenceByProjectId(@Param("projectId") Long projectId);
 
     /**
      * 按项目+阶段+证据类型查询证据列表（用于按阶段+模板项证据列表接口）

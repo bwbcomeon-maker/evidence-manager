@@ -3,7 +3,9 @@ package com.bwbcomeon.evidence.dto;
 import lombok.Data;
 
 /**
- * 有效证据计数：(project_id, stage_id, evidence_type_code) 下的 SUBMITTED/ARCHIVED 条数
+ * 证据计数行：(stage_id, evidence_type_code) → count。
+ * 门禁口径（countValidEvidenceByProjectId）仅统计 SUBMITTED/ARCHIVED；
+ * 展示口径（countUploadedEvidenceByProjectId）统计 DRAFT/SUBMITTED/ARCHIVED。
  */
 @Data
 public class EvidenceCountRow {

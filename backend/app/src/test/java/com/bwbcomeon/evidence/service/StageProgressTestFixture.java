@@ -69,8 +69,10 @@ public class StageProgressTestFixture {
     }
 
     /**
-     * 插入一条证据（有效口径：SUBMITTED/ARCHIVED 才计入 currentCount；此处由调用方传入 evidenceStatus）。
-     * 返回 evidence_item.id。
+     * 插入一条证据。
+     * 门禁口径（currentCount / completed）：仅 SUBMITTED/ARCHIVED 计入；
+     * 展示口径（uploadCount）：DRAFT/SUBMITTED/ARCHIVED 均计入。
+     * evidenceStatus 由调用方传入，返回 evidence_item.id。
      */
     public long insertEvidence(long projectId, long stageId, String evidenceTypeCode, String evidenceStatus) {
         long userId = getAnyUserId();

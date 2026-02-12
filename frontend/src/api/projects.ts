@@ -101,14 +101,23 @@ export const createProject = (body: CreateProjectBody) =>
 
 // ---------- 阶段进度与归档（Phase 4，以 stage-progress 为唯一事实源） ----------
 
-/** 阶段内模板行（stages[].items[]） */
+/**
+ * 阶段内模板行（stages[].items[]）
+ *
+ * 双口径模型：
+ * - currentCount / completed → 门禁口径（仅 SUBMITTED + ARCHIVED），驱动完成判断
+ * - uploadCount → 展示口径（含 DRAFT），仅用于 UI 展示"已上传数量"
+ */
 export interface StageItemVO {
   evidenceTypeCode: string
   displayName: string
   required?: boolean
   isRequired?: boolean
   minCount: number
+  /** 门禁口径：仅 SUBMITTED + ARCHIVED */
   currentCount: number
+  /** 展示口径：DRAFT + SUBMITTED + ARCHIVED */
+  uploadCount: number
   completed: boolean
   ruleGroup?: string | null
   groupCompleted?: boolean | null

@@ -22,7 +22,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 阶段进度与归档门禁：参与计算项过滤、有效证据计数、x/y、overall%、keyMissing、healthStatus、canArchive。
+ * 阶段进度与归档门禁（双口径模型）。
+ * <p>
+ * 门禁口径（gate）：仅 SUBMITTED + ARCHIVED → 驱动 completed / canComplete / canArchive / keyMissing / completionPercent。
+ * 展示口径（upload）：DRAFT + SUBMITTED + ARCHIVED → 仅供 UI 展示"已上传数量"（StageItemVO.uploadCount），不影响任何门禁判断。
  */
 @Service
 public class StageProgressService {
@@ -70,10 +73,17 @@ public class StageProgressService {
         Map<Long, ProjectStage> stageIdToProjectStage = projectStages.stream()
                 .collect(Collectors.toMap(ProjectStage::getStageId, ps -> ps, (a, b) -> a));
 
-        List<EvidenceCountRow> countRows = evidenceItemMapper.countValidEvidenceByProjectId(projectId);
+        // 门禁口径：仅 SUBMITTED + ARCHIVED → 驱动 completed / canComplete / canArchive / keyMissing
+        List<EvidenceCountRow> gateRows = evidenceItemMapper.countValidEvidenceByProjectId(projectId);
         Map<String, Long> countKeyToCnt = new HashMap<>();
-        for (EvidenceCountRow r : countRows) {
+        for (EvidenceCountRow r : gateRows) {
             countKeyToCnt.put(key(r.getStageId(), r.getEvidenceTypeCode()), r.getCount());
+        }
+        // 展示口径：DRAFT + SUBMITTED + ARCHIVED → 仅用于 UI 展示"已上传数量"
+        List<EvidenceCountRow> uploadRows = evidenceItemMapper.countUploadedEvidenceByProjectId(projectId);
+        Map<String, Long> uploadKeyToCnt = new HashMap<>();
+        for (EvidenceCountRow r : uploadRows) {
+            uploadKeyToCnt.put(key(r.getStageId(), r.getEvidenceTypeCode()), r.getCount());
         }
 
         List<StageVO> stageVOList = new ArrayList<>();
@@ -102,8 +112,11 @@ public class StageProgressService {
                     .collect(Collectors.groupingBy(t -> t.getRuleGroup() != null && !t.getRuleGroup().isBlank() ? t.getRuleGroup() : "standalone_" + t.getId()));
 
             for (StageEvidenceTemplate row : rows) {
+                // 门禁口径（仅 SUBMITTED + ARCHIVED）：决定 completed
                 long currentCount = countKeyToCnt.getOrDefault(key(row.getStageId(), row.getEvidenceTypeCode()), 0L);
                 boolean rowCompleted = currentCount >= (row.getMinCount() != null ? row.getMinCount() : 1);
+                // 展示口径（含 DRAFT）：仅供 UI 显示上传进度
+                long uploadCount = uploadKeyToCnt.getOrDefault(key(row.getStageId(), row.getEvidenceTypeCode()), 0L);
 
                 StageItemVO item = new StageItemVO();
                 item.setEvidenceTypeCode(row.getEvidenceTypeCode());
@@ -111,6 +124,7 @@ public class StageProgressService {
                 item.setRequired(Boolean.TRUE.equals(row.getIsRequired()));
                 item.setMinCount(row.getMinCount() != null ? row.getMinCount() : 1);
                 item.setCurrentCount((int) currentCount);
+                item.setUploadCount((int) uploadCount);
                 item.setCompleted(rowCompleted);
                 item.setRuleGroup(row.getRuleGroup());
                 item.setSortOrder(row.getSortOrder());

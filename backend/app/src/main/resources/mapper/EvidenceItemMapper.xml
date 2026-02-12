@@ -216,11 +216,21 @@
           AND evidence_status = #{expectedCurrentStatus}
     </update>
 
+    <!-- 门禁口径：仅 SUBMITTED + ARCHIVED，用于阶段完成判断、项目归档门禁、keyMissing、completionPercent -->
     <select id="countValidEvidenceByProjectId" resultType="com.bwbcomeon.evidence.dto.EvidenceCountRow">
         SELECT stage_id AS stageId, evidence_type_code AS evidenceTypeCode, COUNT(*) AS count
         FROM evidence_item
         WHERE project_id = #{projectId}
           AND evidence_status IN ('SUBMITTED', 'ARCHIVED')
+        GROUP BY project_id, stage_id, evidence_type_code
+    </select>
+
+    <!-- 展示口径：DRAFT + SUBMITTED + ARCHIVED，仅用于 UI 展示"已上传数量"，不影响门禁判断 -->
+    <select id="countUploadedEvidenceByProjectId" resultType="com.bwbcomeon.evidence.dto.EvidenceCountRow">
+        SELECT stage_id AS stageId, evidence_type_code AS evidenceTypeCode, COUNT(*) AS count
+        FROM evidence_item
+        WHERE project_id = #{projectId}
+          AND evidence_status IN ('DRAFT', 'SUBMITTED', 'ARCHIVED')
         GROUP BY project_id, stage_id, evidence_type_code
     </select>
 
