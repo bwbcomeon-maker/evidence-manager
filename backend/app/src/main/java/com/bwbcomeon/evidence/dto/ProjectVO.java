@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 项目基本信息（列表/详情/创建响应共用）
  * V1：权限位以 permissions 为准；扁平 can* 保留兼容。
@@ -34,4 +36,8 @@ public class ProjectVO {
     private Long currentPmUserId;
     /** 当前项目经理展示名（sys_user.real_name） */
     private String currentPmDisplayName;
+    /** 证据完成度 0–100（来自 stage-progress 唯一事实源，列表扩展） */
+    private Integer evidenceCompletionPercent;
+    /** 关键缺失摘要，前若干条（列表扩展，便于前端展示） */
+    private List<String> keyMissingSummary;
 }

@@ -112,6 +112,7 @@ interface Project {
   name: string
   description: string
   status: string
+  currentPmDisplayName?: string
 }
 
 const router = useRouter()
@@ -172,20 +173,23 @@ const loadProjects = async () => {
   loading.value = true
   try {
     const res = await getProjects()
-    if (res.code === 0 && Array.isArray(res.data)) {
-      projects.value = res.data.map((p: ProjectVO) => ({
-        id: p.id,
-        code: p.code,
-        name: p.name,
+    const raw = res?.data
+    const list = Array.isArray(raw) ? raw : []
+    if (res?.code === 0) {
+      projects.value = list.map((p: ProjectVO) => ({
+        id: p.id ?? 0,
+        code: p.code ?? '',
+        name: p.name ?? '',
         description: p.description ?? '',
-        status: p.status,
-        currentPmDisplayName: p.currentPmDisplayName
+        status: p.status ?? 'active',
+        currentPmDisplayName: p.currentPmDisplayName ?? undefined
       }))
     } else {
-      listError.value = res.message || '加载失败'
+      listError.value = res?.message || '加载失败'
     }
-  } catch (e: any) {
-    listError.value = e?.message || '加载失败'
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : (e as { message?: string })?.message
+    listError.value = msg || '加载失败'
     projects.value = []
   } finally {
     finished.value = true
@@ -230,16 +234,21 @@ const onCreateSubmit = async () => {
       name,
       description: createForm.value.description?.trim() || undefined
     })
-    if (res.code !== 0) {
-      showToast(res.message || (res.code === 403 ? '仅管理员或 PMO 可创建项目' : '创建失败'))
+    if (res?.code !== 0) {
+      showToast(res?.message || (res?.code === 403 ? '仅管理员或 PMO 可创建项目' : '创建失败'))
       return
     }
-    const data = res.data as ProjectVO
+    const data = res?.data as ProjectVO | undefined
+    if (!data?.id) {
+      showToast('创建成功，请刷新列表')
+      showCreate.value = false
+      loadProjects()
+      return
+    }
     showCreate.value = false
     createForm.value = { code: '', name: '', description: '' }
-    // 将新建项目插入列表前并刷新（真实列表来自 API，此处仅本地追加一次）
     projects.value = [
-      { id: data.id, code: data.code, name: data.name, description: data.description ?? '', status: data.status },
+      { id: data.id, code: data.code ?? code, name: data.name ?? name, description: data.description ?? '', status: data.status ?? 'active', currentPmDisplayName: data.currentPmDisplayName },
       ...projects.value
     ]
     showToast('创建成功')

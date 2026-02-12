@@ -1,5 +1,6 @@
 package com.bwbcomeon.evidence.mapper;
 
+import com.bwbcomeon.evidence.dto.EvidenceCountRow;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -125,5 +126,19 @@ public interface EvidenceItemMapper {
             @Param("invalidReason") String invalidReason,
             @Param("invalidByUserId") Long invalidByUserId,
             @Param("invalidAt") java.time.OffsetDateTime invalidAt
+    );
+
+    /**
+     * 按项目统计有效证据数（SUBMITTED/ARCHIVED），按 (stage_id, evidence_type_code) 分组
+     */
+    List<EvidenceCountRow> countValidEvidenceByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 按项目+阶段+证据类型查询证据列表（用于按阶段+模板项证据列表接口）
+     */
+    List<EvidenceItem> selectByProjectIdAndStageIdAndEvidenceTypeCode(
+            @Param("projectId") Long projectId,
+            @Param("stageId") Long stageId,
+            @Param("evidenceTypeCode") String evidenceTypeCode
     );
 }

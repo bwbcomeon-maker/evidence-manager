@@ -1,16 +1,24 @@
 package com.bwbcomeon.evidence.web;
 
 import com.bwbcomeon.evidence.dto.AddProjectMemberRequest;
+import com.bwbcomeon.evidence.dto.ArchiveBlockVO;
+import com.bwbcomeon.evidence.dto.ArchiveResult;
 import com.bwbcomeon.evidence.dto.AuthUserVO;
 import com.bwbcomeon.evidence.dto.BatchAddProjectMembersRequest;
 import com.bwbcomeon.evidence.dto.BatchAssignResult;
 import com.bwbcomeon.evidence.dto.BatchAssignUserToProjectsRequest;
 import com.bwbcomeon.evidence.dto.CreateProjectRequest;
+import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
 import com.bwbcomeon.evidence.dto.ProjectVO;
 import com.bwbcomeon.evidence.dto.Result;
+import com.bwbcomeon.evidence.dto.StageCompleteResult;
+import com.bwbcomeon.evidence.dto.StageProgressVO;
+import com.bwbcomeon.evidence.service.EvidenceService;
 import com.bwbcomeon.evidence.service.ProjectService;
+import com.bwbcomeon.evidence.service.StageProgressService;
+import com.bwbcomeon.evidence.util.PermissionUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -46,6 +54,15 @@ public class ProjectController {
 
     @Autowired
     private ProjectService projectService;
+
+    @Autowired
+    private StageProgressService stageProgressService;
+
+    @Autowired
+    private EvidenceService evidenceService;
+
+    @Autowired
+    private PermissionUtil permissionUtil;
 
     /**
      * 项目列表（当前用户可见）
@@ -225,6 +242,81 @@ public class ProjectController {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
         projectService.removeMember(projectId, userId, user.getId(), user.getRoleCode());
+        return Result.success(null);
+    }
+
+    /**
+     * 阶段进度（唯一事实源）
+     * GET /api/projects/{projectId}/stage-progress
+     */
+    @GetMapping("/{projectId}/stage-progress")
+    public Result<StageProgressVO> getStageProgress(
+            HttpServletRequest request,
+            @PathVariable Long projectId) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(user.getId(), user.getRoleCode());
+        if (!visibleIds.contains(projectId)) {
+            return Result.error(403, "无权限访问该项目");
+        }
+        StageProgressVO vo = stageProgressService.computeStageProgress(projectId);
+        if (vo == null) {
+            return Result.error(404, "项目不存在");
+        }
+        return Result.success(vo);
+    }
+
+    /**
+     * 按阶段+模板项证据实例列表
+     * GET /api/projects/{projectId}/stages/{stageCode}/evidence-types/{evidenceTypeCode}/evidences
+     */
+    @GetMapping("/{projectId}/stages/{stageCode}/evidence-types/{evidenceTypeCode}/evidences")
+    public Result<List<EvidenceListItemVO>> listEvidencesByStageAndType(
+            HttpServletRequest request,
+            @PathVariable Long projectId,
+            @PathVariable String stageCode,
+            @PathVariable String evidenceTypeCode) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        List<EvidenceListItemVO> list = evidenceService.listEvidencesByStageAndType(
+                projectId, stageCode, evidenceTypeCode, user.getId(), user.getRoleCode());
+        return Result.success(list);
+    }
+
+    /**
+     * 标记阶段完成（门禁失败返回 400 + missingItems + message）
+     * POST /api/projects/{projectId}/stages/{stageCode}/complete
+     */
+    @PostMapping("/{projectId}/stages/{stageCode}/complete")
+    public Result<StageCompleteResult> completeStage(
+            HttpServletRequest request,
+            @PathVariable Long projectId,
+            @PathVariable String stageCode) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        permissionUtil.checkCanUpload(projectId, user.getId(), user.getRoleCode());
+        StageCompleteResult result = stageProgressService.completeStage(projectId, stageCode);
+        if (!result.isSuccess()) {
+            return Result.error(400, result.getMessage(), result);
+        }
+        return Result.success(result);
+    }
+
+    /**
+     * 项目归档（门禁失败返回 400 + keyMissing + archiveBlockReason + blockedByStages + blockedByRequiredItems）
+     * POST /api/projects/{projectId}/archive
+     */
+    @PostMapping("/{projectId}/archive")
+    public Result<?> archiveProject(
+            HttpServletRequest request,
+            @PathVariable Long projectId) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) return Result.error(401, "未登录");
+        ArchiveResult result = projectService.archive(projectId, user.getId(), user.getRoleCode());
+        if (!result.isSuccess()) {
+            ArchiveBlockVO block = result.getBlock();
+            return Result.error(400, block != null ? block.getArchiveBlockReason() : "不满足归档条件", block);
+        }
         return Result.success(null);
     }
 }

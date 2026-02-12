@@ -5,9 +5,12 @@ import com.bwbcomeon.evidence.dto.BatchAddProjectMembersRequest;
 import com.bwbcomeon.evidence.dto.BatchAssignResult;
 import com.bwbcomeon.evidence.dto.BatchAssignUserToProjectsRequest;
 import com.bwbcomeon.evidence.dto.PermissionBits;
+import com.bwbcomeon.evidence.dto.ArchiveBlockVO;
+import com.bwbcomeon.evidence.dto.ArchiveResult;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
 import com.bwbcomeon.evidence.dto.ProjectVO;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
+import com.bwbcomeon.evidence.dto.StageProgressVO;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.Project;
 import com.bwbcomeon.evidence.entity.SysUser;
@@ -45,6 +48,7 @@ public class ProjectService {
 
     private static final String ROLE_OWNER = "owner";
     private static final String STATUS_ACTIVE = "active";
+    private static final String STATUS_ARCHIVED = "archived";
     private static final DateTimeFormatter CREATED_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Autowired
@@ -60,7 +64,12 @@ public class ProjectService {
     private EvidenceService evidenceService;
 
     @Autowired
+    private StageProgressService stageProgressService;
+
+    @Autowired
     private PermissionUtil permissionUtil;
+
+    private static final int KEY_MISSING_SUMMARY_MAX = 5;
 
     private static final Set<String> ACL_ROLES = Set.of("owner", "editor", "viewer");
     private static final int IMPORT_MAX_ROWS = 500;
@@ -202,6 +211,18 @@ public class ProjectService {
             }
             result.add(vo);
         }
+        Map<Long, StageProgressVO> progressMap = stageProgressService.computeStageProgressBatch(visibleIds);
+        for (ProjectVO vo : result) {
+            if (vo.getId() == null) continue;
+            StageProgressVO progress = progressMap.get(vo.getId());
+            if (progress != null) {
+                vo.setEvidenceCompletionPercent(progress.getOverallCompletionPercent());
+                List<String> keyMissing = progress.getKeyMissing();
+                if (keyMissing != null && !keyMissing.isEmpty()) {
+                    vo.setKeyMissingSummary(keyMissing.subList(0, Math.min(KEY_MISSING_SUMMARY_MAX, keyMissing.size())));
+                }
+            }
+        }
         return result;
     }
 
@@ -295,6 +316,41 @@ public class ProjectService {
             result.add(vo);
         }
         return result;
+    }
+
+    /**
+     * 项目归档：门禁通过则更新 status=archived，否则返回结构化失败信息
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ArchiveResult archive(Long projectId, Long currentUserId, String roleCode) {
+        permissionUtil.checkCanArchive(projectId, currentUserId, roleCode);
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
+        if (!visibleIds.contains(projectId)) {
+            throw new BusinessException(403, "无权限访问该项目");
+        }
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(404, "项目不存在");
+        }
+        if (STATUS_ARCHIVED.equals(project.getStatus())) {
+            return ArchiveResult.ok();
+        }
+        StageProgressVO progress = stageProgressService.computeStageProgress(projectId);
+        if (progress == null) {
+            throw new BusinessException(404, "项目不存在");
+        }
+        if (!progress.isCanArchive()) {
+            ArchiveBlockVO block = new ArchiveBlockVO();
+            block.setArchiveBlockReason(progress.getArchiveBlockReason());
+            block.setKeyMissing(progress.getKeyMissing());
+            block.setBlockedByStages(progress.getBlockedByStages());
+            block.setBlockedByRequiredItems(progress.getBlockedByRequiredItems());
+            return ArchiveResult.fail(block);
+        }
+        project.setStatus(STATUS_ARCHIVED);
+        project.setUpdatedAt(OffsetDateTime.now());
+        projectMapper.update(project);
+        return ArchiveResult.ok();
     }
 
     /**

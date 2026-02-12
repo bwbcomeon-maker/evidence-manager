@@ -39,30 +39,103 @@
           </div>
         </van-tab>
 
-        <!-- 证据 Tab -->
+        <!-- 证据 Tab（阶段驱动：完整度 + 阶段折叠 + 模板项证据列表） -->
         <van-tab title="证据">
           <div class="evidence-section">
-            <!-- 筛选栏 -->
-            <van-dropdown-menu>
-              <van-dropdown-item v-model="filterBizType" :options="bizTypeOptions" @change="onFilterChange" />
-              <van-dropdown-item v-model="filterContentType" :options="contentTypeOptions" @change="onFilterChange" />
-            </van-dropdown-menu>
+            <!-- 阶段进度顶部：完整度、关键缺失、申请归档 -->
+            <div v-if="stageProgress" class="stage-progress-header">
+              <div class="completion-row">
+                <span class="completion-label">证据完成度</span>
+                <van-progress :percentage="stageProgress.overallCompletionPercent" stroke-width="8" />
+                <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
+              </div>
+              <div v-if="stageProgress.keyMissing?.length" class="key-missing-row">
+                <span class="key-missing-label">关键缺失：</span>
+                <span class="key-missing-list">{{ (stageProgress.keyMissing || []).slice(0, 5).join('、') }}</span>
+              </div>
+              <div class="archive-row">
+                <van-button
+                  type="primary"
+                  :disabled="!stageProgress.canArchive || project?.status === 'archived'"
+                  :title="!stageProgress.canArchive ? (stageProgress.archiveBlockReason || '不满足归档条件') : ''"
+                  @click="handleArchive"
+                >
+                  申请归档
+                </van-button>
+                <span v-if="!stageProgress.canArchive && stageProgress.archiveBlockReason" class="archive-block-tip">
+                  {{ stageProgress.archiveBlockReason }}
+                </span>
+              </div>
+            </div>
+            <van-loading v-else-if="stageProgressLoading" class="stage-progress-loading" vertical>加载阶段进度...</van-loading>
 
-            <!-- 上传按钮：仅 canUpload 时显示（V1 只读后端 permissions） -->
+            <!-- 阶段折叠清单 -->
+            <van-collapse v-if="stageProgress?.stages?.length" v-model="expandedStages" class="stage-collapse">
+              <van-collapse-item
+                v-for="s in stageProgress.stages"
+                :key="s.stageCode"
+                :name="s.stageCode"
+              >
+                <template #title>
+                  <div class="stage-title-row">
+                    <span class="stage-name">{{ s.stageName || s.stageCode }}</span>
+                    <span class="stage-count">{{ s.completedCount }}/{{ s.itemCount }}</span>
+                    <van-tag :type="healthTagType(s.healthStatus)">{{ s.healthStatus }}</van-tag>
+                    <van-tag v-if="s.stageCompleted" type="success">已完成</van-tag>
+                  </div>
+                </template>
+                <!-- 模板项列表 -->
+                <div class="stage-items">
+                  <div
+                    v-for="(item, idx) in (s.items || [])"
+                    :key="item.evidenceTypeCode + '-' + idx"
+                    class="stage-item-row"
+                    @click="toggleEvidenceList(s.stageCode, item)"
+                  >
+                    <span class="item-name">{{ item.groupDisplayName || item.displayName }}</span>
+                    <span class="item-count">{{ item.currentCount }}/{{ item.minCount }}</span>
+                    <van-icon v-if="item.completed || item.groupCompleted" name="success" color="var(--van-success-color)" />
+                  </div>
+                  <!-- 当前选中模板项的证据实例列表 -->
+                  <div v-if="openedStageCode === s.stageCode && openedEvidenceTypeCode" class="evidence-by-type-list">
+                    <div class="evidence-by-type-header">
+                      {{ getOpenedItemDisplayName(s) }} — 证据列表
+                    </div>
+                    <van-loading v-if="evidenceByTypeLoading" size="20" vertical>加载中...</van-loading>
+                    <template v-else>
+                      <van-cell
+                        v-for="ev in evidenceByTypeList"
+                        :key="ev.evidenceId"
+                        :title="ev.title"
+                        clickable
+                        @click="goToEvidenceDetail(ev.evidenceId)"
+                      >
+                        <template #value>
+                          <van-tag :type="evidenceListStatusTagType(ev)">{{ evidenceListStatusText(ev) }}</van-tag>
+                          <van-button size="mini" type="primary" icon="eye-o" @click.stop="handlePreview(ev)" />
+                          <van-button size="mini" type="primary" icon="down" @click.stop="handleDownload(ev)">下载</van-button>
+                        </template>
+                      </van-cell>
+                      <van-empty v-if="evidenceByTypeList.length === 0" description="暂无证据" :image-size="48" />
+                    </template>
+                  </div>
+                </div>
+              </van-collapse-item>
+            </van-collapse>
+            <van-empty v-else-if="stageProgress && !stageProgressLoading" description="暂无阶段配置" :image-size="60" />
+
+            <!-- 上传按钮（阶段驱动下仍保留） -->
             <div v-if="canUpload" class="upload-btn-wrapper">
-              <van-button type="primary" icon="plus" @click="openUploadDialog">
-                上传证据
-              </van-button>
+              <van-button type="primary" icon="plus" @click="openUploadDialog">上传证据</van-button>
             </div>
 
-            <!-- 证据列表 -->
+            <!-- 全部证据列表（折叠或次要入口，保留原有能力） -->
+            <div class="all-evidence-header">
+              <span>全部证据</span>
+              <van-button size="small" plain @click="onRefresh">刷新</van-button>
+            </div>
             <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-              <van-list
-                v-model:loading="loading"
-                :finished="finished"
-                finished-text="没有更多了"
-                @load="onLoad"
-              >
+              <van-list v-model:loading="loading" :finished="finished" finished-text="没有更多了" @load="onLoad">
                 <van-cell
                   v-for="evidence in evidenceList"
                   :key="evidence.evidenceId"
@@ -76,26 +149,9 @@
                         <div class="evidence-cell-label">{{ getEvidenceLabel(evidence) }}</div>
                       </div>
                       <div class="cell-actions">
-                        <van-tag :type="evidenceListStatusTagType(evidence)">
-                          {{ evidenceListStatusText(evidence) }}
-                        </van-tag>
-                        <van-button
-                          size="mini"
-                          type="primary"
-                          icon="eye-o"
-                          class="preview-btn"
-                          aria-label="预览"
-                          @click.stop="handlePreview(evidence)"
-                        />
-                        <van-button
-                          size="mini"
-                          type="primary"
-                          icon="down"
-                          class="download-btn"
-                          @click.stop="handleDownload(evidence)"
-                        >
-                          下载
-                        </van-button>
+                        <van-tag :type="evidenceListStatusTagType(evidence)">{{ evidenceListStatusText(evidence) }}</van-tag>
+                        <van-button size="mini" type="primary" icon="eye-o" class="preview-btn" aria-label="预览" @click.stop="handlePreview(evidence)" />
+                        <van-button size="mini" type="primary" icon="down" class="download-btn" @click.stop="handleDownload(evidence)">下载</van-button>
                         <van-icon name="arrow" class="cell-arrow" />
                       </div>
                     </div>
@@ -250,6 +306,19 @@
         />
       </div>
     </van-popup>
+
+    <!-- 归档失败弹窗（400 时展示 archiveBlockReason / keyMissing / blockedByStages / blockedByRequiredItems） -->
+    <van-dialog v-model:show="showArchiveBlockDialog" title="无法归档" :show-confirm-button="true" confirm-button-text="知道了">
+      <div class="archive-block-content">
+        <p v-if="archiveBlockMessage" class="archive-block-reason">{{ archiveBlockMessage }}</p>
+        <p v-if="archiveBlockData?.keyMissing?.length" class="archive-block-list">
+          <strong>关键缺失：</strong>{{ archiveBlockData.keyMissing.join('、') }}
+        </p>
+        <p v-if="archiveBlockData?.blockedByStages?.length" class="archive-block-list">
+          <strong>未完成阶段：</strong>{{ archiveBlockData.blockedByStages.join('、') }}
+        </p>
+      </div>
+    </van-dialog>
   </div>
 </template>
 
@@ -290,7 +359,19 @@ import {
   invalidateEvidence,
   type EvidenceListItem
 } from '@/api/evidence'
-import { getProjectDetail, getProjectMembers, type ProjectMemberVO } from '@/api/projects'
+import {
+  getProjectDetail,
+  getProjectMembers,
+  getStageProgress,
+  archiveProject,
+  getStructuredErrorData,
+  type ProjectMemberVO,
+  type StageProgressVO,
+  type StageVO,
+  type StageItemVO,
+  type ArchiveBlockVO
+} from '@/api/projects'
+import { getEvidencesByStageType } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
@@ -316,6 +397,19 @@ const project = ref<Project | null>(null)
 const projectLoading = ref(false)
 const projectError = ref('')
 const activeTab = ref(0)
+
+// 阶段进度（stage-progress 唯一事实源）
+const stageProgress = ref<StageProgressVO | null>(null)
+const stageProgressLoading = ref(false)
+const expandedStages = ref<string[]>([])
+const openedStageCode = ref<string | null>(null)
+const openedEvidenceTypeCode = ref<string | null>(null)
+const evidenceByTypeList = ref<EvidenceListItem[]>([])
+const evidenceByTypeLoading = ref(false)
+// 归档失败弹窗（400 结构化 data）
+const showArchiveBlockDialog = ref(false)
+const archiveBlockMessage = ref('')
+const archiveBlockData = ref<ArchiveBlockVO | null>(null)
 
 // 项目成员列表（详情 Tab 展示）
 const members = ref<ProjectMemberVO[]>([])
@@ -835,10 +929,100 @@ const resetUploadForm = () => {
   uploadFileList.value = []
 }
 
+// 阶段进度加载
+async function loadStageProgress() {
+  if (!projectId.value) return
+  stageProgressLoading.value = true
+  try {
+    const res = await getStageProgress(projectId.value)
+    if (res?.code === 0 && res.data) {
+      stageProgress.value = res.data
+    } else {
+      stageProgress.value = null
+    }
+  } catch {
+    stageProgress.value = null
+  } finally {
+    stageProgressLoading.value = false
+  }
+}
+
+function healthTagType(health: string): 'success' | 'warning' | 'default' {
+  if (health === 'COMPLETE') return 'success'
+  if (health === 'PARTIAL') return 'warning'
+  return 'default'
+}
+
+function getOpenedItemDisplayName(stage: StageVO): string {
+  const code = openedEvidenceTypeCode.value
+  if (!code || !stage.items) return ''
+  const item = stage.items.find((i) => i.evidenceTypeCode === code)
+  return item ? (item.groupDisplayName || item.displayName || code) : code
+}
+
+function toggleEvidenceList(stageCode: string, item: StageItemVO) {
+  const code = item.evidenceTypeCode
+  if (!code) return
+  if (openedStageCode.value === stageCode && openedEvidenceTypeCode.value === code) {
+    openedStageCode.value = null
+    openedEvidenceTypeCode.value = null
+    evidenceByTypeList.value = []
+    return
+  }
+  openedStageCode.value = stageCode
+  openedEvidenceTypeCode.value = code
+  loadEvidenceByType()
+}
+
+async function loadEvidenceByType() {
+  if (!projectId.value || !openedStageCode.value || !openedEvidenceTypeCode.value) return
+  evidenceByTypeLoading.value = true
+  try {
+    const res = await getEvidencesByStageType(projectId.value, openedStageCode.value, openedEvidenceTypeCode.value)
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      evidenceByTypeList.value = res.data
+    } else {
+      evidenceByTypeList.value = []
+    }
+  } catch {
+    evidenceByTypeList.value = []
+  } finally {
+    evidenceByTypeLoading.value = false
+  }
+}
+
+async function handleArchive() {
+  if (!projectId.value || !stageProgress.value?.canArchive || project.value?.status === 'archived') return
+  try {
+    const res = await archiveProject(projectId.value)
+    if (res?.code === 0) {
+      showSuccessToast('归档成功')
+      loadProject()
+      loadStageProgress()
+    } else if (res?.code === 400 && res.data) {
+      archiveBlockMessage.value = (res as { message?: string }).message ?? '不满足归档条件'
+      archiveBlockData.value = res.data as ArchiveBlockVO
+      showArchiveBlockDialog.value = true
+    } else {
+      showToast((res as { message?: string })?.message ?? '归档失败')
+    }
+  } catch (err: unknown) {
+    const structured = getStructuredErrorData(err as { response?: { data?: { code?: number; data?: unknown; message?: string } } })
+    if (structured?.data) {
+      archiveBlockMessage.value = structured.message
+      archiveBlockData.value = structured.data as ArchiveBlockVO
+      showArchiveBlockDialog.value = true
+    } else {
+      showToast((err as Error)?.message ?? '归档失败')
+    }
+  }
+}
+
 // 监听Tab切换
 watch(activeTab, (newVal) => {
-  if (newVal === 1 && evidenceList.value.length === 0) {
-    loadEvidenceList()
+  if (newVal === 1) {
+    loadStageProgress()
+    if (evidenceList.value.length === 0) loadEvidenceList()
   }
 })
 
@@ -1019,5 +1203,124 @@ onMounted(() => {
 
 .picker-wheel-wrap {
   touch-action: pan-y;
+}
+
+/* 阶段进度顶部 */
+.stage-progress-header {
+  padding: 12px 16px;
+  background: var(--van-gray-1);
+  border-radius: 8px;
+  margin: 12px 16px;
+}
+.completion-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.completion-label {
+  font-size: 14px;
+  color: var(--van-gray-7);
+  min-width: 72px;
+}
+.completion-row .van-progress {
+  flex: 1;
+}
+.completion-value {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 36px;
+}
+.key-missing-row {
+  font-size: 12px;
+  color: var(--van-gray-6);
+  margin-bottom: 6px;
+}
+.key-missing-list {
+  word-break: break-all;
+}
+.archive-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.archive-block-tip {
+  font-size: 12px;
+  color: var(--van-gray-6);
+  flex: 1;
+}
+.stage-progress-loading {
+  padding: 24px;
+}
+
+/* 阶段折叠 */
+.stage-collapse {
+  margin: 0 16px 16px;
+}
+.stage-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stage-name {
+  font-weight: 500;
+}
+.stage-count {
+  font-size: 13px;
+  color: var(--van-gray-6);
+}
+.stage-items {
+  padding: 4px 0;
+}
+.stage-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  background: var(--van-gray-1);
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.item-name {
+  flex: 1;
+}
+.item-count {
+  font-size: 13px;
+  color: var(--van-gray-6);
+}
+.evidence-by-type-list {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--van-gray-1);
+  border-radius: 8px;
+}
+.evidence-by-type-header {
+  font-size: 13px;
+  color: var(--van-gray-6);
+  margin-bottom: 8px;
+}
+.all-evidence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+.archive-block-content {
+  padding: 16px;
+  font-size: 14px;
+}
+.archive-block-reason {
+  margin-bottom: 8px;
+  color: var(--van-gray-8);
+}
+.archive-block-list {
+  margin: 6px 0;
+  font-size: 13px;
+  color: var(--van-gray-7);
 }
 </style>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.StageEvidenceTemplateMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.StageEvidenceTemplate">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="stage_id" property="stageId" jdbcType="BIGINT"/>
+        <result column="evidence_type_code" property="evidenceTypeCode" jdbcType="VARCHAR"/>
+        <result column="display_name" property="displayName" jdbcType="VARCHAR"/>
+        <result column="is_required" property="isRequired" jdbcType="BOOLEAN"/>
+        <result column="min_count" property="minCount" jdbcType="INTEGER"/>
+        <result column="sort_order" property="sortOrder" jdbcType="INTEGER"/>
+        <result column="required_when" property="requiredWhen" jdbcType="VARCHAR"/>
+        <result column="rule_group" property="ruleGroup" jdbcType="VARCHAR"/>
+        <result column="group_required_count" property="groupRequiredCount" jdbcType="INTEGER"/>
+    </resultMap>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT id, stage_id, evidence_type_code, display_name, is_required, min_count, sort_order,
+               required_when, rule_group, group_required_count
+        FROM stage_evidence_template
+        ORDER BY stage_id, sort_order
+    </select>
+
+    <select id="selectByStageId" resultMap="BaseResultMap">
+        SELECT id, stage_id, evidence_type_code, display_name, is_required, min_count, sort_order,
+               required_when, rule_group, group_required_count
+        FROM stage_evidence_template
+        WHERE stage_id = #{stageId}
+        ORDER BY sort_order
+    </select>
+
+    <select id="selectByStageIdAndEvidenceTypeCode" resultMap="BaseResultMap">
+        SELECT id, stage_id, evidence_type_code, display_name, is_required, min_count, sort_order,
+               required_when, rule_group, group_required_count
+        FROM stage_evidence_template
+        WHERE stage_id = #{stageId} AND evidence_type_code = #{evidenceTypeCode}
+    </select>
+</mapper>

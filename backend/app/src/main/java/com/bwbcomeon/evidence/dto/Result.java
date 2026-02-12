@@ -58,4 +58,11 @@ public class Result<T> {
     public static <T> Result<T> error(String message) {
         return new Result<>(400, message, null);
     }
+
+    /**
+     * 失败响应（带业务数据，供前端直接消费如 missingItems / keyMissing / archiveBlockReason）
+     */
+    public static <T> Result<T> error(Integer code, String message, T data) {
+        return new Result<>(code, message, data);
+    }
 }

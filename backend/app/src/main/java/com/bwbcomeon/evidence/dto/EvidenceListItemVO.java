@@ -30,6 +30,11 @@ public class EvidenceListItemVO {
     private Long stageId;
 
     /**
+     * 所属阶段编码（如 S1/S5），按阶段+模板项列表接口返回
+     */
+    private String stageCode;
+
+    /**
      * 证据类型编码，与 stage_evidence_template 对应
      */
     private String evidenceTypeCode;

@@ -25,6 +25,10 @@ export interface ProjectVO {
   currentPmUserId?: number
   /** 当前项目经理展示名 */
   currentPmDisplayName?: string
+  /** 证据完成度 0–100（stage-progress 事实源，列表扩展） */
+  evidenceCompletionPercent?: number
+  /** 关键缺失摘要，前若干条（列表扩展） */
+  keyMissingSummary?: string[]
 }
 
 export interface ProjectMemberVO {
@@ -94,6 +98,96 @@ export const getProjectDetail = (id: number) =>
 
 export const createProject = (body: CreateProjectBody) =>
   http.post<ApiResult<ProjectVO>>('/projects', body)
+
+// ---------- 阶段进度与归档（Phase 4，以 stage-progress 为唯一事实源） ----------
+
+/** 阶段内模板行（stages[].items[]） */
+export interface StageItemVO {
+  evidenceTypeCode: string
+  displayName: string
+  required?: boolean
+  isRequired?: boolean
+  minCount: number
+  currentCount: number
+  completed: boolean
+  ruleGroup?: string | null
+  groupCompleted?: boolean | null
+  groupDisplayName?: string | null
+  sortOrder?: number | null
+}
+
+/** 阶段进度（stages[] 元素） */
+export interface StageVO {
+  stageCode: string
+  stageName: string
+  stageDescription?: string
+  itemCount: number
+  completedCount: number
+  completionPercent: number
+  healthStatus: string
+  stageCompleted: boolean
+  canComplete: boolean
+  items: StageItemVO[]
+}
+
+/** 门禁失败时未满足项（missingItems / blockedByRequiredItems 元素） */
+export interface BlockedByItemVO {
+  stageCode?: string
+  evidenceTypeCode?: string | null
+  displayName?: string
+  shortfall?: number | null
+}
+
+/** GET /api/projects/{id}/stage-progress 响应 */
+export interface StageProgressVO {
+  overallCompletionPercent: number
+  keyMissing: string[]
+  canArchive: boolean
+  archiveBlockReason?: string | null
+  stages: StageVO[]
+  projectName?: string
+  projectStatus?: string
+  hasProcurement?: boolean | null
+  blockedByStages?: string[]
+  blockedByRequiredItems?: BlockedByItemVO[]
+}
+
+/** 阶段完成结果（成功或失败含缺失项） */
+export interface StageCompleteResult {
+  success: boolean
+  message?: string
+  missingItems?: BlockedByItemVO[]
+}
+
+/** 归档门禁失败时返回的 data 结构 */
+export interface ArchiveBlockVO {
+  archiveBlockReason?: string
+  keyMissing?: string[]
+  blockedByStages?: string[]
+  blockedByRequiredItems?: BlockedByItemVO[]
+}
+
+/** 阶段进度（唯一事实源） */
+export const getStageProgress = (projectId: number) =>
+  http.get<ApiResult<StageProgressVO>>(`/projects/${projectId}/stage-progress`)
+
+/** 阶段完成（门禁失败时 code=400，data 为 StageCompleteResult） */
+export const completeStage = (projectId: number, stageCode: string) =>
+  http.post<ApiResult<StageCompleteResult>>(`/projects/${projectId}/stages/${stageCode}/complete`)
+
+/** 项目归档（门禁失败时 code=400，data 为 ArchiveBlockVO） */
+export const archiveProject = (projectId: number) =>
+  http.post<ApiResult<ArchiveBlockVO | null>>(`/projects/${projectId}/archive`)
+
+/** 从接口响应或 axios 错误中取出 400 结构化 data（供弹窗/页面展示） */
+export function getStructuredErrorData(
+  resOrErr: { code?: number; data?: unknown } | { response?: { data?: { code?: number; data?: unknown; message?: string } } }
+): { message: string; data: unknown } | null {
+  const body = 'code' in resOrErr ? resOrErr : resOrErr.response?.data
+  if (!body || (body as { code?: number }).code !== 400) return null
+  const b = body as { message?: string; data?: unknown }
+  return { message: b.message ?? '请求失败', data: b.data }
+}
 
 /** 项目导入结果（最小版） */
 export interface ProjectImportResult {

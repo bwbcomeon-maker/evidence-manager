@@ -26,11 +26,11 @@ export interface EvidenceListItem {
   evidenceId: number
   projectId: number
   title: string
-  bizType: string
+  bizType?: string
   /** 备注（上传时填写） */
   note?: string
   contentType: string
-  status: string
+  status?: string
   evidenceStatus?: EvidenceStatus
   createdByUserId?: number
   /** 上传人展示名（后端返回） */
@@ -45,6 +45,10 @@ export interface EvidenceListItem {
   /** 作废人展示名（后端可选返回） */
   invalidByDisplayName?: string
   invalidAt?: string
+  /** 按阶段+模板项列表接口返回 */
+  stageId?: number
+  stageCode?: string
+  evidenceTypeCode?: string
   latestVersion: {
     versionId: number
     versionNo: number
@@ -54,6 +58,16 @@ export interface EvidenceListItem {
     createdAt: string
   } | null
 }
+
+/** 按阶段+模板项证据实例列表（GET .../stages/{stageCode}/evidence-types/{evidenceTypeCode}/evidences） */
+export const getEvidencesByStageType = (
+  projectId: number,
+  stageCode: string,
+  evidenceTypeCode: string
+) =>
+  http.get<{ code: number; message: string; data: EvidenceListItem[] }>(
+    `/projects/${projectId}/stages/${stageCode}/evidence-types/${evidenceTypeCode}/evidences`
+  )
 
 export interface EvidenceListParams {
   nameLike?: string

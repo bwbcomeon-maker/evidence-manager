@@ -7,6 +7,7 @@ import com.bwbcomeon.evidence.dto.InvalidateAuditInfo;
 import com.bwbcomeon.evidence.dto.LatestVersionVO;
 import com.bwbcomeon.evidence.dto.PageResult;
 import com.bwbcomeon.evidence.enums.EvidenceStatus;
+import com.bwbcomeon.evidence.entity.DeliveryStage;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import com.bwbcomeon.evidence.entity.EvidenceVersion;
 import com.bwbcomeon.evidence.exception.BusinessException;
@@ -14,9 +15,11 @@ import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.Project;
 import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
+import com.bwbcomeon.evidence.mapper.DeliveryStageMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceVersionMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
+import com.bwbcomeon.evidence.mapper.StageEvidenceTemplateMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.FileStorageUtil;
 import com.bwbcomeon.evidence.util.PermissionUtil;
@@ -62,6 +65,12 @@ public class EvidenceService {
 
     @Autowired
     private SysUserMapper sysUserMapper;
+
+    @Autowired
+    private DeliveryStageMapper deliveryStageMapper;
+
+    @Autowired
+    private StageEvidenceTemplateMapper stageEvidenceTemplateMapper;
 
     @Autowired
     private PermissionUtil permissionUtil;
@@ -461,6 +470,62 @@ public class EvidenceService {
             vo.setLatestVersion(lv);
         }
         return vo;
+    }
+
+    /**
+     * 按阶段+模板项查询证据实例列表（GET 按阶段+模板项 evidence 列表）
+     */
+    public List<EvidenceListItemVO> listEvidencesByStageAndType(Long projectId, String stageCode, String evidenceTypeCode, Long userId, String roleCode) {
+        if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
+            permissionUtil.checkProjectAccess(projectId, userId);
+        }
+        DeliveryStage stage = deliveryStageMapper.selectByCode(stageCode);
+        if (stage == null) {
+            throw new BusinessException(404, "阶段不存在");
+        }
+        if (stageEvidenceTemplateMapper.selectByStageIdAndEvidenceTypeCode(stage.getId(), evidenceTypeCode) == null) {
+            throw new BusinessException(404, "该阶段下不存在该证据类型");
+        }
+        List<EvidenceItem> items = evidenceItemMapper.selectByProjectIdAndStageIdAndEvidenceTypeCode(projectId, stage.getId(), evidenceTypeCode);
+        List<EvidenceListItemVO> result = new ArrayList<>();
+        for (EvidenceItem item : items) {
+            EvidenceListItemVO vo = new EvidenceListItemVO();
+            vo.setEvidenceId(item.getId());
+            vo.setProjectId(item.getProjectId());
+            vo.setStageId(item.getStageId());
+            vo.setStageCode(stageCode);
+            vo.setEvidenceTypeCode(item.getEvidenceTypeCode());
+            vo.setTitle(item.getTitle());
+            vo.setNote(item.getNote());
+            vo.setContentType(item.getContentType());
+            vo.setEvidenceStatus(item.getEvidenceStatus());
+            vo.setCreatedByUserId(item.getCreatedByUserId());
+            if (item.getCreatedByUserId() != null) {
+                SysUser creator = sysUserMapper.selectById(item.getCreatedByUserId());
+                vo.setCreatedByDisplayName(creator != null ? (creator.getRealName() != null && !creator.getRealName().isBlank() ? creator.getRealName() : creator.getUsername()) : null);
+            }
+            vo.setCreatedAt(item.getCreatedAt());
+            vo.setUpdatedAt(item.getUpdatedAt());
+            vo.setInvalidReason(item.getInvalidReason());
+            vo.setInvalidByUserId(item.getInvalidByUserId());
+            vo.setInvalidAt(item.getInvalidAt());
+            EvidenceVersion latest = evidenceVersionMapper.selectLatestVersionByEvidenceId(item.getId());
+            if (latest != null) {
+                LatestVersionVO lv = new LatestVersionVO();
+                lv.setVersionId(latest.getId());
+                lv.setVersionNo(latest.getVersionNo());
+                lv.setOriginalFilename(latest.getOriginalFilename());
+                lv.setFilePath(latest.getFilePath());
+                lv.setFileSize(latest.getFileSize());
+                lv.setCreatedAt(latest.getCreatedAt());
+                vo.setLatestVersion(lv);
+            }
+            PermissionBits bits = permissionUtil.computeProjectPermissionBits(projectId, userId, roleCode);
+            vo.setPermissions(bits);
+            vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
+            result.add(vo);
+        }
+        return result;
     }
 
     /**

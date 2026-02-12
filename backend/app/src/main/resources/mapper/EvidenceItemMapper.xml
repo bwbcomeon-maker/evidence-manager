@@ -216,6 +216,22 @@
           AND evidence_status = #{expectedCurrentStatus}
     </update>
 
+    <select id="countValidEvidenceByProjectId" resultType="com.bwbcomeon.evidence.dto.EvidenceCountRow">
+        SELECT stage_id AS stageId, evidence_type_code AS evidenceTypeCode, COUNT(*) AS count
+        FROM evidence_item
+        WHERE project_id = #{projectId}
+          AND evidence_status IN ('SUBMITTED', 'ARCHIVED')
+        GROUP BY project_id, stage_id, evidence_type_code
+    </select>
+
+    <select id="selectByProjectIdAndStageIdAndEvidenceTypeCode" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM evidence_item
+        WHERE project_id = #{projectId} AND stage_id = #{stageId} AND evidence_type_code = #{evidenceTypeCode}
+        ORDER BY created_at DESC
+    </select>
+
     <!-- 作废证据：写入 evidence_status/invalid_time/invalid_reason/invalid_by/invalid_at（时间优先 invalid_at），状态保护：仅当未作废时更新 -->
     <update id="updateEvidenceInvalidate">
         UPDATE evidence_item

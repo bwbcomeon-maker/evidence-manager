@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.ProjectStageMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.ProjectStage">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="project_id" property="projectId" jdbcType="BIGINT"/>
+        <result column="stage_id" property="stageId" jdbcType="BIGINT"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="completed_at" property="completedAt" jdbcType="TIMESTAMP"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <select id="selectByProjectId" resultMap="BaseResultMap">
+        SELECT id, project_id, stage_id, status, completed_at, created_at, updated_at
+        FROM project_stage
+        WHERE project_id = #{projectId}
+        ORDER BY stage_id
+    </select>
+
+    <select id="selectByProjectIdAndStageId" resultMap="BaseResultMap">
+        SELECT id, project_id, stage_id, status, completed_at, created_at, updated_at
+        FROM project_stage
+        WHERE project_id = #{projectId} AND stage_id = #{stageId}
+    </select>
+
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.ProjectStage" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_stage (project_id, stage_id, status, completed_at, created_at, updated_at)
+        VALUES (#{projectId}, #{stageId}, COALESCE(#{status}, 'NOT_STARTED'), #{completedAt}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE project_stage
+        SET status = #{status}, completed_at = #{completedAt}, updated_at = CURRENT_TIMESTAMP
+        WHERE project_id = #{projectId} AND stage_id = #{stageId}
+    </update>
+</mapper>
