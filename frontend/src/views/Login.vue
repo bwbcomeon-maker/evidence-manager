@@ -30,6 +30,30 @@
         </div>
       </van-form>
     </div>
+
+    <!-- 手机测试：右下角悬浮按钮 -->
+    <div class="qr-float-btn" @click="openQrPopup">
+      <van-icon name="scan" size="20" />
+      <span class="qr-float-text">手机测试</span>
+    </div>
+
+    <!-- 扫码访问二维码弹层 -->
+    <van-popup
+      v-model:show="showQrPopup"
+      position="center"
+      round
+      :style="{ width: '280px', padding: '20px' }"
+      @closed="qrDataUrl = ''"
+    >
+      <div class="qr-popup-content">
+        <div class="qr-popup-title">扫码用手机访问</div>
+        <div class="qr-popup-canvas">
+          <img v-if="qrDataUrl" :src="qrDataUrl" alt="访问二维码" class="qr-img" />
+          <div v-else class="qr-loading">生成中...</div>
+        </div>
+        <div class="qr-popup-tip">请使用微信/浏览器扫一扫</div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -37,8 +61,35 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
+import QRCode from 'qrcode'
 import { login } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+
+// ---------- 手机扫码访问（开发用） ----------
+const showQrPopup = ref(false)
+const qrDataUrl = ref('')
+
+/** 生成二维码的目标 URL：开发环境强制使用本机局域网 IP，避免手机扫到 localhost 无法访问 */
+function getQrTargetUrl(): string {
+  if (typeof window === 'undefined') return ''
+  const port = window.location.port || '3000'
+  const host = import.meta.env.VITE_DEV_SERVER_HOST
+  const base =
+    import.meta.env.DEV && host ? `http://${host}:${port}` : window.location.origin
+  return base + window.location.pathname + window.location.search
+}
+
+async function openQrPopup() {
+  const url = getQrTargetUrl()
+  qrDataUrl.value = ''
+  showQrPopup.value = true
+  try {
+    qrDataUrl.value = await QRCode.toDataURL(url, { width: 240, margin: 1 })
+  } catch {
+    showToast('二维码生成失败')
+    showQrPopup.value = false
+  }
+}
 
 const REMEMBER_KEY = 'evidence_login_remember'
 
@@ -130,5 +181,62 @@ const onSubmit = async () => {
 }
 .submit-wrap {
   padding: 24px 16px;
+}
+
+/* 手机测试：右下角悬浮按钮 */
+.qr-float-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border-radius: 24px;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+.qr-float-btn:active {
+  opacity: 0.9;
+}
+.qr-float-text {
+  line-height: 1;
+}
+
+/* 二维码弹层 */
+.qr-popup-content {
+  text-align: center;
+}
+.qr-popup-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #323233;
+  margin-bottom: 16px;
+}
+.qr-popup-canvas {
+  width: 240px;
+  height: 240px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f8fa;
+  border-radius: 8px;
+}
+.qr-img {
+  width: 240px;
+  height: 240px;
+  display: block;
+}
+.qr-loading {
+  color: #969799;
+  font-size: 14px;
+}
+.qr-popup-tip {
+  font-size: 12px;
+  color: #969799;
 }
 </style>

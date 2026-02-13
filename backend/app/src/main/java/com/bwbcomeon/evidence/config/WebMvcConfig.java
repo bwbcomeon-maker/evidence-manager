@@ -30,12 +30,18 @@ public class WebMvcConfig implements WebMvcConfigurer {
     }
 
     /**
-     * CORS：允许前端带 Cookie（withCredentials）时，必须指定具体 origin，不能为 *
+     * CORS：允许前端带 Cookie（withCredentials）时，必须指定具体 origin，不能为 *。
+     * 含本机与局域网，便于手机扫码访问（192.168.x.x / 10.x.x.x）。
      */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOriginPatterns("http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001")
+                .allowedOriginPatterns(
+                        "http://localhost:3000", "http://localhost:3001",
+                        "http://127.0.0.1:3000", "http://127.0.0.1:3001",
+                        "http://192.168.*.*:3000", "http://192.168.*.*:3001",
+                        "http://10.*.*.*:3000", "http://10.*.*.*:3001"
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)

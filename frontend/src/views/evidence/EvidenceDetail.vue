@@ -31,6 +31,38 @@
         <van-button v-if="canVoid" type="danger" block plain icon="warning-o" @click="handleVoid">作废</van-button>
       </div>
 
+      <!-- 预览弹层：页面内展示，避免手机端 window.open 被拦截 -->
+      <van-popup
+        v-model:show="showPreviewPopup"
+        position="center"
+        round
+        :style="{ width: '94vw', maxWidth: '400px', maxHeight: '85vh' }"
+        closeable
+        close-icon-position="top-right"
+        @closed="previewVersionId = null"
+      >
+        <div class="preview-popup-body">
+          <template v-if="previewVersionId != null">
+            <!-- 图片：直接使用接口 URL，同源会带 Cookie -->
+            <img
+              v-if="previewContentType?.startsWith('image/')"
+              :src="previewImageUrl"
+              class="preview-img"
+              alt="预览"
+              @error="onPreviewImageError"
+            />
+            <!-- PDF：iframe 内嵌 -->
+            <iframe
+              v-else-if="previewContentType === 'application/pdf'"
+              :src="previewImageUrl"
+              class="preview-iframe"
+              title="PDF 预览"
+            />
+            <div v-else class="preview-fallback">该类型请在电脑端预览或下载查看</div>
+          </template>
+        </div>
+      </van-popup>
+
       <!-- 作废原因弹窗 -->
       <van-dialog
         v-model:show="showInvalidateReasonDialog"
@@ -78,6 +110,13 @@ const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
 const showInvalidateReasonDialog = ref(false)
 const invalidateReasonText = ref('')
+/** 预览弹层：页面内展示，避免手机端 window.open 被拦截 */
+const showPreviewPopup = ref(false)
+const previewVersionId = ref<number | null>(null)
+const previewContentType = ref<string>('')
+const previewImageUrl = computed(() =>
+  previewVersionId.value != null ? `/api/evidence/versions/${previewVersionId.value}/download` : ''
+)
 /** 用户列表（用于兜底：接口未返回 createdByDisplayName 时按 userId 解析展示名） */
 const userList = ref<AuthUserSimpleVO[]>([])
 
@@ -171,27 +210,42 @@ async function handlePreview() {
     return
   }
   const ct = (evidence.value.contentType || '').toLowerCase()
-  const isPreviewable =
-    ct.includes('pdf') ||
-    ct.startsWith('image/') ||
-    ct.startsWith('text/') ||
-    ct.includes('json') ||
-    ct.includes('xml')
-  if (!isPreviewable) {
+  const isImage = ct.startsWith('image/')
+  const isPdf = ct.includes('pdf')
+  const isTextLike = ct.startsWith('text/') || ct.includes('json') || ct.includes('xml')
+
+  if (!isImage && !isPdf && !isTextLike) {
     showToast('该文件类型暂不支持预览，请下载查看')
     return
   }
+
+  const versionId = evidence.value.latestVersion.versionId
+
+  // 图片、PDF：页面内弹层预览（手机端不会被弹窗拦截）
+  if (isImage || isPdf) {
+    previewContentType.value = evidence.value.contentType || ''
+    previewVersionId.value = versionId
+    showPreviewPopup.value = true
+    return
+  }
+
+  // 文本类：仍用 blob + 新窗口（电脑端有效；手机端可能被拦截则提示下载）
   try {
     showLoadingToast({ message: '打开预览...', forbidClick: true, duration: 0 })
-    const blob = await downloadVersionFile(evidence.value.latestVersion.versionId)
+    const blob = await downloadVersionFile(versionId)
     const url = window.URL.createObjectURL(blob)
-    window.open(url, '_blank', 'noopener,noreferrer')
+    const w = window.open(url, '_blank', 'noopener,noreferrer')
     setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
+    if (!w) showToast('若未打开新窗口，请使用下载')
   } catch (e: any) {
     showToast(e.message || '预览失败')
   } finally {
     closeToast()
   }
+}
+
+function onPreviewImageError() {
+  showToast('预览加载失败，请检查网络或使用下载')
 }
 
 async function handleDownload() {
@@ -309,5 +363,29 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.preview-popup-body {
+  padding: 12px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f8fa;
+}
+.preview-img {
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  display: block;
+}
+.preview-iframe {
+  width: 100%;
+  height: 75vh;
+  border: none;
+}
+.preview-fallback {
+  color: #969799;
+  font-size: 14px;
 }
 </style>
