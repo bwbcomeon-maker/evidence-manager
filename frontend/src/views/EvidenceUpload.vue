@@ -36,6 +36,7 @@
           <van-uploader
             v-model="fileList"
             :after-read="afterRead"
+            :before-read="onBeforeRead"
             :max-count="1"
             accept="*/*"
             :disabled="!!evidenceId"
@@ -109,6 +110,7 @@ import {
   type EvidenceListItem
 } from '@/api/evidence'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
+import { validateFileSize } from '@/utils/uploadFileLimit'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +141,18 @@ const showViewDetail = computed(() => {
 
 function afterRead(_file: UploaderFileListItem) {
   // 仅用于触发 van-uploader 的 v-model
+}
+
+/** 选择文件前校验大小：图片 5MB、文档 50MB */
+function onBeforeRead(file: File | File[]): boolean {
+  const f = Array.isArray(file) ? file[0] : file
+  if (!f) return true
+  const r = validateFileSize(f)
+  if (!r.ok) {
+    showToast(r.message)
+    return false
+  }
+  return true
 }
 
 async function loadByEvidenceId(id: number) {
@@ -180,6 +194,11 @@ async function onSaveDraft() {
   const file = fileList.value[0]?.file as File | undefined
   if (!file) {
     showToast('请选择要上传的文件')
+    return
+  }
+  const sizeCheck = validateFileSize(file)
+  if (!sizeCheck.ok) {
+    showToast(sizeCheck.message)
     return
   }
 

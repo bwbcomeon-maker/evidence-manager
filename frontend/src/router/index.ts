@@ -5,7 +5,6 @@ import ProjectList from '@/views/ProjectList.vue'
 import ProjectDetail from '@/views/ProjectDetail.vue'
 import ProjectMembers from '@/views/ProjectMembers.vue'
 import EvidenceUpload from '@/views/EvidenceUpload.vue'
-import EvidenceList from '@/views/EvidenceList.vue'
 import EvidenceHome from '@/views/evidence/EvidenceHome.vue'
 import EvidenceByProject from '@/views/evidence/EvidenceByProject.vue'
 import MyEvidenceList from '@/views/evidence/MyEvidenceList.vue'
@@ -118,8 +117,7 @@ const router = createRouter({
         {
           path: 'projects/:id/evidences',
           name: 'EvidenceList',
-          component: EvidenceList,
-          meta: { title: '证据列表', showTabbar: false, showBack: true }
+          redirect: (to) => ({ path: `/projects/${to.params.id}`, query: { tab: 'evidence' } })
         },
         {
           path: 'batch-assign-projects',

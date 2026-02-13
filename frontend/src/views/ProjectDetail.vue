@@ -241,6 +241,7 @@
               v-model="uploadFileList"
               :max-count="1"
               accept="*/*"
+              :before-read="onUploaderBeforeRead"
             >
               <van-button icon="plus" type="primary">选择文件</van-button>
             </van-uploader>
@@ -402,6 +403,7 @@ import { getEvidencesByStageType } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
+import { validateFileSize } from '@/utils/uploadFileLimit'
 
 interface Project {
   id: number
@@ -818,6 +820,18 @@ function onBizTypePickerWheel(e: WheelEvent) {
   uploadForm.value.type = opts[newIdx].value
 }
 
+/** 选择文件前校验大小：图片 5MB、文档 50MB */
+function onUploaderBeforeRead(file: File | File[]): boolean {
+  const f = Array.isArray(file) ? file[0] : file
+  if (!f) return true
+  const r = validateFileSize(f)
+  if (!r.ok) {
+    showToast(r.message)
+    return false
+  }
+  return true
+}
+
 // 上传证据（阶段驱动：必须从某模板项「上传」带入 stageId + evidenceTypeCode）
 const handleUpload = async () => {
   if (!uploadContext.value) {
@@ -834,9 +848,14 @@ const handleUpload = async () => {
     return
   }
 
-  const file = uploadFileList.value[0].file
-  if (!file) {
+  const file = uploadFileList.value[0].file as File | undefined
+  if (!file || !(file instanceof File)) {
     showToast('文件无效')
+    return
+  }
+  const sizeCheck = validateFileSize(file)
+  if (!sizeCheck.ok) {
+    showToast(sizeCheck.message)
     return
   }
 

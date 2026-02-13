@@ -73,7 +73,7 @@ function onLoad() {
 }
 
 function goToProjectEvidences(projectId: number) {
-  router.push(`/projects/${projectId}/evidences`)
+  router.push({ path: `/projects/${projectId}`, query: { tab: 'evidence', from: 'evidence-by-project' } })
 }
 
 onMounted(() => {

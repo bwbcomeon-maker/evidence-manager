@@ -73,9 +73,13 @@ function onBack() {
     router.replace({ path: `/projects/${fromProject}`, query: { tab: 'evidence' } })
     return
   }
-  // 项目详情页的返回一律回到项目列表，避免历史栈中有证据详情时返回到错误页
+  // 项目详情页：从「按项目查看证据」进入则返回到证据管理，否则回到项目列表
   if (route.path.match(/^\/projects\/[^/]+$/)) {
-    router.replace('/projects')
+    if (route.query.from === 'evidence-by-project') {
+      router.replace('/evidence/by-project')
+    } else {
+      router.replace('/projects')
+    }
     return
   }
   if (window.history.length > 1) {
