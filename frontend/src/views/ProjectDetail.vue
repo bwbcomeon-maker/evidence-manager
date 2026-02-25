@@ -18,6 +18,17 @@
                   </van-tag>
                 </template>
               </van-cell>
+              <van-cell title="是否含采购">
+                <template #value>
+                  <van-switch
+                    v-if="project.canManageMembers && project.status !== 'archived'"
+                    :model-value="project.hasProcurement"
+                    size="20"
+                    @update:model-value="onHasProcurementChange"
+                  />
+                  <span v-else>{{ project.hasProcurement ? '是' : '否' }}</span>
+                </template>
+              </van-cell>
               <van-cell title="创建时间" :value="project.createdAt" />
             </van-cell-group>
             <!-- 证据完成度（详情页也展示） -->
@@ -107,7 +118,7 @@
                 <template #title>
                   <div class="stage-title-row">
                     <span class="stage-name">{{ s.stageName || s.stageCode }}</span>
-                    <span class="stage-count">{{ s.completedCount }}/{{ s.itemCount }}</span>
+                    <span class="stage-count">{{ (s.displayCompletedCount ?? s.completedCount) }}/{{ (s.displayItemCount ?? s.itemCount) }}</span>
                     <van-tag :type="healthTagType(s.healthStatus)">{{ healthStatusText(s.healthStatus) }}</van-tag>
                     <van-tag v-if="s.stageCompleted" type="success">已完成</van-tag>
                   </div>
@@ -124,11 +135,13 @@
                       <div class="evidence-card-title">
                         <span class="card-name">{{ item.groupDisplayName || item.displayName }}</span>
                         <van-tag v-if="item.isRequired || item.required" type="danger" size="mini" class="card-required">必填</van-tag>
+                        <van-tag v-else type="default" size="mini">选填</van-tag>
                       </div>
                       <div class="evidence-card-status">
-                        <!-- 展示口径（含草稿）显示上传进度，门禁口径驱动完成状态 -->
-                        <span class="card-count">{{ item.uploadCount ?? item.currentCount }}/{{ item.minCount }}</span>
-                        <van-tag v-if="item.completed || item.groupCompleted" type="success" size="mini">已完成</van-tag>
+                        <!-- minCount=0 为选填项，不显示 0/0 已完成，改为「选填」 -->
+                        <span class="card-count">{{ (item.minCount ?? 1) === 0 ? '选填' : `${item.uploadCount ?? item.currentCount}/${item.minCount}` }}</span>
+                        <van-tag v-if="(item.minCount ?? 1) === 0" type="default" size="mini">选填</van-tag>
+                        <van-tag v-else-if="item.completed || item.groupCompleted" type="success" size="mini">已完成</van-tag>
                         <van-tag v-else-if="(item.uploadCount ?? item.currentCount) > 0 && !item.completed" type="primary" size="mini">待提交</van-tag>
                         <van-tag v-else type="warning" size="mini">待上传</van-tag>
                       </div>
@@ -280,6 +293,16 @@
               提交
             </van-button>
             <van-button
+              v-if="showUploadResultDelete"
+              type="danger"
+              plain
+              block
+              :loading="deleteLoading"
+              @click="handleUploadResultDelete"
+            >
+              删除
+            </van-button>
+            <van-button
               type="primary"
               plain
               block
@@ -347,6 +370,26 @@
         </p>
       </div>
     </van-dialog>
+
+    <!-- 申请归档前：存在草稿证据时确认弹窗 -->
+    <van-dialog
+      v-model:show="showDraftConfirmDialog"
+      title="确认归档"
+      show-cancel-button
+      cancel-button-text="取消"
+      confirm-button-text="确认归档"
+      :before-close="onDraftArchiveConfirm"
+    >
+      <div class="draft-confirm-content">
+        <p class="draft-confirm-tip">以下材料处于草稿状态，请确认是否需要调整。如不调整，草稿状态的材料将随项目一并归档（自动转为已归档状态）。</p>
+        <ul v-if="draftListForArchive.length" class="draft-confirm-list">
+          <li v-for="d in draftListForArchive" :key="d.evidenceId">
+            {{ draftItemPathLabel(d) }}：{{ d.title || '未命名' }}
+          </li>
+        </ul>
+        <p class="draft-confirm-ask">确认继续归档？</p>
+      </div>
+    </van-dialog>
   </div>
 </template>
 
@@ -384,6 +427,7 @@ import {
   uploadEvidence,
   downloadVersionFile,
   submitEvidence,
+  deleteEvidence,
   invalidateEvidence,
   type EvidenceListItem
 } from '@/api/evidence'
@@ -392,6 +436,7 @@ import {
   getProjectMembers,
   getStageProgress,
   archiveProject,
+  updateProject,
   getStructuredErrorData,
   type ProjectMemberVO,
   type StageProgressVO,
@@ -412,9 +457,12 @@ interface Project {
   description: string
   status: string
   createdAt: string
+  /** 是否含采购（项目启动阶段「项目前期产品比测报告」勾选后为必填） */
+  hasProcurement?: boolean
   permissions?: { canUpload?: boolean; canInvalidate?: boolean; canManageMembers?: boolean }
   canInvalidate?: boolean
   canUpload?: boolean
+  canManageMembers?: boolean
   currentPmUserId?: string
   currentPmDisplayName?: string
 }
@@ -442,6 +490,9 @@ const evidenceByItemLoading = ref<Record<string, boolean>>({})
 const showArchiveBlockDialog = ref(false)
 const archiveBlockMessage = ref('')
 const archiveBlockData = ref<ArchiveBlockVO | null>(null)
+// 申请归档前草稿确认：存在草稿时展示列表，用户确认后再执行归档
+const showDraftConfirmDialog = ref(false)
+const draftListForArchive = ref<EvidenceListItem[]>([])
 
 /** 上传上下文：从某阶段某模板项点击「上传」时带入，用于提交时带 stageId + evidenceTypeCode */
 const uploadContext = ref<{ stageId: number; evidenceTypeCode: string; displayName: string } | null>(null)
@@ -509,6 +560,7 @@ const uploadResult = ref<{
 } | null>(null)
 const uploading = ref(false)
 const submitLoading = ref(false)
+const deleteLoading = ref(false)
 const invalidateLoading = ref(false)
 const uploadForm = ref({
   name: '',
@@ -531,10 +583,9 @@ const uploadResultStatusTagType = computed(() => evidenceStatusTagType(getEffect
 const showUploadResultSubmit = computed(
   () => getEffectiveEvidenceStatus(uploadResult.value) === 'DRAFT'
 )
+const showUploadResultDelete = computed(() => getEffectiveEvidenceStatus(uploadResult.value) === 'DRAFT')
 const showUploadResultInvalidate = computed(() => {
-  const s = getEffectiveEvidenceStatus(uploadResult.value)
-  if (!s || s === 'ARCHIVED' || s === 'INVALID') return false
-  return project.value?.canInvalidate === true
+  return getEffectiveEvidenceStatus(uploadResult.value) === 'SUBMITTED' && project.value?.canInvalidate === true
 })
 const bizTypePickerOptions = [
   { text: '方案', value: 'PLAN' },
@@ -613,6 +664,23 @@ const getFileTypeText = (contentType: string) => {
   return '文件'
 }
 
+/** 切换「是否含采购」后请求后端并刷新 */
+async function onHasProcurementChange(value: boolean) {
+  if (!projectId.value || !project.value) return
+  try {
+    const res = await updateProject(projectId.value, { hasProcurement: value })
+    if (res?.code === 0 && res.data) {
+      project.value.hasProcurement = res.data.hasProcurement ?? false
+      showSuccessToast(value ? '已设为含采购' : '已设为不含采购')
+      loadStageProgress()
+    } else {
+      showToast(res?.message || '更新失败')
+    }
+  } catch (e: any) {
+    showToast(e?.message || '更新失败')
+  }
+}
+
 // 加载项目信息（真实 API）
 const loadProject = async () => {
   projectError.value = ''
@@ -628,6 +696,7 @@ const loadProject = async () => {
         description: p.description ?? '',
         status: p.status,
         createdAt: p.createdAt ?? '',
+        hasProcurement: p.hasProcurement ?? false,
         permissions: p.permissions,
         canInvalidate: p.canInvalidate ?? false,
         canManageMembers: p.canManageMembers ?? false,
@@ -928,6 +997,9 @@ async function handleUploadResultSubmit() {
       uploadResult.value = { ...uploadResult.value!, evidenceStatus: 'SUBMITTED' }
       showSuccessToast('已提交')
       onRefresh()
+      // 刷新证据 Tab 中当前模板项列表与阶段进度，使「草稿」及时变为「已提交」
+      refreshCurrentItemEvidences()
+      loadStageProgress()
     } else {
       showToast(res?.message || '提交失败')
     }
@@ -938,7 +1010,35 @@ async function handleUploadResultSubmit() {
   }
 }
 
-// 阶段2：作废（先弹出填写原因）
+// 阶段2：草稿物理删除
+async function handleUploadResultDelete() {
+  if (!uploadResult.value || getEffectiveEvidenceStatus(uploadResult.value) !== 'DRAFT') return
+  try {
+    await showConfirmDialog({ title: '确认删除', message: '删除后不可恢复，是否继续？' })
+  } catch {
+    return
+  }
+  const id = uploadResult.value.evidenceId
+  deleteLoading.value = true
+  try {
+    const res = (await deleteEvidence(id)) as { code: number; message?: string }
+    if (res?.code === 0) {
+      showSuccessToast('已删除')
+      closeUploadDialog()
+      onRefresh()
+      refreshCurrentItemEvidences()
+      loadStageProgress()
+    } else {
+      showToast(res?.message || '删除失败')
+    }
+  } catch (e: any) {
+    showToast(e?.message || '删除失败')
+  } finally {
+    deleteLoading.value = false
+  }
+}
+
+// 阶段2：作废（先弹出填写原因，仅已提交可作废）
 function handleUploadResultInvalidate() {
   if (!uploadResult.value) return
   pendingInvalidateEvidenceId.value = uploadResult.value.evidenceId
@@ -964,6 +1064,8 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
       }
       showSuccessToast('已作废')
       onRefresh()
+      refreshCurrentItemEvidences()
+      loadStageProgress()
       pendingInvalidateEvidenceId.value = null
       invalidateReasonText.value = ''
       return true
@@ -1182,21 +1284,25 @@ function openUploadForItem(stage: StageVO, item: StageItemVO) {
   openUploadDialog()
 }
 
-async function handleArchive() {
-  if (!projectId.value || !stageProgress.value?.canArchive || project.value?.status === 'archived') return
+/** 实际执行归档请求（供 handleArchive 与草稿确认弹窗确认后调用） */
+async function doArchive(): Promise<boolean> {
+  if (!projectId.value) return false
   try {
     const res = await archiveProject(projectId.value)
     if (res?.code === 0) {
       showSuccessToast('归档成功')
       loadProject()
       loadStageProgress()
-    } else if (res?.code === 400 && res.data) {
+      return true
+    }
+    if (res?.code === 400 && res.data) {
       archiveBlockMessage.value = (res as { message?: string }).message ?? '不满足归档条件'
       archiveBlockData.value = res.data as ArchiveBlockVO
       showArchiveBlockDialog.value = true
     } else {
       showToast((res as { message?: string })?.message ?? '归档失败')
     }
+    return false
   } catch (err: unknown) {
     const structured = getStructuredErrorData(err as { response?: { data?: { code?: number; data?: unknown; message?: string } } })
     if (structured?.data) {
@@ -1206,7 +1312,46 @@ async function handleArchive() {
     } else {
       showToast((err as Error)?.message ?? '归档失败')
     }
+    return false
   }
+}
+
+/** 申请归档：若有草稿则先弹窗列出草稿并确认，确认后再归档；无草稿则直接归档 */
+async function handleArchive() {
+  if (!projectId.value || !stageProgress.value?.canArchive || project.value?.status === 'archived') return
+  try {
+    const draftRes = await getEvidenceList(projectId.value, { evidenceStatus: 'DRAFT' })
+    const drafts = (draftRes?.data ?? []) as EvidenceListItem[]
+    if (drafts.length > 0) {
+      draftListForArchive.value = drafts
+      showDraftConfirmDialog.value = true
+      return
+    }
+    await doArchive()
+  } catch {
+    showToast('获取证据列表失败')
+  }
+}
+
+/** 草稿项展示路径：大阶段 > 子阶段（便于定位） */
+function draftItemPathLabel(d: EvidenceListItem): string {
+  const stage = d.stageName || d.stageCode || (d.stageId != null ? `阶段${d.stageId}` : '')
+  const typeName = d.evidenceTypeDisplayName || d.evidenceTypeCode || ''
+  if (stage && typeName) return `${stage} > ${typeName}`
+  if (stage) return stage
+  if (typeName) return typeName
+  return '未分类'
+}
+
+/** 草稿确认弹窗：用户点击「确认归档」时执行归档并关闭弹窗 */
+async function onDraftArchiveConfirm(action: string): Promise<boolean> {
+  if (action !== 'confirm') return true
+  const ok = await doArchive()
+  if (ok) {
+    draftListForArchive.value = []
+    return true
+  }
+  return false
 }
 
 // 监听Tab切换
@@ -1618,5 +1763,29 @@ onMounted(() => {
   margin: 6px 0;
   font-size: 13px;
   color: var(--van-gray-7);
+}
+.draft-confirm-content {
+  padding: 16px;
+  font-size: 14px;
+}
+.draft-confirm-tip {
+  margin-bottom: 12px;
+  color: var(--van-gray-8);
+  line-height: 1.5;
+}
+.draft-confirm-list {
+  margin: 8px 0;
+  padding-left: 20px;
+  color: var(--van-gray-7);
+  font-size: 13px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.draft-confirm-list li {
+  margin: 4px 0;
+}
+.draft-confirm-ask {
+  margin-top: 12px;
+  color: var(--van-gray-8);
 }
 </style>

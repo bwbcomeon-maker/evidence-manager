@@ -46,8 +46,8 @@ public enum EvidenceStatus {
         }
         switch (this) {
             case DRAFT:
-                if (target != SUBMITTED && target != INVALID) {
-                    throw new BusinessException(400, "草稿只能提交或作废，不能变更为" + target.getDisplayName());
+                if (target != SUBMITTED) {
+                    throw new BusinessException(400, "草稿只能提交，不能变更为" + target.getDisplayName() + "；草稿可物理删除");
                 }
                 break;
             case SUBMITTED:

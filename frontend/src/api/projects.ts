@@ -29,6 +29,8 @@ export interface ProjectVO {
   evidenceCompletionPercent?: number
   /** 关键缺失摘要，前若干条（列表扩展） */
   keyMissingSummary?: string[]
+  /** 是否含采购（影响项目启动阶段「项目前期产品比测报告」是否必填） */
+  hasProcurement?: boolean | null
 }
 
 export interface ProjectMemberVO {
@@ -86,6 +88,8 @@ export interface CreateProjectBody {
   code: string
   name: string
   description?: string
+  /** 是否含采购（项目启动阶段「项目前期产品比测报告」勾选后为必填） */
+  hasProcurement?: boolean
 }
 
 /** 项目列表（当前用户可见） */
@@ -95,6 +99,10 @@ export const getProjects = () =>
 /** 项目详情（不可见返回 403） */
 export const getProjectDetail = (id: number) =>
   http.get<ApiResult<ProjectVO>>(`/projects/${id}`)
+
+/** 更新项目部分字段（如「是否含采购」），需具备管理成员权限 */
+export const updateProject = (projectId: number, body: { hasProcurement?: boolean }) =>
+  http.patch<ApiResult<ProjectVO>>(`/projects/${projectId}`, body)
 
 export const createProject = (body: CreateProjectBody) =>
   http.post<ApiResult<ProjectVO>>('/projects', body)
@@ -133,6 +141,9 @@ export interface StageVO {
   stageDescription?: string
   itemCount: number
   completedCount: number
+  /** 无必填项阶段（如 S2 无采购时）的展示用数量，有则阶段头用此显示 */
+  displayItemCount?: number | null
+  displayCompletedCount?: number | null
   completionPercent: number
   healthStatus: string
   stageCompleted: boolean

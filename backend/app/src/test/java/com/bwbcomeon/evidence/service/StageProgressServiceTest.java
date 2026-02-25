@@ -168,13 +168,13 @@ class StageProgressServiceTest {
     }
 
     /**
-     * 【用例 3】归档门禁：阶段 x==y 但未标记 COMPLETED → canArchive 为 false，archiveBlockReason 指向阶段未完成。
+     * 【用例 3】归档门禁：证据完成度 100% 即可归档，不要求「标记阶段完成」。
      * Arrange: 创建 project；每阶段参与项均插入足够 SUBMITTED 证据使 x==y；不将 project_stage 置为 COMPLETED。
      * Act: computeStageProgress(projectId)。
-     * Assert: 各阶段 completionPercent=100、keyMissing 为空、canArchive=false、archiveBlockReason 非空且为“未标记完成”类文案。
+     * Assert: 各阶段 completionPercent=100、keyMissing 为空、canArchive=true。
      */
     @Test
-    void archiveGate_allStagesXEqualsYButNotMarkedCompleted_canArchiveFalse_reasonStageNotCompleted() {
+    void archiveGate_allStagesXEqualsY_canArchiveTrue_withoutMarkingStagesCompleted() {
         long projectId = fixture.createProject(false);
         long s1 = fixture.getStageIdByCode("S1");
         long s2 = fixture.getStageIdByCode("S2");
@@ -206,8 +206,6 @@ class StageProgressServiceTest {
             assertThat(stage.getCompletionPercent()).describedAs("stage " + stage.getStageCode()).isEqualTo(100);
         }
         assertThat(vo.getKeyMissing()).isEmpty();
-        assertThat(vo.isCanArchive()).isFalse();
-        assertThat(vo.getArchiveBlockReason()).isNotBlank();
-        assertThat(vo.getArchiveBlockReason()).contains("未标记完成");
+        assertThat(vo.isCanArchive()).isTrue();
     }
 }

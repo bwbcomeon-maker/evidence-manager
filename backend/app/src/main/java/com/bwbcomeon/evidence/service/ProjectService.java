@@ -152,7 +152,7 @@ public class ProjectService {
      * @return 新建项目的基本信息
      */
     @Transactional(rollbackFor = Exception.class)
-    public ProjectVO createProject(Long userId, String code, String name, String description) {
+    public ProjectVO createProject(Long userId, String code, String name, String description, Boolean hasProcurement) {
         String codeTrim = code != null ? code.trim() : "";
         if (codeTrim.isEmpty()) {
             throw new BusinessException(400, "项目令号不能为空");
@@ -164,6 +164,7 @@ public class ProjectService {
         project.setCode(codeTrim);
         project.setName(name != null ? name.trim() : "");
         project.setDescription(description != null ? description.trim() : null);
+        project.setHasProcurement(Boolean.TRUE.equals(hasProcurement));
         project.setStatus(STATUS_ACTIVE);
         project.setCreatedByUserId(userId);
         projectMapper.insert(project);
@@ -261,6 +262,29 @@ public class ProjectService {
         return vo;
     }
 
+    /**
+     * 更新项目「是否含采购」（需具备管理成员权限：SYSTEM_ADMIN/PMO/项目创建人/ACL owner）
+     * @param hasProcurement 为 null 时不更新，仅返回详情
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ProjectVO updateHasProcurement(Long projectId, Boolean hasProcurement, Long currentUserId, String roleCode) {
+        permissionUtil.checkCanManageMembers(projectId, currentUserId, roleCode);
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
+        if (!visibleIds.contains(projectId)) {
+            throw new BusinessException(403, "无权限访问该项目");
+        }
+        if (hasProcurement != null) {
+            Project project = projectMapper.selectById(projectId);
+            if (project == null) {
+                throw new BusinessException(404, "项目不存在");
+            }
+            project.setHasProcurement(Boolean.TRUE.equals(hasProcurement));
+            project.setUpdatedAt(OffsetDateTime.now());
+            projectMapper.update(project);
+        }
+        return getProjectDetail(projectId, currentUserId, roleCode);
+    }
+
     /** 仅 ACL 中 role=owner 的用户（用于展示「项目经理」；无则视为未分配） */
     private Long resolveAclOwnerUserId(Long projectId) {
         List<AuthProjectAcl> acls = authProjectAclMapper.selectByProjectId(projectId);
@@ -350,6 +374,8 @@ public class ProjectService {
         project.setStatus(STATUS_ARCHIVED);
         project.setUpdatedAt(OffsetDateTime.now());
         projectMapper.update(project);
+        // 项目归档时，将该项目下所有草稿证据自动转为已归档（与项目一并归档）
+        evidenceService.batchConvertDraftToArchivedOnProjectArchive(projectId);
         return ArchiveResult.ok();
     }
 

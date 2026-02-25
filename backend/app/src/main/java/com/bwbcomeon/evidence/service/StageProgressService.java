@@ -93,9 +93,9 @@ public class StageProgressService {
         List<BlockedByItemVO> blockedByRequiredItems = new ArrayList<>();
 
         for (DeliveryStage stage : stages) {
+            // 展示用：该阶段下所有模板项都展示（含 required_when 不满足的），便于用户看到并上传
             List<StageEvidenceTemplate> rows = allTemplates.stream()
                     .filter(t -> t.getStageId().equals(stage.getId()))
-                    .filter(t -> participating(t, hasProcurement))
                     .sorted(Comparator.comparingInt(t -> t.getSortOrder() != null ? t.getSortOrder() : 0))
                     .toList();
 
@@ -112,6 +112,11 @@ public class StageProgressService {
                     .collect(Collectors.groupingBy(t -> t.getRuleGroup() != null && !t.getRuleGroup().isBlank() ? t.getRuleGroup() : "standalone_" + t.getId()));
 
             for (StageEvidenceTemplate row : rows) {
+                boolean participates = participating(row, hasProcurement);
+                // 当「是否含采购」为否时：整个采购与设备到货阶段（S2）仅展示，全部子项为非必填且不计入完成度
+                if ("S2".equals(stage.getCode()) && !hasProcurement) {
+                    participates = false;
+                }
                 // 门禁口径（仅 SUBMITTED + ARCHIVED）：决定 completed
                 long currentCount = countKeyToCnt.getOrDefault(key(row.getStageId(), row.getEvidenceTypeCode()), 0L);
                 boolean rowCompleted = currentCount >= (row.getMinCount() != null ? row.getMinCount() : 1);
@@ -121,7 +126,8 @@ public class StageProgressService {
                 StageItemVO item = new StageItemVO();
                 item.setEvidenceTypeCode(row.getEvidenceTypeCode());
                 item.setDisplayName(row.getDisplayName());
-                item.setRequired(Boolean.TRUE.equals(row.getIsRequired()));
+                // 不参与时（如 HAS_PROCUREMENT 但项目无采购）仅展示为选填，不参与完成度
+                item.setRequired(participates && Boolean.TRUE.equals(row.getIsRequired()));
                 item.setMinCount(row.getMinCount() != null ? row.getMinCount() : 1);
                 item.setCurrentCount((int) currentCount);
                 item.setUploadCount((int) uploadCount);
@@ -132,6 +138,7 @@ public class StageProgressService {
                 if (row.getRuleGroup() != null && !row.getRuleGroup().isBlank()) {
                     String g = row.getRuleGroup();
                     List<StageEvidenceTemplate> groupRows = byGroup.get(g);
+                    List<StageEvidenceTemplate> participatingGroupRows = groupRows.stream().filter(tr -> participating(tr, hasProcurement)).toList();
                     int satisfied = (int) groupRows.stream().filter(tr -> {
                         long c = countKeyToCnt.getOrDefault(key(tr.getStageId(), tr.getEvidenceTypeCode()), 0L);
                         return c >= (tr.getMinCount() != null ? tr.getMinCount() : 1);
@@ -142,12 +149,14 @@ public class StageProgressService {
                     String groupDisplayName = groupRows.stream().map(StageEvidenceTemplate::getDisplayName).collect(Collectors.joining("或"));
                     item.setGroupDisplayName(groupDisplayName);
 
-                    if (!groupIdsCounted.contains(g)) {
+                    if (participatingGroupRows.isEmpty()) {
+                        // 该组无参与项，不纳入完成度
+                    } else if (!groupIdsCounted.contains(g)) {
                         groupIdsCounted.add(g);
                         stageY += 1;
                         if (groupCompleted) stageX += 1;
                     }
-                    boolean groupRequired = groupRows.stream().anyMatch(tr -> Boolean.TRUE.equals(tr.getIsRequired()));
+                    boolean groupRequired = participatingGroupRows.stream().anyMatch(tr -> Boolean.TRUE.equals(tr.getIsRequired()));
                     if (groupRequired && !groupCompleted && !groupIdsMissingAdded.contains(g)) {
                         groupIdsMissingAdded.add(g);
                         if (keyMissing.size() < KEY_MISSING_MAX) keyMissing.add(groupDisplayName);
@@ -159,11 +168,15 @@ public class StageProgressService {
                         blockedByRequiredItems.add(blocked);
                     }
                 } else {
-                    stageY += 1;
-                    if (rowCompleted) stageX += 1;
+                    // min_count=0 的项（如「其他」）仅展示，不参与完成度分子分母，避免新项目即显示 6% 等
+                    boolean countsTowardCompletion = participates && (row.getMinCount() != null && row.getMinCount() > 0);
+                    if (countsTowardCompletion) {
+                        stageY += 1;
+                        if (rowCompleted) stageX += 1;
+                    }
                     item.setGroupCompleted(null);
                     item.setGroupDisplayName(null);
-                    if (Boolean.TRUE.equals(row.getIsRequired()) && !rowCompleted && !keyMissing.contains(row.getDisplayName())) {
+                    if (participates && Boolean.TRUE.equals(row.getIsRequired()) && !rowCompleted && !keyMissing.contains(row.getDisplayName())) {
                         if (keyMissing.size() < KEY_MISSING_MAX) keyMissing.add(row.getDisplayName());
                         int minC = row.getMinCount() != null ? row.getMinCount() : 1;
                         int shortfall = Math.max(0, minC - (int) currentCount);
@@ -181,8 +194,39 @@ public class StageProgressService {
             totalY += stageY;
             totalX += stageX;
 
-            int completionPercent = stageY == 0 ? 100 : Math.round(stageX * 100f / stageY);
-            String healthStatus = (stageX == stageY && stageY > 0) ? "COMPLETE" : (stageX == 0 && stageY > 0) ? "NOT_STARTED" : "PARTIAL";
+            // 当阶段无必填/计项（stageY==0）时，用「展示用」的实际上传数量与状态，与列表内子项一致
+            int displayY = stageY;
+            int displayX = stageX;
+            if (stageY == 0 && !rows.isEmpty()) {
+                Set<String> displayGroupCounted = new HashSet<>();
+                for (StageEvidenceTemplate row : rows) {
+                    if (row.getRuleGroup() != null && !row.getRuleGroup().isBlank()) {
+                        String g = row.getRuleGroup();
+                        if (!displayGroupCounted.contains(g)) {
+                            displayGroupCounted.add(g);
+                            displayY += 1;
+                            List<StageEvidenceTemplate> groupRows = byGroup.get(g);
+                            int satisfied = (int) groupRows.stream().filter(tr -> {
+                                long c = countKeyToCnt.getOrDefault(key(tr.getStageId(), tr.getEvidenceTypeCode()), 0L);
+                                return c >= (tr.getMinCount() != null ? tr.getMinCount() : 1);
+                            }).count();
+                            int required = groupRows.get(0).getGroupRequiredCount() != null ? groupRows.get(0).getGroupRequiredCount() : 1;
+                            if (satisfied >= required) displayX += 1;
+                        }
+                    } else {
+                        displayY += 1;
+                        long c = countKeyToCnt.getOrDefault(key(row.getStageId(), row.getEvidenceTypeCode()), 0L);
+                        if (c >= (row.getMinCount() != null ? row.getMinCount() : 1)) displayX += 1;
+                    }
+                }
+            }
+
+            int completionPercent = stageY == 0
+                    ? (displayY == 0 ? 100 : Math.round(displayX * 100f / displayY))
+                    : Math.round(stageX * 100f / stageY);
+            String healthStatus = stageY == 0
+                    ? (displayY == 0 ? "NOT_STARTED" : (displayX == displayY) ? "COMPLETE" : (displayX == 0) ? "NOT_STARTED" : "PARTIAL")
+                    : (stageX == stageY) ? "COMPLETE" : (stageX == 0) ? "NOT_STARTED" : "PARTIAL";
             ProjectStage ps = stageIdToProjectStage.get(stage.getId());
             boolean stageCompleted = ps != null && STATUS_COMPLETED.equals(ps.getStatus());
             boolean canComplete = (stageX == stageY);
@@ -194,6 +238,10 @@ public class StageProgressService {
             vo.setStageDescription(stage.getDescription());
             vo.setItemCount(stageY);
             vo.setCompletedCount(stageX);
+            if (stageY == 0 && displayY > 0) {
+                vo.setDisplayItemCount(displayY);
+                vo.setDisplayCompletedCount(displayX);
+            }
             vo.setCompletionPercent(completionPercent);
             vo.setHealthStatus(healthStatus);
             vo.setStageCompleted(stageCompleted);
@@ -203,23 +251,22 @@ public class StageProgressService {
         }
 
         int overallPercent = totalY == 0 ? 100 : Math.round(totalX * 100f / totalY);
-        boolean allStages100 = stageVOList.stream().allMatch(s -> s.getCompletedCount() == s.getItemCount() && s.getItemCount() > 0);
-        boolean allStagesMarkedCompleted = stageVOList.stream().allMatch(StageVO::isStageCompleted);
+        // 无计项阶段（itemCount==0，如 S2 在无采购时）不参与归档条件
+        boolean allStages100 = stageVOList.stream().allMatch(s -> s.getItemCount() == 0 || (s.getCompletedCount() == s.getItemCount() && s.getItemCount() > 0));
         boolean notArchived = !STATUS_ARCHIVED.equals(project.getStatus());
-        boolean canArchive = notArchived && allStages100 && allStagesMarkedCompleted && keyMissing.isEmpty();
+        // 证据完成度 100% 且无关键缺失即可申请归档，不再要求「标记阶段完成」
+        boolean canArchive = notArchived && allStages100 && keyMissing.isEmpty();
 
         String archiveBlockReason = null;
         List<String> blockedByStages = new ArrayList<>();
         if (!canArchive && notArchived) {
             if (!keyMissing.isEmpty()) {
                 archiveBlockReason = "缺少关键证据，不可归档：" + String.join("、", keyMissing.subList(0, Math.min(3, keyMissing.size())));
-            } else if (!allStagesMarkedCompleted) {
-                archiveBlockReason = "存在未标记完成的阶段，不可归档";
             } else if (!allStages100) {
                 archiveBlockReason = "存在阶段未满足完成条件，不可归档";
             }
             for (StageVO s : stageVOList) {
-                if (!s.isStageCompleted() || s.getCompletedCount() < s.getItemCount()) {
+                if (s.getCompletedCount() < s.getItemCount()) {
                     blockedByStages.add(s.getStageCode());
                 }
             }

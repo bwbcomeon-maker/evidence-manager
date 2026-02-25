@@ -40,6 +40,16 @@ public class EvidenceListItemVO {
     private String evidenceTypeCode;
 
     /**
+     * 所属阶段名称（delivery_stage.name），用于列表/归档确认等展示路径
+     */
+    private String stageName;
+
+    /**
+     * 证据类型展示名（stage_evidence_template.display_name），用于列表/归档确认等展示路径
+     */
+    private String evidenceTypeDisplayName;
+
+    /**
      * 备注（上传时填写）
      */
     private String note;

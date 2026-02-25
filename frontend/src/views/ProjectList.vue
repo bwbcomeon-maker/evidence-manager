@@ -64,6 +64,11 @@
               placeholder="选填"
               rows="2"
             />
+            <van-field name="hasProcurement" label="是否含采购">
+              <template #input>
+                <van-switch v-model="createForm.hasProcurement" size="22" />
+              </template>
+            </van-field>
           </van-cell-group>
           <div class="form-actions">
             <van-button block type="primary" native-type="submit" :loading="createLoading">创建</van-button>
@@ -101,7 +106,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag } from 'vant'
+import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Switch } from 'vant'
 import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, type ProjectVO, type ProjectImportResult } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
@@ -136,7 +141,7 @@ const listError = ref('')
 
 const showCreate = ref(false)
 const createLoading = ref(false)
-const createForm = ref({ code: '', name: '', description: '' })
+const createForm = ref({ code: '', name: '', description: '', hasProcurement: true })
 
 const showImport = ref(false)
 const importFile = ref<File | null>(null)
@@ -232,7 +237,8 @@ const onCreateSubmit = async () => {
     const res = await createProject({
       code,
       name,
-      description: createForm.value.description?.trim() || undefined
+      description: createForm.value.description?.trim() || undefined,
+      hasProcurement: createForm.value.hasProcurement
     })
     if (res?.code !== 0) {
       showToast(res?.message || (res?.code === 403 ? '仅管理员或 PMO 可创建项目' : '创建失败'))
@@ -246,7 +252,7 @@ const onCreateSubmit = async () => {
       return
     }
     showCreate.value = false
-    createForm.value = { code: '', name: '', description: '' }
+    createForm.value = { code: '', name: '', description: '', hasProcurement: true }
     projects.value = [
       { id: data.id, code: data.code ?? code, name: data.name ?? name, description: data.description ?? '', status: data.status ?? 'active', currentPmDisplayName: data.currentPmDisplayName },
       ...projects.value

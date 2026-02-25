@@ -45,10 +45,12 @@ export interface EvidenceListItem {
   /** 作废人展示名（后端可选返回） */
   invalidByDisplayName?: string
   invalidAt?: string
-  /** 按阶段+模板项列表接口返回 */
+  /** 按阶段+模板项列表接口返回；归档确认弹窗用 stageName + evidenceTypeDisplayName 展示路径 */
   stageId?: number
   stageCode?: string
+  stageName?: string
   evidenceTypeCode?: string
+  evidenceTypeDisplayName?: string
   latestVersion: {
     versionId: number
     versionNo: number
@@ -72,6 +74,8 @@ export const getEvidencesByStageType = (
 export interface EvidenceListParams {
   nameLike?: string
   status?: string
+  /** 证据状态筛选，与后端 evidenceStatus 参数对应 */
+  evidenceStatus?: string
   bizType?: string
   contentType?: string
 }
@@ -128,7 +132,8 @@ export const getEvidenceById = (id: number) => {
 
 // 证据状态流转
 export const submitEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/submit`)
-export const archiveEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/archive`)
+/** 草稿证据物理删除（仅 DRAFT 可删） */
+export const deleteEvidence = (id: number) => http.delete<{ code: number; message: string }>(`/evidence/${id}`)
 export const invalidateEvidence = (id: number, invalidReason: string) =>
   http.post<{ code: number; message: string }>(`/evidence/${id}/invalidate`, { invalidReason })
 

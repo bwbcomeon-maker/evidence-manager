@@ -8,6 +8,7 @@ import com.bwbcomeon.evidence.dto.BatchAddProjectMembersRequest;
 import com.bwbcomeon.evidence.dto.BatchAssignResult;
 import com.bwbcomeon.evidence.dto.BatchAssignUserToProjectsRequest;
 import com.bwbcomeon.evidence.dto.CreateProjectRequest;
+import com.bwbcomeon.evidence.dto.UpdateProjectRequest;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
@@ -27,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -96,6 +98,25 @@ public class ProjectController {
     }
 
     /**
+     * 更新项目部分字段（如「是否含采购」）
+     * PATCH /api/projects/{projectId}
+     * 请求体：{ hasProcurement?: boolean }，需具备管理成员权限
+     */
+    @PatchMapping("/{projectId}")
+    public Result<ProjectVO> updateProject(
+            HttpServletRequest request,
+            @PathVariable Long projectId,
+            @RequestBody @Valid UpdateProjectRequest body) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        ProjectVO vo = projectService.updateHasProcurement(
+                projectId, body.getHasProcurement(), user.getId(), user.getRoleCode());
+        return Result.success(vo);
+    }
+
+    /**
      * 创建项目
      * POST /api/projects
      * 请求体：code(项目令号,必填), name(必填), description(可选)
@@ -118,7 +139,8 @@ public class ProjectController {
                 user.getId(),
                 body.getCode(),
                 body.getName(),
-                body.getDescription());
+                body.getDescription(),
+                body.getHasProcurement());
         return Result.success(vo);
     }
 

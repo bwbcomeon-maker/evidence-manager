@@ -27,7 +27,7 @@
         <van-button type="primary" block icon="eye-o" @click="handlePreview">预览</van-button>
         <van-button type="primary" block plain icon="down" @click="handleDownload">下载</van-button>
         <van-button v-if="canSubmit" type="primary" block plain @click="handleSubmit">提交</van-button>
-        <van-button v-if="canArchive" type="primary" block plain @click="handleArchive">归档</van-button>
+        <van-button v-if="canDelete" type="danger" block plain icon="delete-o" @click="handleDelete">删除</van-button>
         <van-button v-if="canVoid" type="danger" block plain icon="warning-o" @click="handleVoid">作废</van-button>
       </div>
 
@@ -92,7 +92,7 @@ import {
   downloadVersionFile,
   getEvidenceById,
   submitEvidence,
-  archiveEvidence,
+  deleteEvidence,
   invalidateEvidence,
   BIZ_TYPE_LABELS,
   type EvidenceListItem
@@ -165,12 +165,11 @@ function invalidatorDisplayName(): string {
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
 const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
 
-/** V1：提交/归档/作废只读后端 permissions，兼容扁平 canInvalidate */
+/** 草稿可提交、可物理删除；已提交可作废；归档仅由项目申请归档执行，无单条归档 */
 const canSubmit = computed(() => effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
-const canArchive = computed(() => effectiveStatus.value === 'SUBMITTED' && (evidence.value?.permissions?.canArchive === true || evidence.value?.canInvalidate === true))
+const canDelete = computed(() => effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
 const canVoid = computed(() => {
-  const s = effectiveStatus.value
-  return (s === 'DRAFT' || s === 'SUBMITTED') && (evidence.value?.permissions?.canInvalidate === true || evidence.value?.canInvalidate === true)
+  return effectiveStatus.value === 'SUBMITTED' && (evidence.value?.permissions?.canInvalidate === true || evidence.value?.canInvalidate === true)
 })
 
 function initFromState() {
@@ -294,25 +293,26 @@ async function handleSubmit() {
   }
 }
 
-async function handleArchive() {
-  showConfirmDialog({ title: '确认归档', message: '归档后仅用于留存，是否继续？' })
-    .then(async () => {
-      try {
-        showLoadingToast({ message: '归档中...', forbidClick: true, duration: 0 })
-        const res = await archiveEvidence(evidenceId.value) as { code: number; message?: string }
-        if (res?.code === 0) {
-          showSuccessToast('已归档')
-          await fetchDetail()
-        } else {
-          showToast(res?.message || '归档失败')
-        }
-      } catch (e: any) {
-        showToast(e?.response?.data?.message || e?.message || '归档失败')
-      } finally {
-        closeToast()
-      }
-    })
-    .catch(() => {})
+async function handleDelete() {
+  try {
+    await showConfirmDialog({ title: '确认删除', message: '删除后不可恢复，是否继续？' })
+  } catch {
+    return
+  }
+  try {
+    showLoadingToast({ message: '删除中...', forbidClick: true, duration: 0 })
+    const res = await deleteEvidence(evidenceId.value) as { code: number; message?: string }
+    if (res?.code === 0) {
+      showSuccessToast('已删除')
+      router.back()
+    } else {
+      showToast(res?.message || '删除失败')
+    }
+  } catch (e: any) {
+    showToast(e?.response?.data?.message || e?.message || '删除失败')
+  } finally {
+    closeToast()
+  }
 }
 
 function handleVoid() {

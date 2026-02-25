@@ -10,6 +10,7 @@ import com.bwbcomeon.evidence.enums.EvidenceStatus;
 import com.bwbcomeon.evidence.entity.DeliveryStage;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import com.bwbcomeon.evidence.entity.EvidenceVersion;
+import com.bwbcomeon.evidence.entity.StageEvidenceTemplate;
 import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.Project;
@@ -273,6 +274,19 @@ public class EvidenceService {
             vo.setTitle(item.getTitle());
             vo.setStageId(item.getStageId());
             vo.setEvidenceTypeCode(item.getEvidenceTypeCode());
+            if (item.getStageId() != null) {
+                DeliveryStage stage = deliveryStageMapper.selectById(item.getStageId());
+                if (stage != null) {
+                    vo.setStageCode(stage.getCode());
+                    vo.setStageName(stage.getName());
+                }
+            }
+            if (item.getEvidenceTypeCode() != null && item.getStageId() != null) {
+                StageEvidenceTemplate template = stageEvidenceTemplateMapper.selectByStageIdAndEvidenceTypeCode(item.getStageId(), item.getEvidenceTypeCode());
+                if (template != null) {
+                    vo.setEvidenceTypeDisplayName(template.getDisplayName());
+                }
+            }
             vo.setContentType(item.getContentType());
             vo.setEvidenceStatus(item.getEvidenceStatus());
             vo.setCreatedByUserId(item.getCreatedByUserId());
@@ -544,23 +558,75 @@ public class EvidenceService {
     }
 
     /**
-     * 证据状态流转：归档（SUBMITTED -> ARCHIVED），仅项目责任人可操作（与 permissions 同源）
+     * 草稿证据物理删除（仅 DRAFT 可删；已提交/已归档不可物理删除）。
+     * 删除 evidence_item、所有 evidence_version 及磁盘文件。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void archiveEvidence(Long id, Long userId, String roleCode) {
+    public void deleteEvidence(Long id, Long userId, String roleCode) {
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
-        permissionUtil.checkCanArchive(item.getProjectId(), userId, roleCode);
-        String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : "SUBMITTED";
-        EvidenceStatus currentStatus = EvidenceStatus.fromCode(current);
-        currentStatus.validateTransition(EvidenceStatus.ARCHIVED);
-        OffsetDateTime now = OffsetDateTime.now();
-        int n = evidenceItemMapper.updateEvidenceStatus(id, EvidenceStatus.ARCHIVED.getCode(), now, null, currentStatus.getCode());
-        if (n == 0) throw new BusinessException(400, "证据状态已变更，请刷新后重试");
+        if (!EvidenceStatus.DRAFT.getCode().equals(item.getEvidenceStatus())) {
+            throw new BusinessException(400, "仅草稿状态的证据可物理删除，已提交的证据只能作废");
+        }
+        permissionUtil.checkCanSubmit(item.getProjectId(), userId, roleCode);
+        List<EvidenceVersion> versions = evidenceVersionMapper.selectByEvidenceId(id);
+        Path basePathNormalized = Paths.get(basePath).normalize();
+        for (EvidenceVersion v : versions) {
+            String fp = v.getFilePath();
+            if (fp != null && !fp.isBlank()) {
+                Path fullPath = Paths.get(basePath, fp).normalize();
+                if (fullPath.startsWith(basePathNormalized)) {
+                    fileStorageUtil.deleteFile(fullPath);
+                }
+            }
+            evidenceVersionMapper.deleteById(v.getId());
+        }
+        evidenceItemMapper.deleteById(id);
     }
 
     /**
-     * 证据状态流转：作废（DRAFT 或 SUBMITTED -> INVALID），仅项目责任人可操作，必填作废原因
+     * 单条证据归档已废弃：归档统一由项目「申请归档」执行。
+     * @deprecated 仅保留方法签名，调用将抛出异常
+     */
+    @Deprecated
+    public void archiveEvidence(Long id, Long userId, String roleCode) {
+        throw new BusinessException(400, "归档仅通过项目「申请归档」执行，不支持单条证据归档");
+    }
+
+    /**
+     * 项目归档时：将该项目下所有草稿证据先转为已提交，再将该项目下所有「已提交」证据（含刚转的草稿）统一转为已归档。
+     * 由 ProjectService.archive 在通过门禁后、更新 project.status 之后调用，不做权限校验。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void batchConvertDraftToArchivedOnProjectArchive(Long projectId) {
+        List<EvidenceItem> drafts = evidenceItemMapper.selectByProjectIdAndEvidenceStatus(projectId, EvidenceStatus.DRAFT.getCode());
+        for (EvidenceItem item : drafts) {
+            evidenceItemMapper.updateEvidenceStatus(
+                    item.getId(),
+                    EvidenceStatus.SUBMITTED.getCode(),
+                    null,
+                    null,
+                    EvidenceStatus.DRAFT.getCode()
+            );
+        }
+        List<EvidenceItem> submitted = evidenceItemMapper.selectByProjectIdAndEvidenceStatus(projectId, EvidenceStatus.SUBMITTED.getCode());
+        if (submitted.isEmpty()) {
+            return;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        for (EvidenceItem item : submitted) {
+            evidenceItemMapper.updateEvidenceStatus(
+                    item.getId(),
+                    EvidenceStatus.ARCHIVED.getCode(),
+                    now,
+                    null,
+                    EvidenceStatus.SUBMITTED.getCode()
+            );
+        }
+    }
+
+    /**
+     * 证据状态流转：作废（仅 SUBMITTED -> INVALID），仅项目责任人可操作，必填作废原因；草稿不可作废，只能删除或提交
      *
      * @return 审计用快照信息（projectId, beforeData, afterData）
      */

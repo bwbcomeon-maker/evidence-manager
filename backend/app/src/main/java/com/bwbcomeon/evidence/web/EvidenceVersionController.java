@@ -89,21 +89,21 @@ public class EvidenceVersionController {
     }
 
     /**
-     * 证据状态流转：归档（SUBMITTED -> ARCHIVED）
-     * POST /api/evidence/{id}/archive
+     * 草稿证据物理删除（仅 DRAFT 可删；已提交/已归档不可物理删除，只能作废）
+     * DELETE /api/evidence/{id}
      */
-    @PostMapping("/{id}/archive")
-    public Result<Void> archiveEvidence(
+    @DeleteMapping("/{id}")
+    public Result<Void> deleteEvidence(
             HttpServletRequest request,
             @PathVariable Long id) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) return Result.error(401, "未登录");
-        evidenceService.archiveEvidence(id, user.getId(), user.getRoleCode());
+        evidenceService.deleteEvidence(id, user.getId(), user.getRoleCode());
         return Result.success(null);
     }
 
     /**
-     * 证据状态流转：作废（DRAFT/SUBMITTED -> INVALID），仅项目责任人可操作，请求体需传 invalidReason
+     * 证据状态流转：作废（仅 SUBMITTED -> INVALID），仅项目责任人可操作，请求体需传 invalidReason；草稿不可作废，只能删除或提交
      * POST /api/evidence/{id}/invalidate
      */
     @PostMapping("/{id}/invalidate")
