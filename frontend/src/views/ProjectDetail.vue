@@ -1,25 +1,53 @@
 <template>
   <div class="project-detail">
     <div class="content">
-      <van-tabs v-model:active="activeTab" sticky>
-        <!-- 详情 Tab -->
+      <!-- 顶部摘要卡片：项目名称、状态胶囊、核心负责人 -->
+      <div v-if="project && !projectLoading" class="detail-header-card">
+        <h1 class="detail-header-title">{{ project.name }}</h1>
+        <div class="detail-header-meta">
+          <span class="detail-header-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
+            {{ project.status === 'active' ? '进行中' : '已归档' }}
+          </span>
+          <span v-if="project.currentPmDisplayName" class="detail-header-responsible">负责人：{{ project.currentPmDisplayName }}</span>
+        </div>
+      </div>
+
+      <!-- 分段控制器：详情 / 证据 -->
+      <div class="segmented-control">
+        <button type="button" class="segmented-item" :class="{ active: activeTab === 0 }" @click="activeTab = 0">基本信息</button>
+        <button type="button" class="segmented-item" :class="{ active: activeTab === 1 }" @click="activeTab = 1">证据管理</button>
+      </div>
+
+      <van-tabs v-model:active="activeTab" sticky class="tabs-custom-nav">
         <van-tab title="详情">
           <van-loading v-if="projectLoading" class="detail-loading" vertical>加载中...</van-loading>
           <van-empty v-else-if="projectError" :description="projectError" />
           <template v-else-if="project">
-            <van-cell-group>
-              <van-cell title="项目令号" :value="project.code" />
-              <van-cell title="项目名称" :value="project.name" />
-              <van-cell title="项目描述" :value="project.description" />
-              <van-cell title="项目状态">
-                <template #value>
-                  <van-tag :type="project.status === 'active' ? 'success' : 'default'">
+            <!-- 信息列表区：左右布局，字段名置灰，数据加深，分割线 -->
+            <div class="info-card">
+              <div class="info-row">
+                <span class="info-label">项目令号</span>
+                <span class="info-value">{{ project.code }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">项目名称</span>
+                <span class="info-value">{{ project.name }}</span>
+              </div>
+              <div class="info-row" v-if="project.description">
+                <span class="info-label">项目描述</span>
+                <span class="info-value">{{ project.description }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">项目状态</span>
+                <span class="info-value">
+                  <span class="info-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
                     {{ project.status === 'active' ? '进行中' : '已归档' }}
-                  </van-tag>
-                </template>
-              </van-cell>
-              <van-cell title="是否含采购">
-                <template #value>
+                  </span>
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">是否含采购</span>
+                <span class="info-value">
                   <van-switch
                     v-if="project.canManageMembers && project.status !== 'archived'"
                     :model-value="project.hasProcurement"
@@ -27,10 +55,13 @@
                     @update:model-value="onHasProcurementChange"
                   />
                   <span v-else>{{ project.hasProcurement ? '是' : '否' }}</span>
-                </template>
-              </van-cell>
-              <van-cell title="创建时间" :value="project.createdAt" />
-            </van-cell-group>
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">创建时间</span>
+                <span class="info-value">{{ project.createdAt }}</span>
+              </div>
+            </div>
             <!-- 证据完成度（详情页也展示） -->
             <div v-if="stageProgress" class="stage-progress-header detail-tab-progress">
               <div class="completion-row">
@@ -130,7 +161,7 @@
                     :key="item.evidenceTypeCode + '-' + idx"
                     class="evidence-card"
                   >
-                    <!-- 卡片标题行 -->
+                    <!-- 卡片标题行：大点击区域列表项，右侧状态透出 + 箭头 -->
                     <div class="evidence-card-header">
                       <div class="evidence-card-title">
                         <span class="card-name">{{ item.groupDisplayName || item.displayName }}</span>
@@ -138,12 +169,10 @@
                         <van-tag v-else type="default" size="mini">选填</van-tag>
                       </div>
                       <div class="evidence-card-status">
-                        <!-- minCount=0 为选填项，不显示 0/0 已完成，改为「选填」 -->
-                        <span class="card-count">{{ (item.minCount ?? 1) === 0 ? '选填' : `${item.uploadCount ?? item.currentCount}/${item.minCount}` }}</span>
-                        <van-tag v-if="(item.minCount ?? 1) === 0" type="default" size="mini">选填</van-tag>
-                        <van-tag v-else-if="item.completed || item.groupCompleted" type="success" size="mini">已完成</van-tag>
-                        <van-tag v-else-if="(item.uploadCount ?? item.currentCount) > 0 && !item.completed" type="primary" size="mini">待提交</van-tag>
-                        <van-tag v-else type="warning" size="mini">待上传</van-tag>
+                        <span class="card-status-text" :class="{ 'status--pending': (item.minCount ?? 1) > 0 && (item.uploadCount ?? item.currentCount) === 0 }">
+                          {{ (item.minCount ?? 1) === 0 ? `选填（已 ${item.uploadCount ?? item.currentCount} 份）` : `已 ${item.uploadCount ?? item.currentCount} / 需 ${item.minCount ?? 1} 份` }}
+                        </span>
+                        <van-icon name="arrow" class="card-arrow" />
                       </div>
                     </div>
                     <!-- 3列网格：缩略图/文件图标 + 上传入口 -->
@@ -156,25 +185,27 @@
                           class="grid-item"
                           @click="goToEvidenceDetail(ev.evidenceId)"
                         >
-                          <!-- 图片缩略图 -->
-                          <div v-if="isImageType(ev.contentType) && ev.latestVersion" class="grid-thumb">
+                          <!-- 图片缩略图：圆角、cover，右上角删除图标 -->
+                          <div v-if="isImageType(ev.contentType) && ev.latestVersion" class="grid-thumb" @click.stop="goToEvidenceDetail(ev.evidenceId)">
                             <img :src="`/api/evidence/versions/${ev.latestVersion.versionId}/download`" :alt="ev.title" />
                             <div class="grid-thumb-overlay">
                               <van-tag :type="evidenceListStatusTagType(ev)" size="mini">{{ evidenceListStatusText(ev) }}</van-tag>
                             </div>
+                            <button type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
-                          <!-- 非图片：按文件类型展示图标+颜色 -->
-                          <div v-else class="grid-file" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }">
+                          <!-- 非图片：文档类列表式展示，左侧图标、中间文件名、右侧删除 -->
+                          <div v-else class="grid-file" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }" @click.stop="goToEvidenceDetail(ev.evidenceId)">
                             <span class="grid-file-type-badge" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).color }">
                               {{ getFileIconConfig(getEvidenceFileName(ev)).label }}
                             </span>
                             <van-icon
                               :name="getFileIconConfig(getEvidenceFileName(ev)).icon"
-                              size="32"
+                              size="28"
                               :color="getFileIconConfig(getEvidenceFileName(ev)).color"
                             />
                             <span class="grid-file-name">{{ ev.latestVersion?.originalFilename || ev.title }}</span>
                             <van-tag :type="evidenceListStatusTagType(ev)" size="mini">{{ evidenceListStatusText(ev) }}</van-tag>
+                            <button type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                         </div>
                         <!-- 上传入口：虚线框 + 号 -->
@@ -649,6 +680,37 @@ function closeUploadDialog() {
 // 跳转证据详情
 function goToEvidenceDetail(id: number) {
   router.push({ path: `/evidence/detail/${id}`, query: { fromProject: String(projectId.value) } })
+}
+
+/** 网格内删除/作废证据：草稿物理删除，已提交则作废；刷新当前类别列表 */
+async function onDeleteEvidence(ev: EvidenceListItem, stage?: StageVO, evidenceItem?: StageItemVO) {
+  const id = ev.evidenceId
+  const status = getEffectiveEvidenceStatus(ev)
+  try {
+    if (status === 'DRAFT') {
+      await showConfirmDialog({ title: '确认删除', message: '删除后不可恢复，确定继续？' })
+      const res = (await deleteEvidence(id)) as { code: number; message?: string }
+      if (res?.code === 0) {
+        showToast('已删除')
+        if (stage?.stageCode && evidenceItem?.evidenceTypeCode) loadEvidenceForItem(stage.stageCode, evidenceItem.evidenceTypeCode)
+        loadStageProgress()
+      } else {
+        showToast(res?.message || '删除失败')
+      }
+    } else {
+      await showConfirmDialog({ title: '确认作废', message: '作废后不可恢复，确定继续？' })
+      const res = (await invalidateEvidence(id, '用户从项目证据列表作废')) as { code: number; message?: string }
+      if (res?.code === 0) {
+        showToast('已作废')
+        if (stage?.stageCode && evidenceItem?.evidenceTypeCode) loadEvidenceForItem(stage.stageCode, evidenceItem.evidenceTypeCode)
+        loadStageProgress()
+      } else {
+        showToast(res?.message || '作废失败')
+      }
+    }
+  } catch {
+    // 用户取消
+  }
 }
 
 function goToMembers() {
@@ -1390,10 +1452,142 @@ onMounted(() => {
 <style scoped>
 .project-detail {
   min-height: 100vh;
+  background: var(--bg-body);
 }
 
 .content {
-  padding: 0;
+  padding: 0 16px 24px;
+}
+
+/* ---------- 顶部摘要卡片 ---------- */
+.detail-header-card {
+  background: var(--bg-card);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  padding: 20px 16px;
+  margin-bottom: 12px;
+}
+.detail-header-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0 0 12px 0;
+  line-height: 1.3;
+}
+.detail-header-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.detail-header-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.detail-header-badge.badge--active {
+  background: rgba(0, 122, 255, 0.12);
+  color: var(--primary-color);
+}
+.detail-header-badge.badge--archived {
+  background: #ebedf0;
+  color: var(--app-text-secondary);
+}
+.detail-header-responsible {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+/* ---------- 分段控制器 ---------- */
+.segmented-control {
+  display: flex;
+  background: var(--bg-card);
+  border-radius: var(--app-card-radius);
+  padding: 4px;
+  margin-bottom: 12px;
+  box-shadow: var(--app-card-shadow);
+}
+.segmented-item {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--app-text-secondary);
+  position: relative;
+  border-radius: 10px;
+  transition: color 0.2s, font-weight 0.2s;
+}
+.segmented-item.active {
+  color: var(--primary-color);
+  font-weight: 600;
+  background: rgba(0, 122, 255, 0.08);
+}
+.segmented-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--primary-color);
+}
+
+/* 隐藏默认 Tab 栏，仅保留内容 */
+.tabs-custom-nav :deep(.van-tabs__nav) {
+  display: none;
+}
+.tabs-custom-nav :deep(.van-tabs__content) {
+  margin-top: 0;
+}
+
+/* ---------- 信息列表区（左右布局、分割线） ---------- */
+.info-card {
+  background: var(--bg-card);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid #ebedf0;
+}
+.info-row:last-child {
+  border-bottom: none;
+}
+.info-label {
+  font-size: 14px;
+  color: var(--app-text-secondary);
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+.info-value {
+  font-size: 14px;
+  color: var(--text-main);
+  text-align: right;
+  word-break: break-all;
+}
+.info-badge {
+  padding: 2px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.info-badge.badge--active {
+  background: rgba(0, 122, 255, 0.12);
+  color: var(--primary-color);
+}
+.info-badge.badge--archived {
+  background: #ebedf0;
+  color: var(--app-text-secondary);
 }
 
 .members-section {
@@ -1419,7 +1613,7 @@ onMounted(() => {
 }
 
 .evidence-section {
-  padding: 16px;
+  padding: 0;
 }
 
 .upload-file-section {
@@ -1542,9 +1736,10 @@ onMounted(() => {
 /* 阶段进度顶部（证据 Tab + 详情 Tab 共用） */
 .stage-progress-header {
   padding: 12px 16px;
-  background: var(--van-gray-1);
-  border-radius: 8px;
-  margin: 12px 16px;
+  background: var(--bg-card);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  margin: 0 0 12px 0;
 }
 .detail-tab-progress {
   margin-top: 16px;
@@ -1593,7 +1788,7 @@ onMounted(() => {
 
 /* 阶段折叠 */
 .stage-collapse {
-  margin: 0 16px 16px;
+  margin: 0 0 16px 0;
 }
 .stage-title-row {
   display: flex;
@@ -1616,26 +1811,30 @@ onMounted(() => {
   gap: 12px;
 }
 .evidence-card {
-  background: #fff;
-  border: 1px solid var(--van-gray-3);
-  border-radius: 10px;
-  padding: 12px;
+  background: var(--bg-card);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  padding: 14px 16px;
+  border: none;
 }
 .evidence-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  min-height: 44px;
 }
 .evidence-card-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
 }
 .card-name {
-  color: var(--van-text-color);
+  color: var(--text-main);
 }
 .card-required {
   flex-shrink: 0;
@@ -1646,9 +1845,20 @@ onMounted(() => {
   gap: 6px;
   flex-shrink: 0;
 }
+.card-status-text {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+.card-status-text.status--pending {
+  color: #ee0a24;
+}
+.card-arrow {
+  color: var(--app-text-secondary);
+  font-size: 14px;
+}
 .card-count {
   font-size: 13px;
-  color: var(--van-gray-6);
+  color: var(--app-text-secondary);
 }
 /* 固定 112px 方块 + flex-wrap 自动排列 */
 .evidence-card-grid {
@@ -1675,6 +1885,10 @@ onMounted(() => {
   height: 100%;
   position: relative;
 }
+.grid-thumb {
+  border-radius: 10px;
+  overflow: hidden;
+}
 .grid-thumb img {
   width: 100%;
   height: 100%;
@@ -1690,6 +1904,25 @@ onMounted(() => {
   background: linear-gradient(transparent, rgba(0,0,0,0.4));
   display: flex;
   justify-content: flex-end;
+}
+.grid-thumb-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  cursor: pointer;
+}
+.grid-thumb-delete:active {
+  background: rgba(0, 0, 0, 0.7);
 }
 .grid-file {
   position: relative;
@@ -1718,7 +1951,7 @@ onMounted(() => {
 }
 .grid-file-name {
   font-size: 10px;
-  color: var(--van-gray-7);
+  color: var(--text-main);
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1727,6 +1960,25 @@ onMounted(() => {
   display: block;
   margin-top: 2px;
   font-weight: 500;
+}
+.grid-file-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  cursor: pointer;
+}
+.grid-file-delete:active {
+  background: rgba(0, 0, 0, 0.6);
 }
 /* 上传入口：虚线框 */
 .grid-upload-btn {
@@ -1742,8 +1994,9 @@ onMounted(() => {
 }
 .grid-upload-text {
   font-size: 12px;
-  color: var(--van-gray-5);
+  color: var(--app-text-secondary);
 }
+
 .upload-context-cell {
   background: var(--van-gray-1);
 }

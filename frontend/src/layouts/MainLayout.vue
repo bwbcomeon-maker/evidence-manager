@@ -13,7 +13,6 @@
       <router-view :key="route.fullPath" />
     </main>
     <van-tabbar v-if="showTabbar" v-model="activeTab" placeholder class="main-tabbar" @change="onTabChange">
-      <van-tabbar-item name="home" icon="home-o">首页</van-tabbar-item>
       <van-tabbar-item name="projects" icon="apps-o">项目</van-tabbar-item>
       <van-tabbar-item name="evidence" icon="description">证据</van-tabbar-item>
       <van-tabbar-item name="me" icon="user-o">我的</van-tabbar-item>
@@ -39,31 +38,29 @@ const showTabbar = computed(() => !!route.meta.showTabbar)
 /** 为 true 时由页面自绘导航栏，布局不渲染顶部栏（避免成员管理等页出现双栏） */
 const hideLayoutNav = computed(() => !!route.meta.hideLayoutNav)
 
-/** 由路由 path 推导当前 Tab（单一真相源），使 /evidence、/evidence/by-project 等均高亮「证据」 */
-const activeTab = ref<'home' | 'projects' | 'evidence' | 'me'>('home')
+/** 由路由 path 推导当前 Tab（单一真相源），默认主页为「项目」 */
+const activeTab = ref<'projects' | 'evidence' | 'me'>('projects')
 watch(
   () => route.path,
   (path) => {
     if (path.startsWith('/projects')) activeTab.value = 'projects'
     else if (path.startsWith('/evidence')) activeTab.value = 'evidence'
     else if (path.startsWith('/me')) activeTab.value = 'me'
-    else activeTab.value = 'home'
   },
   { immediate: true }
 )
 const tabPathMap: Record<string, string> = {
-  home: '/home',
   projects: '/projects',
   evidence: '/evidence',
   me: '/me'
 }
 function onTabChange(nameOrIndex: string | number) {
-  const tabNames = ['home', 'projects', 'evidence', 'me'] as const
+  const tabNames = ['projects', 'evidence', 'me'] as const
   const name = typeof nameOrIndex === 'number' ? tabNames[nameOrIndex] : nameOrIndex
   const path = tabPathMap[name]
   if (!path) return
   activeTab.value = name
-  if (route.path !== path) router.push(path)
+  if (route.path !== path && !route.path.startsWith(path + '/')) router.push(path)
 }
 
 function onBack() {
@@ -85,7 +82,7 @@ function onBack() {
   if (window.history.length > 1) {
     router.back()
   } else {
-    const fallback = route.path.startsWith('/evidence') && route.path !== '/evidence' ? '/evidence' : '/home'
+    const fallback = route.path.startsWith('/evidence') && route.path !== '/evidence' ? '/evidence' : '/projects'
     router.replace(fallback)
   }
 }
@@ -96,20 +93,24 @@ function onBack() {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f7f8fa;
+  background: var(--app-bg, #F5F7FA);
 }
 .layout-content {
   flex: 1;
   min-height: 0;
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
-/* 有 Tabbar 时预留底部高度，避免空态/列表内容覆盖 Tabbar 导致点击被吞 */
 .layout-content--with-tabbar {
-  padding-bottom: calc(var(--van-tabbar-height, 50px) + env(safe-area-inset-bottom, 0));
+  padding-bottom: calc(var(--app-tabbar-height, 60px) + env(safe-area-inset-bottom, 0));
 }
-/* 保证 Tabbar 始终在内容层之上，避免空态区域遮挡（Vant 默认 z-index 仅 1） */
 .main-tabbar {
   z-index: 10;
+  min-height: var(--app-tabbar-height, 60px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.main-tabbar :deep(.van-tabbar-item) {
+  min-height: 60px;
+  padding: 8px 0;
 }
 /* 返回文字强化：仅字重，不新增颜色/阴影 */
 :deep(.van-nav-bar__text) {

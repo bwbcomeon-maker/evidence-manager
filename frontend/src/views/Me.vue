@@ -1,11 +1,38 @@
 <template>
   <div class="me-page">
-    <van-cell-group inset>
-      <van-cell v-if="auth.currentUser" :title="auth.currentUser.realName || auth.currentUser.username" :label="`@${auth.currentUser.username} · ${roleLabel(auth.currentUser.roleCode)}`" />
-      <van-cell v-if="auth.isAdmin" title="用户管理" is-link to="/admin/users" />
-      <van-cell title="修改密码" is-link @click="showChangePwd = true" />
-      <van-cell title="退出登录" is-link @click="onLogout" />
-    </van-cell-group>
+    <!-- 用户信息卡片 -->
+    <div class="me-card" v-if="auth.currentUser">
+      <div class="me-user-row">
+        <span class="me-user-name">{{ auth.currentUser.realName || auth.currentUser.username }}</span>
+        <span class="me-user-meta">@{{ auth.currentUser.username }} · {{ roleLabel(auth.currentUser.roleCode) }}</span>
+      </div>
+    </div>
+
+    <!-- 分组列表：白色圆角卡片，左侧图标 + 右侧箭头 + 底部分割线 -->
+    <div class="me-card me-card--list">
+      <van-cell
+        v-if="auth.isAdmin"
+        title="用户管理"
+        icon="manager-o"
+        is-link
+        to="/admin/users"
+        class="me-cell"
+      />
+      <van-cell
+        title="修改密码"
+        icon="lock"
+        is-link
+        class="me-cell"
+        @click="showChangePwd = true"
+      />
+      <van-cell
+        title="退出登录"
+        icon="warning-o"
+        is-link
+        class="me-cell me-cell--last"
+        @click="onLogout"
+      />
+    </div>
 
     <van-dialog
       v-model:show="showChangePwd"
@@ -190,8 +217,55 @@ async function onLogout() {
 
 <style scoped>
 .me-page {
-  padding: 16px 0;
+  padding: 16px;
   min-height: 100vh;
+  background: var(--app-bg);
+}
+
+.me-card {
+  background: var(--app-card);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.me-user-row {
+  padding: 16px;
+  min-height: var(--app-tap-min-height);
+}
+.me-user-name {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #323233;
+}
+.me-user-meta {
+  display: block;
+  font-size: 13px;
+  color: #969799;
+  margin-top: 4px;
+}
+
+.me-card--list :deep(.van-cell) {
+  min-height: var(--app-tap-min-height);
+  padding: 0 16px;
+}
+.me-card--list :deep(.van-cell::after) {
+  border-bottom: 1px solid #ebedf0;
+  left: 16px;
+  right: 0;
+}
+.me-cell.me-cell--last :deep(.van-cell::after),
+.me-card--list :deep(.van-cell:last-child::after) {
+  display: none;
+}
+.me-card--list :deep(.van-cell__left-icon) {
+  margin-right: 12px;
+  color: var(--app-primary);
+}
+.me-card--list :deep(.van-cell__right-icon) {
+  color: #c8c9cc;
 }
 
 .pwd-toggle-icon {

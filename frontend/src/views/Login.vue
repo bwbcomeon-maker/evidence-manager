@@ -2,40 +2,39 @@
   <div class="login-page">
     <van-nav-bar title="登录" />
     <div class="content">
-      <van-form @submit="onSubmit">
-        <van-cell-group inset>
-          <van-field
-            v-model="username"
-            name="username"
-            label="账号"
-            placeholder="请输入登录账号"
-            :rules="[{ required: true, message: '请输入登录账号' }]"
-          />
-          <van-field
-            v-model="password"
-            type="password"
-            name="password"
-            label="密码"
-            placeholder="请输入密码"
-            :rules="[{ required: true, message: '请输入密码' }]"
-          />
-          <van-cell center>
-            <van-checkbox v-model="rememberMe" shape="square">记住用户名和密码</van-checkbox>
-          </van-cell>
-        </van-cell-group>
-        <div class="submit-wrap">
-          <van-button round block type="primary" native-type="submit" :loading="loading">
-            登录
-          </van-button>
-        </div>
-      </van-form>
+      <div class="login-card">
+        <van-form @submit="onSubmit">
+          <van-cell-group inset>
+            <van-field
+              v-model="username"
+              name="username"
+              label="账号"
+              placeholder="请输入登录账号"
+              :rules="[{ required: true, message: '请输入登录账号' }]"
+            />
+            <van-field
+              v-model="password"
+              type="password"
+              name="password"
+              label="密码"
+              placeholder="请输入密码"
+              :rules="[{ required: true, message: '请输入密码' }]"
+            />
+            <van-cell center>
+              <van-checkbox v-model="rememberMe" shape="square">记住用户名和密码</van-checkbox>
+            </van-cell>
+          </van-cell-group>
+          <div class="submit-wrap">
+            <van-button round block type="primary" native-type="submit" :loading="loading" class="login-btn">
+              登录
+            </van-button>
+          </div>
+        </van-form>
+      </div>
     </div>
 
-    <!-- 手机测试：右下角悬浮按钮 -->
-    <div class="qr-float-btn" @click="openQrPopup">
-      <van-icon name="scan" size="20" />
-      <span class="qr-float-text">手机测试</span>
-    </div>
+    <!-- 手机测试：右下角轻量文字按钮 -->
+    <button type="button" class="qr-float-btn" @click="openQrPopup">手机测试</button>
 
     <!-- 扫码访问二维码弹层 -->
     <van-popup
@@ -152,7 +151,7 @@ const onSubmit = async () => {
       }
       if (res.data) auth.setUser(res.data)
       showToast('登录成功')
-      const redirect = (route.query.redirect as string) || '/home'
+      const redirect = (route.query.redirect as string) || '/projects'
       router.replace(redirect)
     } else {
       showToast(res.message || '登录失败')
@@ -174,36 +173,52 @@ const onSubmit = async () => {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: #f7f8fa;
+  background: var(--app-bg);
+  display: flex;
+  flex-direction: column;
 }
 .content {
-  padding: 24px 0;
-}
-.submit-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px 16px;
 }
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--app-card);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  overflow: hidden;
+}
+.login-card :deep(.van-cell-group--inset) {
+  margin: 0;
+}
+.submit-wrap {
+  padding: 16px 16px 24px;
+}
+.login-btn {
+  background: var(--app-primary) !important;
+  border: none !important;
+  min-height: var(--app-tap-min-height);
+}
 
-/* 手机测试：右下角悬浮按钮 */
+/* 手机测试：右下角轻量文字按钮 */
 .qr-float-btn {
   position: fixed;
   right: 16px;
   bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.45);
-  color: #fff;
-  border-radius: 24px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--app-primary);
+  border: none;
   font-size: 13px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 100;
+  cursor: pointer;
 }
 .qr-float-btn:active {
-  opacity: 0.9;
-}
-.qr-float-text {
-  line-height: 1;
+  opacity: 0.7;
 }
 
 /* 二维码弹层 */

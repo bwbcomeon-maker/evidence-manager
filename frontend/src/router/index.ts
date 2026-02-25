@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
-import Home from '@/views/Home.vue'
 import ProjectList from '@/views/ProjectList.vue'
 import ProjectDetail from '@/views/ProjectDetail.vue'
 import ProjectMembers from '@/views/ProjectMembers.vue'
@@ -34,14 +33,9 @@ const router = createRouter({
     {
       path: '/',
       component: MainLayout,
-      redirect: '/home',
+      redirect: '/projects',
       children: [
-        {
-          path: 'home',
-          name: 'Home',
-          component: Home,
-          meta: { title: '首页', showTabbar: true, showBack: false }
-        },
+        { path: 'home', redirect: '/projects' },
         {
           path: 'projects',
           name: 'ProjectList',
