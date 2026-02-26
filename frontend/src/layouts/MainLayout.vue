@@ -1,15 +1,35 @@
 <template>
   <div class="main-layout">
+    <!-- 有返回时：沉浸式透明导航栏 -->
+    <header
+      v-if="!hideLayoutNav && showBack"
+      class="app-nav-bar"
+      :class="{ 'app-nav-bar--scrolled': navScrolled }"
+    >
+      <div class="app-nav-bar-inner">
+        <div class="nav-left" @click="onBack()">
+          <svg class="nav-back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </div>
+        <h1 class="nav-title">{{ (route.meta.title as string) || '证据管理' }}</h1>
+        <div class="nav-right" aria-hidden="true" />
+      </div>
+    </header>
+    <!-- 有返回时：占位，避免内容顶到导航栏下 -->
+    <div v-if="!hideLayoutNav && showBack" class="app-nav-bar-placeholder" />
+    <!-- 无返回时：沿用全宽 NavBar -->
     <van-nav-bar
-      v-if="!hideLayoutNav"
+      v-else-if="!hideLayoutNav"
       :title="(route.meta.title as string) || '证据管理'"
-      :left-arrow="showBack"
-      :left-text="showBack ? '返回' : ''"
       fixed
       placeholder
-      @click-left="showBack ? onBack() : undefined"
     />
-    <main class="layout-content" :class="{ 'layout-content--with-tabbar': showTabbar }">
+    <main
+      class="layout-content"
+      :class="{ 'layout-content--with-tabbar': showTabbar }"
+      @scroll.passive="onContentScroll"
+    >
       <router-view :key="route.fullPath" />
     </main>
     <van-tabbar v-if="showTabbar" v-model="activeTab" placeholder class="main-tabbar" @change="onTabChange">
@@ -21,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -29,8 +49,25 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
+/** 沉浸式导航栏：滚动超过阈值时显示实体背景 */
+const navScrolled = ref(false)
+const SCROLL_THRESHOLD = 50
+
+function onWindowScroll() {
+  const y = window.scrollY ?? document.documentElement.scrollTop ?? 0
+  navScrolled.value = y > SCROLL_THRESHOLD
+}
+function onContentScroll(e: Event) {
+  const el = e.target as HTMLElement
+  navScrolled.value = (el?.scrollTop ?? 0) > SCROLL_THRESHOLD
+}
+
 onMounted(() => {
   auth.fetchMe()
+  window.addEventListener('scroll', onWindowScroll, { passive: true })
+})
+onUnmounted(() => {
+  window.removeEventListener('scroll', onWindowScroll)
 })
 
 const showBack = computed(() => !!route.meta.showBack)
@@ -65,9 +102,14 @@ function onTabChange(nameOrIndex: string | number) {
 
 function onBack() {
   const fromProject = route.query.fromProject as string | undefined
+  const fromEvidenceByProject = route.query.from === 'evidence-by-project'
   if (fromProject && route.path.startsWith('/evidence/detail/')) {
-    // 用 replace 替换当前历史，避免「项目详情 → 返回」时又回到证据详情
-    router.replace({ path: `/projects/${fromProject}`, query: { tab: 'evidence' } })
+    // 返回到该项目详情页的「证据管理」Tab；若来自「按项目查看证据」则保留 from 以保持只读；带上 expandedStage 以便恢复展开阶段
+    const query: Record<string, string> = { tab: 'evidence' }
+    if (fromEvidenceByProject) query.from = 'evidence-by-project'
+    const expandedStage = route.query.expandedStage as string | undefined
+    if (expandedStage) query.expandedStage = expandedStage
+    router.replace({ path: `/projects/${fromProject}`, query })
     return
   }
   // 项目详情页：从「按项目查看证据」进入则返回到证据管理，否则回到项目列表
@@ -112,8 +154,79 @@ function onBack() {
   min-height: 60px;
   padding: 8px 0;
 }
-/* 返回文字强化：仅字重，不新增颜色/阴影 */
+/* 无返回时的 NavBar 文字（保留兼容） */
 :deep(.van-nav-bar__text) {
   font-weight: 600;
+}
+
+/* ---------- 沉浸式透明导航栏（透明 → 滚动后实体） ---------- */
+.app-nav-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 999;
+  padding-top: env(safe-area-inset-top);
+  background: transparent;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.app-nav-bar--scrolled {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+
+.app-nav-bar-inner {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding-left: 8px;
+  padding-right: 16px;
+}
+
+.nav-left {
+  min-width: 48px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 -8px 0 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  color: #1A1A1A;
+}
+.nav-left:active {
+  opacity: 0.7;
+}
+
+.nav-back-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.nav-title {
+  flex: 1;
+  margin: 0;
+  padding: 0 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #1A1A1A;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-right {
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.app-nav-bar-placeholder {
+  height: calc(env(safe-area-inset-top) + 44px);
+  flex-shrink: 0;
 }
 </style>

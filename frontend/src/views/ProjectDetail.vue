@@ -183,18 +183,18 @@
                           v-for="ev in getItemEvidences(s.stageCode, item.evidenceTypeCode)"
                           :key="ev.evidenceId"
                           class="grid-item"
-                          @click="goToEvidenceDetail(ev.evidenceId)"
+                          @click="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                         >
                           <!-- 图片缩略图：圆角、cover，右上角删除图标 -->
-                          <div v-if="isImageType(ev.contentType) && ev.latestVersion" class="grid-thumb" @click.stop="goToEvidenceDetail(ev.evidenceId)">
+                          <div v-if="isImageType(ev.contentType) && ev.latestVersion" class="grid-thumb" @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)">
                             <img :src="`/api/evidence/versions/${ev.latestVersion.versionId}/download`" :alt="ev.title" />
                             <div class="grid-thumb-overlay">
                               <van-tag :type="evidenceListStatusTagType(ev)" size="mini">{{ evidenceListStatusText(ev) }}</van-tag>
                             </div>
-                            <button type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
+                            <button v-if="route.query.from !== 'evidence-by-project'" type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                           <!-- 非图片：文档类列表式展示，左侧图标、中间文件名、右侧删除 -->
-                          <div v-else class="grid-file" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }" @click.stop="goToEvidenceDetail(ev.evidenceId)">
+                          <div v-else class="grid-file" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }" @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)">
                             <span class="grid-file-type-badge" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).color }">
                               {{ getFileIconConfig(getEvidenceFileName(ev)).label }}
                             </span>
@@ -205,12 +205,12 @@
                             />
                             <span class="grid-file-name">{{ ev.latestVersion?.originalFilename || ev.title }}</span>
                             <van-tag :type="evidenceListStatusTagType(ev)" size="mini">{{ evidenceListStatusText(ev) }}</van-tag>
-                            <button type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
+                            <button v-if="route.query.from !== 'evidence-by-project'" type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                         </div>
-                        <!-- 上传入口：虚线框 + 号 -->
+                        <!-- 上传入口：虚线框 + 号；从「按项目查看证据」进入时仅查看，不显示 -->
                         <div
-                          v-if="canUpload && s.stageId"
+                          v-if="canUpload && s.stageId && route.query.from !== 'evidence-by-project'"
                           class="grid-item grid-upload-btn"
                           @click="openUploadForItem(s, item)"
                         >
@@ -228,8 +228,8 @@
         </van-tab>
       </van-tabs>
 
-      <!-- 成员管理入口：仅在「详情」Tab 显示，证据 Tab 不显示 -->
-      <div v-if="project?.canManageMembers && activeTab === 0" class="member-entry-wrap">
+      <!-- 成员管理入口：仅在「详情」Tab 显示；从「按项目查看证据」进入时为只读，不显示 -->
+      <div v-if="project?.canManageMembers && activeTab === 0 && route.query.from !== 'evidence-by-project'" class="member-entry-wrap">
         <van-button type="primary" class="member-entry-btn" @click="goToMembers">
           成员管理
         </van-button>
@@ -678,9 +678,12 @@ function closeUploadDialog() {
   resetUploadForm()
 }
 
-// 跳转证据详情
-function goToEvidenceDetail(id: number) {
-  router.push({ path: `/evidence/detail/${id}`, query: { fromProject: String(projectId.value) } })
+// 跳转证据详情（带上当前阶段 code，返回时用于恢复展开）
+function goToEvidenceDetail(id: number, stageCode?: string) {
+  const query: Record<string, string> = { fromProject: String(projectId.value) }
+  if (route.query.from === 'evidence-by-project') query.from = 'evidence-by-project'
+  if (stageCode) query.expandedStage = stageCode
+  router.push({ path: `/evidence/detail/${id}`, query })
 }
 
 /** 网格内删除/作废证据：草稿物理删除，已提交则作废；刷新当前类别列表 */
@@ -1163,7 +1166,11 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
 function goToUploadResultDetail() {
   if (uploadResult.value) {
     closeUploadDialog()
-    router.push({ path: `/evidence/detail/${uploadResult.value.evidenceId}`, query: { fromProject: String(projectId.value) } })
+    const query: Record<string, string> = { fromProject: String(projectId.value) }
+    if (route.query.from === 'evidence-by-project') query.from = 'evidence-by-project'
+    const stageCode = stageProgress.value?.stages?.find(st => st.stageId === uploadContext.value?.stageId)?.stageCode
+    if (stageCode) query.expandedStage = stageCode
+    router.push({ path: `/evidence/detail/${uploadResult.value.evidenceId}`, query })
   }
 }
 
@@ -1192,6 +1199,10 @@ async function loadStageProgress() {
     const res = await getStageProgress(projectId.value)
     if (res?.code === 0 && res.data) {
       stageProgress.value = res.data
+      const expanded = route.query.expandedStage as string | undefined
+      if (expanded && res.data.stages?.some((st: { stageCode: string }) => st.stageCode === expanded)) {
+        expandedStages.value = [...new Set([...expandedStages.value, expanded])]
+      }
       loadAllItemEvidences()
     } else {
       stageProgress.value = null
@@ -1453,6 +1464,19 @@ watch(() => route.query.tab, (tab) => {
     if (evidenceList.value.length === 0) loadEvidenceList()
   }
 }, { immediate: true })
+
+// 从证据详情返回时带 ?expandedStage=xxx，恢复展开对应阶段（含已加载 stageProgress 的情况）
+watch(
+  () => [route.query.expandedStage, stageProgress.value] as const,
+  ([expanded, progress]) => {
+    const code = expanded as string | undefined
+    if (!code || !progress?.stages?.some((s: { stageCode: string }) => s.stageCode === code)) return
+    if (!expandedStages.value.includes(code)) {
+      expandedStages.value = [...expandedStages.value, code]
+    }
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   loadProject()

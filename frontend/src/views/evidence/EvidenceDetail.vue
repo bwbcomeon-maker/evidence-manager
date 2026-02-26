@@ -165,10 +165,14 @@ function invalidatorDisplayName(): string {
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
 const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
 
+/** 从「按项目查看证据」进入时仅允许预览、下载，不显示提交/删除/作废 */
+const isReadOnlyFromEvidenceByProject = computed(() => route.query.from === 'evidence-by-project')
+
 /** 草稿可提交、可物理删除；已提交可作废；归档仅由项目申请归档执行，无单条归档 */
-const canSubmit = computed(() => effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
-const canDelete = computed(() => effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
+const canSubmit = computed(() => !isReadOnlyFromEvidenceByProject.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
+const canDelete = computed(() => !isReadOnlyFromEvidenceByProject.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
 const canVoid = computed(() => {
+  if (isReadOnlyFromEvidenceByProject.value) return false
   return effectiveStatus.value === 'SUBMITTED' && (evidence.value?.permissions?.canInvalidate === true || evidence.value?.canInvalidate === true)
 })
 

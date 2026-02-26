@@ -1,23 +1,25 @@
 <template>
   <div class="evidence-home">
-    <div class="evidence-card">
-      <van-cell title="按项目查看证据" icon="apps-o" is-link to="/evidence/by-project" class="evidence-cell" />
-      <van-cell title="我上传的证据" icon="user-o" is-link to="/evidence/my" class="evidence-cell" />
-      <van-cell title="最近上传的证据" icon="clock-o" is-link to="/evidence/recent" class="evidence-cell" />
-      <van-cell
-        v-if="auth.canAccessVoidedEvidence"
-        icon="warning-o"
-        is-link
-        to="/evidence/voided"
-        class="evidence-cell"
-      >
-        <template #title>
-          <span>作废证据</span>
-          <van-tag type="warning" size="medium" class="audit-tag">审计</van-tag>
-        </template>
-      </van-cell>
-      <van-cell title="按文件类型查看" icon="description" is-link to="/evidence/type" class="evidence-cell evidence-cell--last" />
-    </div>
+    <main class="evidence-home-main">
+      <div class="evidence-card">
+        <van-cell title="按项目查看证据" icon="apps-o" is-link to="/evidence/by-project" class="evidence-cell" />
+        <van-cell title="我上传的证据" icon="user-o" is-link to="/evidence/my" class="evidence-cell" />
+        <van-cell title="最近上传的证据" icon="clock-o" is-link to="/evidence/recent" class="evidence-cell" />
+        <van-cell
+          v-if="auth.canAccessVoidedEvidence"
+          icon="warning-o"
+          is-link
+          to="/evidence/voided"
+          class="evidence-cell"
+        >
+          <template #title>
+            <span>作废证据</span>
+            <van-tag type="warning" size="medium" class="audit-tag">审计</van-tag>
+          </template>
+        </van-cell>
+        <van-cell title="按文件类型查看" icon="description" is-link to="/evidence/type" class="evidence-cell evidence-cell--last" />
+      </div>
+    </main>
   </div>
 </template>
 
@@ -29,10 +31,21 @@ const auth = useAuthStore()
 </script>
 
 <style scoped>
+/* 页面主容器：纵向 Flex，充满视口，全局浅灰背景 */
 .evidence-home {
-  padding: 16px;
-  min-height: 100%;
-  background: var(--app-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-body);
+}
+
+/* 主要内容区：顶部呼吸空间 + 中间自适应拉伸 */
+.evidence-home-main {
+  flex: 1;
+  padding-top: calc(env(safe-area-inset-top) + 64px);
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: 16px;
 }
 
 .evidence-card {
