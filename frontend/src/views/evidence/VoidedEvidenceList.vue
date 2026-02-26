@@ -7,6 +7,8 @@
       :filter-params="{ status: 'VOIDED' }"
       empty-description="暂无作废证据"
       force-void-tag
+      voided-style
+      from-evidence-module
     />
   </div>
 </template>

@@ -125,19 +125,21 @@ public class EvidenceVersionController {
     /**
      * 下载证据版本文件（预览/下载共用，按当前登录用户做项目权限校验）
      * GET /api/evidence/versions/{versionId}/download
+     * @param preview 为 true 时返回 Content-Disposition: inline，便于浏览器在 iframe 内在线预览（如 Office）
      *
      * @param versionId 版本ID
-     * @return 文件资源（附件形式）
+     * @return 文件资源（附件或内联）
      */
     @GetMapping("/versions/{versionId}/download")
     public ResponseEntity<Resource> downloadVersionFile(
             HttpServletRequest request,
-            @PathVariable Long versionId) {
+            @PathVariable Long versionId,
+            @RequestParam(required = false) Boolean preview) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) {
             throw new UnauthorizedException("未登录");
         }
-        logger.info("Download version file request: versionId={}, userId={}", versionId, user.getId());
+        logger.info("Download version file request: versionId={}, userId={}, preview={}", versionId, user.getId(), preview);
         Resource resource = evidenceService.downloadVersionFile(versionId, user.getId(), user.getRoleCode());
         
         // 获取原始文件名和Content-Type
@@ -148,10 +150,13 @@ public class EvidenceVersionController {
         String encodedFilename = URLEncoder.encode(originalFilename, StandardCharsets.UTF_8)
                 .replace("+", "%20");
         
-        // 构建响应头
+        // 构建响应头：预览时使用 inline 以便 iframe 内展示（Word/Excel/PPT 等）
         HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.CONTENT_DISPOSITION, 
-                   "attachment; filename=\"" + originalFilename + "\"; filename*=UTF-8''" + encodedFilename);
+        boolean inline = Boolean.TRUE.equals(preview);
+        String disposition = inline
+                ? "inline; filename=\"" + originalFilename + "\"; filename*=UTF-8''" + encodedFilename
+                : "attachment; filename=\"" + originalFilename + "\"; filename*=UTF-8''" + encodedFilename;
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, disposition);
         
         // 设置Content-Type
         if (contentType != null && !contentType.isEmpty()) {

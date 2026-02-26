@@ -121,6 +121,27 @@ function onBack() {
     }
     return
   }
+  // 从「按文件类型查看」的某 Tab 进入证据详情后返回：回到按文件类型查看页并恢复当时的 Tab（文档/视频/图片）
+  const fromTab = route.query.fromTab as string | undefined
+  if (route.path.startsWith('/evidence/detail/') && fromTab && ['image', 'document', 'video'].includes(fromTab)) {
+    router.replace({ path: '/evidence/type', query: { tab: fromTab } })
+    return
+  }
+  // 证据管理下所有子页（按项目查看、我上传的、最近上传、作废、按类型）返回：统一回到证据管理首页，避免历史栈残留导致再次进入时复用旧实例/旧样式
+  if (route.path.startsWith('/evidence/') && route.path !== '/evidence' && !route.path.startsWith('/evidence/detail/')) {
+    router.replace('/evidence')
+    return
+  }
+  // 「我的」下的用户管理返回：统一回到我的页，避免历史栈残留
+  if (route.path === '/admin/users') {
+    router.replace('/me')
+    return
+  }
+  // 批量分配项目返回：统一回到项目列表，避免历史栈残留
+  if (route.path === '/batch-assign-projects') {
+    router.replace('/projects')
+    return
+  }
   if (window.history.length > 1) {
     router.back()
   } else {
@@ -170,28 +191,41 @@ function onBack() {
   background: transparent;
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
+.app-nav-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+}
 .app-nav-bar--scrolled {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+.app-nav-bar--scrolled::after {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .app-nav-bar-inner {
   display: flex;
   align-items: center;
-  height: 44px;
-  padding-left: 8px;
-  padding-right: 16px;
+  min-height: 48px;
+  padding: 12px 16px 12px 8px;
 }
 
+/* 返回按钮：触控热区 ≥48×48px，左侧留足 padding，全屏/刘海屏易点 */
 .nav-left {
-  min-width: 48px;
-  height: 100%;
+  min-width: 56px;
+  min-height: 48px;
+  margin: -12px 0 -12px -8px;
+  padding: 12px 12px 12px 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 -8px 0 0;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   color: #1A1A1A;
@@ -226,7 +260,7 @@ function onBack() {
 }
 
 .app-nav-bar-placeholder {
-  height: calc(env(safe-area-inset-top) + 44px);
+  height: calc(env(safe-area-inset-top) + 48px);
   flex-shrink: 0;
 }
 </style>

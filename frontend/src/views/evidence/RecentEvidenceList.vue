@@ -6,6 +6,7 @@
     <EvidenceList
       :filter-params="{ recentDays }"
       empty-description="暂无最近上传的证据"
+      from-evidence-module
     />
   </div>
 </template>
@@ -25,5 +26,6 @@ const dayOptions = [
 <style scoped>
 .evidence-list-page {
   min-height: 100%;
+  background: var(--app-bg);
 }
 </style>

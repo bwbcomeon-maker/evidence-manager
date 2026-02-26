@@ -2,22 +2,22 @@
   <div class="evidence-home">
     <main class="evidence-home-main">
       <div class="evidence-card">
-        <van-cell title="按项目查看证据" icon="apps-o" is-link to="/evidence/by-project" class="evidence-cell" />
-        <van-cell title="我上传的证据" icon="user-o" is-link to="/evidence/my" class="evidence-cell" />
-        <van-cell title="最近上传的证据" icon="clock-o" is-link to="/evidence/recent" class="evidence-cell" />
+        <van-cell title="按项目查看证据" icon="apps-o" is-link class="evidence-cell" @click="goToEvidence('/evidence/by-project')" />
+        <van-cell title="我上传的证据" icon="user-o" is-link class="evidence-cell" @click="goToEvidence('/evidence/my')" />
+        <van-cell title="最近上传的证据" icon="clock-o" is-link class="evidence-cell" @click="goToEvidence('/evidence/recent')" />
         <van-cell
           v-if="auth.canAccessVoidedEvidence"
           icon="warning-o"
           is-link
-          to="/evidence/voided"
           class="evidence-cell"
+          @click="goToEvidence('/evidence/voided')"
         >
           <template #title>
             <span>作废证据</span>
             <van-tag type="warning" size="medium" class="audit-tag">审计</van-tag>
           </template>
         </van-cell>
-        <van-cell title="按文件类型查看" icon="description" is-link to="/evidence/type" class="evidence-cell evidence-cell--last" />
+        <van-cell title="按文件类型查看" icon="description" is-link class="evidence-cell evidence-cell--last" @click="goToEvidence('/evidence/type')" />
       </div>
     </main>
   </div>
@@ -25,9 +25,16 @@
 
 <script setup lang="ts">
 import { Cell, CellGroup, Tag } from 'vant'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+const router = useRouter()
 const auth = useAuthStore()
+
+/** 进入证据子页：带时间戳 push，避免历史栈中旧实例被复用导致样式/状态回退 */
+function goToEvidence(path: string) {
+  router.push({ path, query: { _t: String(Date.now()) } })
+}
 </script>
 
 <style scoped>

@@ -1,34 +1,48 @@
 <template>
   <div class="evidence-detail">
     <template v-if="evidence">
-      <van-cell-group inset>
-        <van-cell title="证据标题" :value="evidence.title || '—'" />
-        <van-cell title="业务类型" :value="bizTypeLabel(evidence.bizType)" />
-        <van-cell title="备注" :value="evidence.note || '—'" />
-        <van-cell title="文件类型" :value="fileTypeDisplay(evidence)" />
-        <van-cell title="当前状态">
-          <template #value>
-            <van-tag :type="statusTagType(effectiveStatus)">
-              {{ mapStatusToText(effectiveStatus) }}
-            </van-tag>
-          </template>
-        </van-cell>
-        <van-cell title="上传人" :value="uploaderDisplayName()" />
-        <van-cell title="上传时间" :value="formatDateTime(evidence.createdAt)" />
-        <template v-if="effectiveStatus === 'INVALID' && (evidence.invalidReason || evidence.invalidByUserId != null || evidence.invalidAt)">
-          <van-cell title="作废原因" :value="evidence.invalidReason || '—'" />
-          <van-cell title="作废人" :value="invalidatorDisplayName()" />
-          <van-cell title="作废时间" :value="evidence.invalidAt ? formatDateTime(evidence.invalidAt) : '—'" />
-        </template>
-        <van-cell v-if="evidence.latestVersion" title="文件名" :value="evidence.latestVersion.originalFilename" />
-      </van-cell-group>
+      <div class="evidence-detail__container">
+        <div class="evidence-detail__card">
+          <!-- 头部：类型图标 + 主标题 + 状态胶囊 -->
+          <header class="evidence-detail__header">
+            <div
+              class="evidence-detail__type-icon"
+              :style="{ background: evidenceFileIcon.bg, color: evidenceFileIcon.color }"
+            >
+              <van-icon :name="evidenceFileIcon.icon" size="28" />
+            </div>
+            <div class="evidence-detail__title-wrap">
+              <h1 class="evidence-detail__title">{{ evidence.title || '—' }}</h1>
+              <span
+                class="evidence-detail__status-pill"
+                :class="`evidence-detail__status-pill--${(effectiveStatus || '').toLowerCase()}`"
+              >
+                {{ mapStatusToText(effectiveStatus) }}
+              </span>
+            </div>
+          </header>
 
-      <div class="actions">
-        <van-button type="primary" block icon="eye-o" @click="handlePreview">预览</van-button>
-        <van-button type="primary" block plain icon="down" @click="handleDownload">下载</van-button>
-        <van-button v-if="canSubmit" type="primary" block plain @click="handleSubmit">提交</van-button>
-        <van-button v-if="canDelete" type="danger" block plain icon="delete-o" @click="handleDelete">删除</van-button>
-        <van-button v-if="canVoid" type="danger" block plain icon="warning-o" @click="handleVoid">作废</van-button>
+          <!-- 核心信息：Grid 网格，移动端 1 列、大屏 2 列 -->
+          <section class="evidence-detail__meta">
+            <div
+              v-for="item in metaItems"
+              :key="item.label"
+              class="meta-item"
+            >
+              <span class="meta-item__label">{{ item.label }}</span>
+              <span class="meta-item__value">{{ item.value }}</span>
+            </div>
+          </section>
+
+          <!-- 动态操作区：弹性布局，非全宽堆叠 -->
+          <div class="evidence-detail__actions">
+            <van-button class="btn-primary" icon="eye-o" @click="handlePreview">预览</van-button>
+            <van-button class="btn-secondary" icon="down" plain @click="handleDownload">下载</van-button>
+            <van-button v-if="canSubmit" class="btn-primary" @click="handleSubmit">提交</van-button>
+            <van-button v-if="canDelete" class="btn-danger" icon="delete-o" plain @click="handleDelete">删除</van-button>
+            <van-button v-if="canVoid" class="btn-danger" icon="warning-o" plain @click="handleVoid">作废</van-button>
+          </div>
+        </div>
       </div>
 
       <!-- 预览弹层：页面内展示，避免手机端 window.open 被拦截 -->
@@ -58,6 +72,15 @@
               class="preview-iframe"
               title="PDF 预览"
             />
+            <!-- Word / Excel / PPT：iframe + preview=1 返回 inline，便于浏览器在线预览（Edge 等支持较好） -->
+            <template v-else-if="isOfficePreview">
+              <iframe
+                :src="previewOfficeUrl"
+                class="preview-iframe"
+                title="Office 预览"
+              />
+              <p class="preview-office-hint">若无法显示，请使用 Edge 浏览器或点击下载</p>
+            </template>
             <div v-else class="preview-fallback">该类型请在电脑端预览或下载查看</div>
           </template>
         </div>
@@ -87,7 +110,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Cell, CellGroup, Button, Tag, Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, closeToast, showConfirmDialog } from 'vant'
+import { Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, closeToast, showConfirmDialog } from 'vant'
 import {
   downloadVersionFile,
   getEvidenceById,
@@ -100,7 +123,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 import { formatDateTime } from '@/utils/format'
-import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
+import { getEffectiveEvidenceStatus, mapStatusToText } from '@/utils/evidenceStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,6 +140,24 @@ const previewContentType = ref<string>('')
 const previewImageUrl = computed(() =>
   previewVersionId.value != null ? `/api/evidence/versions/${previewVersionId.value}/download` : ''
 )
+/** Word/Excel/PPT 的 MIME 类型（用于在线预览） */
+const OFFICE_MIMES = [
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+]
+const isOfficePreview = computed(() => {
+  const ct = (previewContentType.value || '').toLowerCase()
+  return OFFICE_MIMES.some(m => ct.includes(m))
+})
+const previewOfficeUrl = computed(() => {
+  const base = previewImageUrl.value
+  if (!base) return ''
+  return base + (base.includes('?') ? '&' : '?') + 'preview=1'
+})
 /** 用户列表（用于兜底：接口未返回 createdByDisplayName 时按 userId 解析展示名） */
 const userList = ref<AuthUserSimpleVO[]>([])
 
@@ -165,14 +206,62 @@ function invalidatorDisplayName(): string {
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
 const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
 
-/** 从「按项目查看证据」进入时仅允许预览、下载，不显示提交/删除/作废 */
-const isReadOnlyFromEvidenceByProject = computed(() => route.query.from === 'evidence-by-project')
+/** 头部文件类型图标配置（按 contentType / 文件名） */
+const evidenceFileIcon = computed(() => {
+  const e = evidence.value
+  if (!e) return { icon: 'description', color: '#969799', bg: '#f7f8fa' }
+  const ct = (e.contentType || '').toLowerCase()
+  const fn = e.latestVersion?.originalFilename || ''
+  const ext = fn.includes('.') ? fn.slice(fn.lastIndexOf('.') + 1).toLowerCase() : ''
+  if (ct.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic'].includes(ext)) {
+    return { icon: 'photo-o', color: '#07c160', bg: '#eefbf3' }
+  }
+  if (ct.includes('pdf') || ext === 'pdf') return { icon: 'description', color: '#ee4d2d', bg: '#fff1f0' }
+  if (ct.includes('word') || ct.includes('wordprocessingml') || ['doc', 'docx'].includes(ext)) {
+    return { icon: 'description', color: '#1989fa', bg: '#e8f4ff' }
+  }
+  if (ct.includes('excel') || ct.includes('spreadsheetml') || ['xls', 'xlsx', 'csv'].includes(ext)) {
+    return { icon: 'bar-chart-o', color: '#07c160', bg: '#eefbf3' }
+  }
+  if (ct.includes('powerpoint') || ct.includes('presentation') || ['ppt', 'pptx'].includes(ext)) {
+    return { icon: 'photo-o', color: '#ff976a', bg: '#fff7e8' }
+  }
+  if (['zip', 'rar', '7z'].includes(ext)) return { icon: 'gift-o', color: '#faad14', bg: '#fffbe6' }
+  return { icon: 'description', color: '#969799', bg: '#f7f8fa' }
+})
+
+/** 元数据项（用于 Grid 展示，不含标题与状态） */
+const metaItems = computed(() => {
+  const e = evidence.value
+  if (!e) return []
+  const items: { label: string; value: string }[] = [
+    { label: '业务类型', value: bizTypeLabel(e.bizType) },
+    { label: '备注', value: e.note || '—' },
+    { label: '文件类型', value: fileTypeDisplay(e) },
+    { label: '上传人', value: uploaderDisplayName() },
+    { label: '上传时间', value: formatDateTime(e.createdAt) }
+  ]
+  if (e.latestVersion) {
+    items.push({ label: '文件名', value: e.latestVersion.originalFilename })
+  }
+  if (effectiveStatus.value === 'INVALID' && (e.invalidReason || e.invalidByUserId != null || e.invalidAt)) {
+    items.push({ label: '作废原因', value: e.invalidReason || '—' })
+    items.push({ label: '作废人', value: invalidatorDisplayName() })
+    items.push({ label: '作废时间', value: e.invalidAt ? formatDateTime(e.invalidAt) : '—' })
+  }
+  return items
+})
+
+/** 从证据管理任一入口进入（按项目查看/我上传的/最近/作废/按类型）时仅保留预览、下载，不显示提交/删除/作废 */
+const isReadOnlyFromEvidenceModule = computed(() =>
+  route.query.from === 'evidence-by-project' || route.query.from === 'evidence'
+)
 
 /** 草稿可提交、可物理删除；已提交可作废；归档仅由项目申请归档执行，无单条归档 */
-const canSubmit = computed(() => !isReadOnlyFromEvidenceByProject.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
-const canDelete = computed(() => !isReadOnlyFromEvidenceByProject.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
+const canSubmit = computed(() => !isReadOnlyFromEvidenceModule.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
+const canDelete = computed(() => !isReadOnlyFromEvidenceModule.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
 const canVoid = computed(() => {
-  if (isReadOnlyFromEvidenceByProject.value) return false
+  if (isReadOnlyFromEvidenceModule.value) return false
   return effectiveStatus.value === 'SUBMITTED' && (evidence.value?.permissions?.canInvalidate === true || evidence.value?.canInvalidate === true)
 })
 
@@ -215,17 +304,18 @@ async function handlePreview() {
   const ct = (evidence.value.contentType || '').toLowerCase()
   const isImage = ct.startsWith('image/')
   const isPdf = ct.includes('pdf')
+  const isOffice = OFFICE_MIMES.some(m => ct.includes(m))
   const isTextLike = ct.startsWith('text/') || ct.includes('json') || ct.includes('xml')
 
-  if (!isImage && !isPdf && !isTextLike) {
+  if (!isImage && !isPdf && !isOffice && !isTextLike) {
     showToast('该文件类型暂不支持预览，请下载查看')
     return
   }
 
   const versionId = evidence.value.latestVersion.versionId
 
-  // 图片、PDF：页面内弹层预览（手机端不会被弹窗拦截）
-  if (isImage || isPdf) {
+  // 图片、PDF、Word/Excel/PPT：页面内弹层预览（Office 使用 iframe + preview=1 在线预览）
+  if (isImage || isPdf || isOffice) {
     previewContentType.value = evidence.value.contentType || ''
     previewVersionId.value = versionId
     showPreviewPopup.value = true
@@ -359,14 +449,148 @@ onMounted(() => {
 
 <style scoped>
 .evidence-detail {
-  padding: 16px 0;
+  padding: 20px 0 28px;
   min-height: 100%;
+  background: var(--app-bg, #f5f7fa);
 }
-.actions {
-  padding: 16px;
+.evidence-detail__container {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+/* 卡片容器：白底、微阴影、圆角 */
+.evidence-detail__card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06), 0 2px 16px rgba(0, 0, 0, 0.04);
+  padding: 24px 20px;
+}
+.evidence-detail__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+/* 文件类型图标：背景色块，类预览组件 */
+.evidence-detail__type-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.evidence-detail__title-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+.evidence-detail__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.35;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* 状态：精致胶囊，浅灰底+深灰字（草稿） */
+.evidence-detail__status-pill {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+.evidence-detail__status-pill--draft {
+  background: #f2f3f5;
+  color: #646566;
+}
+.evidence-detail__status-pill--submitted {
+  background: #e8f4ff;
+  color: #1989fa;
+}
+.evidence-detail__status-pill--archived {
+  background: #eefbf3;
+  color: #07c160;
+}
+.evidence-detail__status-pill--invalid {
+  background: #fff1f0;
+  color: #ee4d2d;
+}
+/* 元数据区：移动端单列，大屏双列 */
+.evidence-detail__meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px 28px;
+  margin-bottom: 28px;
+}
+@media (min-width: 768px) {
+  .evidence-detail__meta {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.meta-item {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+.meta-item__label {
+  font-size: 12px;
+  color: #969799;
+  line-height: 1.35;
+  font-weight: 400;
+}
+.meta-item__value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #323233;
+  line-height: 1.45;
+  word-break: break-all;
+}
+.evidence-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+  justify-content: flex-start;
+}
+@media (min-width: 768px) {
+  .evidence-detail__actions {
+    justify-content: flex-end;
+  }
+}
+.evidence-detail__actions .van-button {
+  min-width: 0;
+}
+.evidence-detail__actions .btn-primary {
+  background: var(--van-button-primary-background, #1989fa);
+  color: #fff;
+  border: none;
+}
+.evidence-detail__actions .btn-primary.van-button--plain {
+  background: transparent;
+  color: var(--van-button-primary-background, #1989fa);
+  border: 1px solid currentColor;
+}
+.evidence-detail__actions .btn-secondary {
+  background: transparent;
+  color: var(--van-button-primary-background, #1989fa);
+  border: 1px solid currentColor;
+}
+.evidence-detail__actions .btn-danger {
+  background: transparent;
+  color: var(--van-button-danger-color, #ee4d2d);
+  border: 1px solid currentColor;
+}
+.evidence-detail__actions .btn-danger:active {
+  background: rgba(238, 77, 45, 0.08);
 }
 
 .preview-popup-body {
@@ -387,6 +611,11 @@ onMounted(() => {
   width: 100%;
   height: 75vh;
   border: none;
+}
+.preview-office-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #969799;
 }
 .preview-fallback {
   color: #969799;

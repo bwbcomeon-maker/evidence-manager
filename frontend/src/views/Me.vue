@@ -15,8 +15,8 @@
         title="用户管理"
         icon="manager-o"
         is-link
-        to="/admin/users"
         class="me-cell"
+        @click="goToAdminUsers"
       />
       <van-cell
         title="修改密码"
@@ -100,6 +100,10 @@ import { showToast } from 'vant'
 
 const router = useRouter()
 const auth = useAuthStore()
+/** 进入用户管理：带时间戳 push，避免历史栈中旧实例被复用 */
+function goToAdminUsers() {
+  router.push({ path: '/admin/users', query: { _t: String(Date.now()) } })
+}
 const showChangePwd = ref(false)
 const showOldPwd = ref(false)
 const showNewPwd = ref(false)

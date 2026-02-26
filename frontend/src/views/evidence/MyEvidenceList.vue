@@ -3,6 +3,7 @@
     <EvidenceList
       :filter-params="{ uploader: 'me' }"
       empty-description="暂无我上传的证据"
+      from-evidence-module
     />
   </div>
 </template>
@@ -14,5 +15,6 @@ import EvidenceList from '@/components/EvidenceList.vue'
 <style scoped>
 .evidence-list-page {
   min-height: 100%;
+  background: var(--app-bg);
 }
 </style>
