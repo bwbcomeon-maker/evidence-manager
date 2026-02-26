@@ -479,7 +479,8 @@ import { getEvidencesByStageType } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
-import { validateFileSize } from '@/utils/uploadFileLimit'
+import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
+import { compressImageIfNeeded } from '@/utils/imageCompress'
 
 interface Project {
   id: number
@@ -964,6 +965,7 @@ function onUploaderBeforeRead(file: File | File[]): boolean {
 }
 
 // 上传证据（阶段驱动：必须从某模板项「上传」带入 stageId + evidenceTypeCode）
+// 支持：图片前端轻度压缩 + 真实上传进度展示
 const handleUpload = async () => {
   if (!uploadContext.value) {
     showToast('请先点击下方某证据类型（如「启动现场照片」）旁的「上传」按钮')
@@ -979,7 +981,7 @@ const handleUpload = async () => {
     return
   }
 
-  const file = uploadFileList.value[0].file as File | undefined
+  let file = uploadFileList.value[0].file as File | undefined
   if (!file || !(file instanceof File)) {
     showToast('文件无效')
     return
@@ -992,7 +994,14 @@ const handleUpload = async () => {
 
   uploading.value = true
   try {
-    showLoadingToast({ message: '上传中...', forbidClick: true, duration: 0 })
+    // 仅对图片进行前端轻度压缩，PDF/Word 等直接上传
+    if (isImageFile(file)) {
+      showLoadingToast({ message: '图片压缩中...', forbidClick: true, duration: 0 })
+      file = await compressImageIfNeeded(file)
+      closeToast()
+    }
+
+    showLoadingToast({ message: '正在上传 0%...', forbidClick: true, duration: 0 })
 
     const formData = new FormData()
     formData.append('name', uploadForm.value.name)
@@ -1003,7 +1012,15 @@ const handleUpload = async () => {
     }
     formData.append('file', file)
 
-    const response = (await uploadEvidence(projectId.value, formData)) as {
+    const response = (await uploadEvidence(projectId.value, formData, {
+      onUploadProgress(percent) {
+        showLoadingToast({
+          message: percent > 0 ? `正在上传 ${percent}%...` : '正在上传...',
+          forbidClick: true,
+          duration: 0
+        })
+      }
+    })) as {
       code: number
       message?: string
       data?: {
@@ -1035,7 +1052,7 @@ const handleUpload = async () => {
   } catch (error: any) {
     closeToast()
     console.error('Upload error:', error)
-    showToast(error.message || '上传失败')
+    showToast(error?.message || '上传失败')
   } finally {
     uploading.value = false
   }

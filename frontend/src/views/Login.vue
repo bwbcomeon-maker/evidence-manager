@@ -80,6 +80,10 @@ function getQrTargetUrl(): string {
 
 async function openQrPopup() {
   const url = getQrTargetUrl()
+  const host = import.meta.env.VITE_DEV_SERVER_HOST
+  if (import.meta.env.DEV && (!host || host === '')) {
+    showToast('未获取到本机 IP，请用 npm run dev 启动并查看终端中的 Network 地址')
+  }
   qrDataUrl.value = ''
   showQrPopup.value = true
   try {

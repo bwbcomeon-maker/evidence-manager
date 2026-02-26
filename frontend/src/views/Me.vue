@@ -250,6 +250,15 @@ async function onLogout() {
 .me-card--list :deep(.van-cell) {
   min-height: var(--app-tap-min-height);
   padding: 0 16px;
+  display: flex;
+  align-items: center;
+}
+.me-card--list :deep(.van-cell__left-icon),
+.me-card--list :deep(.van-cell__title),
+.me-card--list :deep(.van-cell__value),
+.me-card--list :deep(.van-cell__right-icon) {
+  display: flex;
+  align-items: center;
 }
 .me-card--list :deep(.van-cell::after) {
   border-bottom: 1px solid #ebedf0;

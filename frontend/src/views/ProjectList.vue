@@ -47,15 +47,27 @@
             class="project-card"
             @click="goToDetail(project.id)"
           >
-            <div class="project-card-header">
-              <h3 class="project-card-title">{{ project.name }}</h3>
-              <span class="project-card-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
-                {{ project.status === 'active' ? '进行中' : '已归档' }}
-              </span>
+            <div class="project-card-body">
+              <div class="project-card-header">
+                <h3 class="project-card-title">{{ project.name }}</h3>
+                <span class="project-card-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
+                  {{ project.status === 'active' ? '进行中' : '已归档' }}
+                </span>
+              </div>
+              <div v-if="project.description" class="project-desc">{{ project.description }}</div>
+              <div class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
+                项目经理：{{ project.currentPmDisplayName || '未分配' }}
+              </div>
             </div>
-            <div v-if="project.description" class="project-desc">{{ project.description }}</div>
-            <div class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
-              项目经理：{{ project.currentPmDisplayName || '未分配' }}
+            <div class="project-card-actions">
+              <button
+                type="button"
+                class="card-action-upload"
+                @click.stop="goToEvidenceTab(project)"
+              >
+                <span class="card-action-upload-icon">📤</span>
+                <span>上传证据</span>
+              </button>
             </div>
           </div>
           <van-empty v-if="!loading && !listLoading && listError" :description="listError" />
@@ -261,6 +273,10 @@ const goToDetail = (id: number) => {
   router.push(`/projects/${id}`)
 }
 
+const goToEvidenceTab = (project: Project) => {
+  router.push({ path: `/projects/${project.id}`, query: { tab: 'evidence' } })
+}
+
 const onCreateSubmit = async () => {
   const code = createForm.value.code?.trim()
   const name = createForm.value.name?.trim()
@@ -403,6 +419,42 @@ onMounted(() => {
 .project-pm-assigned,
 .project-pm-unassigned {
   color: var(--app-text-secondary, #8E8E93);
+}
+
+/* 卡片主体与底部操作区 */
+.project-card-body {
+  /* 主体内容区，无额外样式 */
+}
+.project-card-actions {
+  border-top: 1px solid #f0f0f0;
+  margin-top: 12px;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.card-action-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--primary-color);
+  background: transparent;
+  border: 1px solid var(--primary-color);
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-action-upload:active {
+  opacity: 0.8;
+}
+.card-action-upload-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 .create-form {

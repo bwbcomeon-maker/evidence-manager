@@ -45,6 +45,15 @@ const auth = useAuthStore()
 .evidence-card :deep(.van-cell) {
   min-height: var(--app-tap-min-height);
   padding: 0 16px;
+  display: flex;
+  align-items: center;
+}
+.evidence-card :deep(.van-cell__left-icon),
+.evidence-card :deep(.van-cell__title),
+.evidence-card :deep(.van-cell__value),
+.evidence-card :deep(.van-cell__right-icon) {
+  display: flex;
+  align-items: center;
 }
 .evidence-card :deep(.van-cell::after) {
   border-bottom: 1px solid #ebedf0;

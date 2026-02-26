@@ -110,7 +110,8 @@ import {
   type EvidenceListItem
 } from '@/api/evidence'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
-import { validateFileSize } from '@/utils/uploadFileLimit'
+import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
+import { compressImageIfNeeded } from '@/utils/imageCompress'
 
 const route = useRoute()
 const router = useRouter()
@@ -191,7 +192,7 @@ async function onSaveDraft() {
     return
   }
 
-  const file = fileList.value[0]?.file as File | undefined
+  let file = fileList.value[0]?.file as File | undefined
   if (!file) {
     showToast('请选择要上传的文件')
     return
@@ -204,17 +205,33 @@ async function onSaveDraft() {
 
   saving.value = true
   try {
+    if (isImageFile(file)) {
+      showLoadingToast({ message: '图片压缩中...', forbidClick: true, duration: 0 })
+      file = await compressImageIfNeeded(file)
+      closeToast()
+    }
+    showLoadingToast({ message: '正在上传 0%...', forbidClick: true, duration: 0 })
+
     const formData = new FormData()
     formData.append('name', form.value.title.trim())
     formData.append('type', 'OTHER')
     if (form.value.note.trim()) formData.append('remark', form.value.note.trim())
     formData.append('file', file)
 
-    const res = (await uploadEvidence(Number(projectId.value), formData)) as {
+    const res = (await uploadEvidence(Number(projectId.value), formData, {
+      onUploadProgress(percent) {
+        showLoadingToast({
+          message: percent > 0 ? `正在上传 ${percent}%...` : '正在上传...',
+          forbidClick: true,
+          duration: 0
+        })
+      }
+    })) as {
       code: number
       message?: string
       data?: { id: number; evidenceStatus?: string }
     }
+    closeToast()
     if (res?.code === 0 && res.data) {
       evidenceId.value = res.data.id
       evidenceStatus.value = res.data.evidenceStatus ?? 'DRAFT'
@@ -223,6 +240,7 @@ async function onSaveDraft() {
       showToast(res?.message || '保存失败')
     }
   } catch (e: any) {
+    closeToast()
     showToast(e?.message || '保存失败')
   } finally {
     saving.value = false

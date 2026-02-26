@@ -1,0 +1,11 @@
+{
+  "name": "项目交付证据管理系统",
+  "short_name": "证据管理",
+  "description": "项目交付证据管理系统",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F7FA",
+  "theme_color": "#007AFF",
+  "icons": []
+}

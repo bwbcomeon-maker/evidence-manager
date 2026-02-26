@@ -1,9 +1,126 @@
 <template>
   <router-view />
+  <!-- 移动端扫码在浏览器内打开时：点击一次进入全屏，隐藏地址栏/底栏 -->
+  <div
+    v-if="showFullscreenHint"
+    class="fullscreen-hint"
+    @click="enterFullscreen"
+  >
+    点击进入全屏
+  </div>
+  <!-- 添加到主屏入口：仅在浏览器内打开且未安装时显示 -->
+  <div
+    v-if="showAddToHomeButton"
+    class="add-to-home-btn"
+    @click="openAddToHome"
+  >
+    添加到主屏
+  </div>
+  <!-- iOS / 无安装接口时：显示操作说明 -->
+  <van-dialog
+    v-model:show="showAddToHomeTip"
+    title="添加到主屏幕"
+    :show-confirm-button="true"
+    confirm-button-text="知道了"
+    class="add-to-home-dialog"
+  >
+    <div class="add-to-home-tip">
+      <template v-if="isIOS()">
+        <p>在 Safari 中点击底部<strong>「分享」</strong>按钮，</p>
+        <p>选择<strong>「添加到主屏幕」</strong>即可。</p>
+      </template>
+      <template v-else>
+        <p>请使用浏览器菜单中的<strong>「添加到主屏幕」</strong>或<strong>「安装应用」</strong>功能。</p>
+      </template>
+    </div>
+  </van-dialog>
 </template>
 
 <script setup lang="ts">
-// App root component
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const showFullscreenHint = ref(false)
+const showAddToHomeButton = ref(false)
+const showAddToHomeTip = ref(false)
+interface InstallPromptEvent extends Event {
+  prompt(): Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+let installPrompt: InstallPromptEvent | null = null
+
+function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+function isMobile(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 'ontouchstart' in window
+}
+
+function isStandalone(): boolean {
+  return (
+    (window as Window & { standalone?: boolean }).standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  )
+}
+
+function isFullscreen(): boolean {
+  return !!(
+    document.fullscreenElement ||
+    (document as Document & { webkitFullscreenElement?: Element }).webkitFullscreenElement
+  )
+}
+
+function enterFullscreen(): void {
+  const el = document.documentElement
+  const req =
+    el.requestFullscreen ||
+    (el as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }).webkitRequestFullscreen
+  if (req) {
+    req.call(el).then(() => {
+      showFullscreenHint.value = false
+    }).catch(() => {})
+  } else {
+    showFullscreenHint.value = false
+  }
+}
+
+onMounted(() => {
+  if (isMobile() && !isStandalone()) {
+    showAddToHomeButton.value = true
+    if (!isFullscreen()) showFullscreenHint.value = true
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange)
+  }
+  window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', onFullscreenChange)
+  window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+})
+
+function onFullscreenChange(): void {
+  if (!isFullscreen()) showFullscreenHint.value = true
+  else showFullscreenHint.value = false
+}
+
+function openAddToHome(): void {
+  if (installPrompt) {
+    installPrompt.prompt()
+    installPrompt.userChoice.then((choice) => {
+      if (choice.outcome === 'accepted') installPrompt = null
+    }).catch(() => {})
+  } else {
+    showAddToHomeTip.value = true
+  }
+}
+
+function onBeforeInstallPrompt(e: Event): void {
+  e.preventDefault()
+  installPrompt = e as InstallPromptEvent
+}
 </script>
 
 <style>
@@ -103,5 +220,50 @@ body {
   background: var(--primary-color) !important;
   border: none !important;
   font-weight: 600;
+}
+
+/* 移动端全屏提示条：点击后进入全屏，隐藏地址栏/底栏 */
+.fullscreen-hint {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0));
+  background: var(--app-primary);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 添加到主屏：右下角悬浮按钮 */
+.add-to-home-btn {
+  position: fixed;
+  right: 16px;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0));
+  z-index: 9998;
+  padding: 10px 16px;
+  background: var(--app-primary);
+  color: #fff;
+  font-size: 13px;
+  border-radius: 22px;
+  box-shadow: 0 2px 12px rgba(0, 122, 255, 0.4);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.add-to-home-dialog .add-to-home-tip {
+  padding: 8px 0 16px;
+  color: var(--text-main);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.add-to-home-dialog .add-to-home-tip strong {
+  color: var(--app-primary);
 }
 </style>

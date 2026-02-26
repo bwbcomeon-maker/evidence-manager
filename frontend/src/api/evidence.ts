@@ -137,12 +137,23 @@ export const deleteEvidence = (id: number) => http.delete<{ code: number; messag
 export const invalidateEvidence = (id: number, invalidReason: string) =>
   http.post<{ code: number; message: string }>(`/evidence/${id}/invalidate`, { invalidReason })
 
-// 上传证据
-export const uploadEvidence = (projectId: number, formData: FormData) => {
+// 上传证据（支持上传进度回调，用于展示真实进度条）
+export const uploadEvidence = (
+  projectId: number,
+  formData: FormData,
+  options?: { onUploadProgress?: (percent: number) => void }
+) => {
   return http.post(`/projects/${projectId}/evidences`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
-    }
+    },
+    onUploadProgress: options?.onUploadProgress
+      ? (progressEvent: { loaded: number; total?: number }) => {
+          const total = progressEvent.total ?? 0
+          const percent = total > 0 ? Math.round((progressEvent.loaded * 100) / total) : 0
+          options.onUploadProgress!(percent)
+        }
+      : undefined
   })
 }
 
