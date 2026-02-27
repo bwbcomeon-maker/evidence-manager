@@ -963,6 +963,8 @@ function closeUploadDialog() {
 function goToEvidenceDetail(id: number, stageCode?: string) {
   const query: Record<string, string> = { fromProject: String(projectId.value) }
   if (route.query.from === 'evidence-by-project') query.from = 'evidence-by-project'
+  else if (route.query.from === 'evidence') query.from = 'evidence'
+  if (route.query.returnKeyword) query.returnKeyword = String(route.query.returnKeyword)
   if (stageCode) query.expandedStage = stageCode
   router.push({ path: `/evidence/detail/${id}`, query })
 }
@@ -1449,6 +1451,8 @@ function goToUploadResultDetail() {
     closeUploadDialog()
     const query: Record<string, string> = { fromProject: String(projectId.value) }
     if (route.query.from === 'evidence-by-project') query.from = 'evidence-by-project'
+    else if (route.query.from === 'evidence') query.from = 'evidence'
+    if (route.query.returnKeyword) query.returnKeyword = String(route.query.returnKeyword)
     const stageCode = stageProgress.value?.stages?.find(st => st.stageId === uploadContext.value?.stageId)?.stageCode
     if (stageCode) query.expandedStage = stageCode
     router.push({ path: `/evidence/detail/${uploadResult.value.evidenceId}`, query })
@@ -1481,8 +1485,16 @@ async function loadStageProgress() {
     if (res?.code === 0 && res.data) {
       stageProgress.value = res.data
       const expanded = route.query.expandedStage as string | undefined
+      const scrollStage = route.query.scrollStage as string | undefined
+      const toExpand: string[] = []
       if (expanded && res.data.stages?.some((st: { stageCode: string }) => st.stageCode === expanded)) {
-        expandedStages.value = [...new Set([...expandedStages.value, expanded])]
+        toExpand.push(expanded)
+      }
+      if (scrollStage && res.data.stages?.some((st: { stageCode: string }) => st.stageCode === scrollStage)) {
+        toExpand.push(scrollStage)
+      }
+      if (toExpand.length) {
+        expandedStages.value = [...new Set([...expandedStages.value, ...toExpand])]
       }
       loadAllItemEvidences()
     } else {
@@ -1757,12 +1769,66 @@ watch(() => route.query.tab, (tab) => {
 
 // 从证据详情返回时带 ?expandedStage=xxx，恢复展开对应阶段（含已加载 stageProgress 的情况）
 watch(
-  () => [route.query.expandedStage, stageProgress.value] as const,
-  ([expanded, progress]) => {
-    const code = expanded as string | undefined
-    if (!code || !progress?.stages?.some((s: { stageCode: string }) => s.stageCode === code)) return
-    if (!expandedStages.value.includes(code)) {
-      expandedStages.value = [...expandedStages.value, code]
+  () => [route.query.expandedStage, route.query.scrollStage, stageProgress.value] as const,
+  ([expanded, scrollStage, progress]) => {
+    const codes: string[] = []
+    if (expanded && progress?.stages?.some((s: { stageCode: string }) => s.stageCode === expanded)) {
+      codes.push(expanded)
+    }
+    if (scrollStage && progress?.stages?.some((s: { stageCode: string }) => s.stageCode === scrollStage)) {
+      codes.push(scrollStage)
+    }
+    if (codes.length) {
+      const next = [...new Set([...expandedStages.value, ...codes])]
+      if (next.length !== expandedStages.value.length || next.some((c, i) => c !== expandedStages.value[i])) {
+        expandedStages.value = next
+      }
+    }
+  },
+  { immediate: true }
+)
+
+// 从全局搜索跳转：带 scrollStage + scrollType 时，在证据 Tab 展开后延时定位到具体证据项并清除 query
+const scrollFromQueryDone = ref(false)
+watch(
+  () => [
+    route.query.scrollStage,
+    route.query.scrollType,
+    route.params.id,
+    activeTab.value,
+    expandedStages.value,
+    stageProgress.value
+  ] as const,
+  async ([scrollStage, scrollType, projectId, tab, expanded, progress]) => {
+    if (!scrollStage || !scrollType || !projectId || scrollFromQueryDone.value) return
+    if (tab !== EVIDENCE_TAB_INDEX) return
+    if (!progress?.stages?.some((s: { stageCode: string }) => s.stageCode === scrollStage)) return
+    if (!expanded.includes(scrollStage)) return
+
+    scrollFromQueryDone.value = true
+    try {
+      await nextTick()
+      // 等待 Tab 与折叠面板展开、证据卡片挂载（折叠动画约 300ms，再留余量）
+      await new Promise((r) => setTimeout(r, 500))
+
+      await scrollToEvidence({
+        displayName: '',
+        stageCode: scrollStage,
+        evidenceTypeCode: scrollType
+      })
+
+      // 若首次未找到元素，折叠或列表可能仍在渲染，再试一次
+      const el = document.getElementById(`evidence-card-${scrollStage}-${scrollType}`)
+      if (!el) {
+        await new Promise((r) => setTimeout(r, 300))
+        await scrollToEvidence({
+          displayName: '',
+          stageCode: scrollStage,
+          evidenceTypeCode: scrollType
+        })
+      }
+    } finally {
+      scrollFromQueryDone.value = false
     }
   },
   { immediate: true }

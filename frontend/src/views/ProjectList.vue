@@ -34,6 +34,21 @@
         </div>
       </div>
 
+      <!-- 搜索与筛选：吸顶，左右 Flex（搜索 + 状态下拉），白底描边提升层级 -->
+      <div class="search-filter-bar">
+        <van-search
+          v-model="searchKeyword"
+          shape="round"
+          background="transparent"
+          placeholder="请输入项目名称或项目编号"
+          @update:model-value="onSearchInput"
+          @search="fetchProjectList"
+        />
+        <van-dropdown-menu class="filter-dropdown">
+          <van-dropdown-item v-model="projectStatus" title="状态" :options="statusOptions" @change="fetchProjectList" />
+        </van-dropdown-menu>
+      </div>
+
       <van-pull-refresh v-model="loading" @refresh="onRefresh">
         <van-list
           v-model:loading="listLoading"
@@ -150,7 +165,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Switch } from 'vant'
+import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Switch, Search, DropdownMenu, DropdownItem } from 'vant'
 import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, type ProjectVO, type ProjectImportResult } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
@@ -192,6 +207,75 @@ const finished = ref(false)
 const projects = ref<Project[]>([])
 const listError = ref('')
 
+// 搜索与筛选（统一由 fetchProjectList 请求）
+const searchKeyword = ref('')
+const projectStatus = ref<string | number>('')
+const statusOptions = [
+  { text: '全部状态', value: '' },
+  { text: '进行中', value: 'active' },
+  { text: '已归档', value: 'archived' }
+]
+
+const SEARCH_DEBOUNCE_MS = 500
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+function onSearchInput() {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    searchDebounceTimer = null
+    fetchProjectList()
+  }, SEARCH_DEBOUNCE_MS)
+}
+
+/**
+ * 统一查询入口：搜索关键词、状态筛选、回车搜索、下拉切换状态 均调用此方法。
+ * 当前为 Mock 逻辑：打印参数后请求 getProjects，再按 keyword/status 做前端过滤。
+ * 若后端支持 query 参数，可改为 getProjects({ keyword: searchKeyword.value, status: projectStatus.value })。
+ */
+async function fetchProjectList() {
+  const keyword = searchKeyword.value.trim()
+  const status = projectStatus.value === '' ? '' : String(projectStatus.value)
+  // Mock：代表发送给后端的参数
+  console.log('[fetchProjectList] params:', { searchKeyword: keyword, projectStatus: status })
+
+  listError.value = ''
+  listLoading.value = true
+  loading.value = true
+  try {
+    const res = await getProjects()
+    const raw = res?.data
+    const list = Array.isArray(raw) ? raw : []
+    if (res?.code !== 0) {
+      listError.value = res?.message || '加载失败'
+      projects.value = []
+      return
+    }
+    let mapped: Project[] = list.map((p: ProjectVO) => ({
+      id: p.id ?? 0,
+      code: p.code ?? '',
+      name: p.name ?? '',
+      description: p.description ?? '',
+      status: p.status ?? 'active',
+      currentPmDisplayName: p.currentPmDisplayName ?? undefined
+    }))
+    if (keyword) {
+      const k = keyword.toLowerCase()
+      mapped = mapped.filter((p) => (p.name || '').toLowerCase().includes(k) || (p.code || '').toLowerCase().includes(k))
+    }
+    if (status) {
+      mapped = mapped.filter((p) => (p.status ?? '') === status)
+    }
+    projects.value = mapped
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : (e as { message?: string })?.message
+    listError.value = msg || '加载失败'
+    projects.value = []
+  } finally {
+    finished.value = true
+    listLoading.value = false
+    loading.value = false
+  }
+}
+
 const showCreate = ref(false)
 const createLoading = ref(false)
 const createForm = ref({ code: '', name: '', description: '', hasProcurement: true })
@@ -225,45 +309,19 @@ async function onImportSubmit() {
   }
 }
 
-const loadProjects = async () => {
-  listError.value = ''
-  listLoading.value = true
-  loading.value = true
-  try {
-    const res = await getProjects()
-    const raw = res?.data
-    const list = Array.isArray(raw) ? raw : []
-    if (res?.code === 0) {
-      projects.value = list.map((p: ProjectVO) => ({
-        id: p.id ?? 0,
-        code: p.code ?? '',
-        name: p.name ?? '',
-        description: p.description ?? '',
-        status: p.status ?? 'active',
-        currentPmDisplayName: p.currentPmDisplayName ?? undefined
-      }))
-    } else {
-      listError.value = res?.message || '加载失败'
-    }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : (e as { message?: string })?.message
-    listError.value = msg || '加载失败'
-    projects.value = []
-  } finally {
-    finished.value = true
-    listLoading.value = false
-    loading.value = false
-  }
+const loadProjects = () => {
+  finished.value = false
+  fetchProjectList()
 }
 
 const onRefresh = () => {
   finished.value = false
-  loadProjects()
+  fetchProjectList()
 }
 
 const onLoad = () => {
   if (projects.value.length === 0 && !listError.value) {
-    loadProjects()
+    fetchProjectList()
   } else {
     finished.value = true
     listLoading.value = false
@@ -362,6 +420,46 @@ onMounted(() => {
 .action-btn--primary {
   background: var(--app-primary) !important;
   border-color: var(--app-primary) !important;
+}
+
+/* 搜索与筛选：吸顶，Flex 左右结构，白底+描边强化层级 */
+.search-filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  background: var(--app-bg);
+}
+.search-filter-bar :deep(.van-search) {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+}
+.search-filter-bar :deep(.van-search__content) {
+  background: #ffffff;
+  border: 1px solid #dcdfe6;
+  border-radius: 20px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.filter-dropdown {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+.filter-dropdown :deep(.van-dropdown-menu__bar) {
+  height: 36px;
+  min-height: 36px;
+  box-shadow: none;
+  background: #ffffff;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+}
+.filter-dropdown :deep(.van-dropdown-menu__title--active) {
+  color: var(--van-primary-color);
 }
 
 /* 项目卡片列表 */

@@ -102,20 +102,27 @@ function onTabChange(nameOrIndex: string | number) {
 
 function onBack() {
   const fromProject = route.query.fromProject as string | undefined
-  const fromEvidenceByProject = route.query.from === 'evidence-by-project'
   if (fromProject && route.path.startsWith('/evidence/detail/')) {
-    // 返回到该项目详情页的「证据管理」Tab；若来自「按项目查看证据」则保留 from 以保持只读；带上 expandedStage 以便恢复展开阶段
+    // 返回到该项目详情页的「证据管理」Tab；保留 from、returnKeyword 以便再次返回时回到证据管理并恢复搜索列表
     const query: Record<string, string> = { tab: 'evidence' }
-    if (fromEvidenceByProject) query.from = 'evidence-by-project'
+    const from = route.query.from as string | undefined
+    if (from === 'evidence-by-project' || from === 'evidence') query.from = from
+    const returnKeyword = route.query.returnKeyword as string | undefined
+    if (returnKeyword) query.returnKeyword = returnKeyword
     const expandedStage = route.query.expandedStage as string | undefined
     if (expandedStage) query.expandedStage = expandedStage
     router.replace({ path: `/projects/${fromProject}`, query })
     return
   }
-  // 项目详情页：从「按项目查看证据」进入则返回到证据管理，否则回到项目列表
+  // 项目详情页：从「按项目查看证据」进入则返回到证据管理，否则回到项目列表；若带 returnKeyword 则回到搜索列表
   if (route.path.match(/^\/projects\/[^/]+$/)) {
-    if (route.query.from === 'evidence-by-project') {
+    const from = route.query.from as string | undefined
+    const returnKeyword = route.query.returnKeyword as string | undefined
+    if (from === 'evidence-by-project') {
       router.replace('/evidence/by-project')
+    } else if (from === 'evidence') {
+      // 从证据管理全局搜索进入时，返回证据管理并带上 keyword 以恢复搜索列表
+      router.replace({ path: '/evidence', query: returnKeyword ? { keyword: returnKeyword } : {} })
     } else {
       router.replace('/projects')
     }

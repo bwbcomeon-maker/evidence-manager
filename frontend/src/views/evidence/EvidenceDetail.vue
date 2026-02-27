@@ -152,7 +152,8 @@
         />
       </van-dialog>
     </template>
-    <van-empty v-else description="无法加载详情，请从列表进入" />
+    <van-loading v-else-if="detailLoading" class="detail-loading" vertical size="24">加载中...</van-loading>
+    <van-empty v-else description="无法加载详情，证据可能不存在或已删除" />
   </div>
 </template>
 
@@ -181,6 +182,8 @@ const auth = useAuthStore()
 
 const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
+/** 详情请求中（避免未完成时显示“无法加载”提示） */
+const detailLoading = ref(true)
 const showInvalidateReasonDialog = ref(false)
 const invalidateReasonText = ref('')
 /** 预览弹层：页面内展示，避免手机端 window.open 被拦截 */
@@ -357,6 +360,11 @@ function initFromState() {
 }
 
 async function fetchDetail() {
+  if (!evidenceId.value || Number.isNaN(evidenceId.value)) {
+    detailLoading.value = false
+    return
+  }
+  detailLoading.value = true
   try {
     const res = await getEvidenceById(evidenceId.value) as { code: number; data?: EvidenceListItem }
     if (res?.code === 0 && res.data) {
@@ -377,6 +385,8 @@ async function fetchDetail() {
     }
   } catch {
     evidence.value = null
+  } finally {
+    detailLoading.value = false
   }
 }
 
@@ -536,6 +546,9 @@ onMounted(() => {
   padding: 20px 0 28px;
   min-height: 100%;
   background: var(--app-bg, #f5f7fa);
+}
+.detail-loading {
+  padding: 48px 0;
 }
 .evidence-detail__container {
   max-width: 56rem;

@@ -1,6 +1,7 @@
 package com.bwbcomeon.evidence.mapper;
 
 import com.bwbcomeon.evidence.dto.EvidenceCountRow;
+import com.bwbcomeon.evidence.dto.EvidenceSearchResultVO;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -147,5 +148,27 @@ public interface EvidenceItemMapper {
             @Param("projectId") Long projectId,
             @Param("stageId") Long stageId,
             @Param("evidenceTypeCode") String evidenceTypeCode
+    );
+
+    /**
+     * 全局证据搜索：仅限可见项目内，按关键字匹配证据标题或上传人姓名/账号，默认排除已作废。
+     * @param projectIds 可见项目ID列表（非空，来自 getVisibleProjectIds）
+     * @param keyword 关键字（非空，匹配 title / real_name / username）
+     * @param offset 偏移
+     * @param limit 条数
+     */
+    List<EvidenceSearchResultVO> selectGlobalSearch(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("keyword") String keyword,
+            @Param("offset") long offset,
+            @Param("limit") long limit
+    );
+
+    /**
+     * 全局证据搜索总数
+     */
+    long countGlobalSearch(
+            @Param("projectIds") List<Long> projectIds,
+            @Param("keyword") String keyword
     );
 }

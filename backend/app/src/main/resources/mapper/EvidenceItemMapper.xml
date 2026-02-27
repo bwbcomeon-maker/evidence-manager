@@ -255,4 +255,73 @@
           AND COALESCE(evidence_status, '') &lt;&gt; 'INVALID'
     </update>
 
+    <!-- 全局搜索：JOIN project / sys_user / delivery_stage / stage_evidence_template，返回 EvidenceSearchResultVO -->
+    <resultMap id="GlobalSearchResultMap" type="com.bwbcomeon.evidence.dto.EvidenceSearchResultVO">
+        <result column="evidence_id" property="evidenceId" jdbcType="BIGINT"/>
+        <result column="project_id" property="projectId" jdbcType="BIGINT"/>
+        <result column="project_name" property="projectName" jdbcType="VARCHAR"/>
+        <result column="stage_code" property="stageCode" jdbcType="VARCHAR"/>
+        <result column="stage_name" property="stageName" jdbcType="VARCHAR"/>
+        <result column="evidence_type_code" property="evidenceTypeCode" jdbcType="VARCHAR"/>
+        <result column="evidence_type_display_name" property="evidenceTypeDisplayName" jdbcType="VARCHAR"/>
+        <result column="title" property="title" jdbcType="VARCHAR"/>
+        <result column="created_by_display_name" property="createdByDisplayName" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="evidence_status" property="evidenceStatus" jdbcType="VARCHAR"/>
+    </resultMap>
+
+    <sql id="GlobalSearchWhereClause">
+        AND ei.project_id IN
+        <foreach collection="projectIds" item="pid" open="(" separator="," close=")">
+            #{pid}
+        </foreach>
+        AND ei.evidence_status != 'INVALID'
+        AND (
+            ei.title ILIKE CONCAT('%', #{keyword}, '%')
+            OR u.real_name ILIKE CONCAT('%', #{keyword}, '%')
+            OR u.username ILIKE CONCAT('%', #{keyword}, '%')
+            OR p.name ILIKE CONCAT('%', #{keyword}, '%')
+            OR ds.name ILIKE CONCAT('%', #{keyword}, '%')
+            OR t.display_name ILIKE CONCAT('%', #{keyword}, '%')
+            OR ei.note ILIKE CONCAT('%', #{keyword}, '%')
+        )
+    </sql>
+
+    <select id="selectGlobalSearch" resultMap="GlobalSearchResultMap">
+        SELECT
+            ei.id AS evidence_id,
+            ei.project_id AS project_id,
+            p.name AS project_name,
+            ds.code AS stage_code,
+            ds.name AS stage_name,
+            ei.evidence_type_code AS evidence_type_code,
+            t.display_name AS evidence_type_display_name,
+            ei.title AS title,
+            COALESCE(TRIM(u.real_name), u.username) AS created_by_display_name,
+            ei.created_at AS created_at,
+            ei.evidence_status AS evidence_status
+        FROM evidence_item ei
+        LEFT JOIN project p ON ei.project_id = p.id
+        LEFT JOIN sys_user u ON ei.created_by_user_id = u.id
+        LEFT JOIN delivery_stage ds ON ei.stage_id = ds.id
+        LEFT JOIN stage_evidence_template t ON t.stage_id = ei.stage_id AND t.evidence_type_code = ei.evidence_type_code
+        <where>
+            <include refid="GlobalSearchWhereClause"/>
+        </where>
+        ORDER BY ei.created_at DESC
+        OFFSET #{offset} LIMIT #{limit}
+    </select>
+
+    <select id="countGlobalSearch" resultType="long">
+        SELECT COUNT(1)
+        FROM evidence_item ei
+        LEFT JOIN project p ON ei.project_id = p.id
+        LEFT JOIN sys_user u ON ei.created_by_user_id = u.id
+        LEFT JOIN delivery_stage ds ON ei.stage_id = ds.id
+        LEFT JOIN stage_evidence_template t ON t.stage_id = ei.stage_id AND t.evidence_type_code = ei.evidence_type_code
+        <where>
+            <include refid="GlobalSearchWhereClause"/>
+        </where>
+    </select>
+
 </mapper>

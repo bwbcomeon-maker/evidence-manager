@@ -130,6 +130,42 @@ export const getEvidenceById = (id: number) => {
   return http.get<{ code: number; message: string; data: EvidenceListItem }>(`/evidence/${id}`)
 }
 
+/** 全局证据搜索结果项（GET /api/evidence/global-search 返回的 data.records 元素） */
+export interface EvidenceSearchResultItem {
+  evidenceId: number
+  projectId: number
+  projectName?: string
+  stageCode: string
+  stageName?: string
+  evidenceTypeCode: string
+  evidenceTypeDisplayName?: string
+  title: string
+  createdByDisplayName?: string
+  createdAt: string
+  evidenceStatus?: string
+  latestVersion?: {
+    versionId: number
+    versionNo: number
+    originalFilename: string
+    filePath: string
+    fileSize: number
+    createdAt: string
+  } | null
+}
+
+/** 全局证据搜索（GET /api/evidence/global-search） */
+export const getEvidenceGlobalSearch = (params: {
+  keyword: string
+  page?: number
+  pageSize?: number
+}) => {
+  return http.get<{
+    code: number
+    message: string
+    data: PageResult<EvidenceSearchResultItem>
+  }>('/evidence/global-search', { params })
+}
+
 // 证据状态流转
 export const submitEvidence = (id: number) => http.post<{ code: number; message: string }>(`/evidence/${id}/submit`)
 /** 草稿证据物理删除（仅 DRAFT 可删） */

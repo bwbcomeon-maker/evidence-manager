@@ -3,6 +3,7 @@ package com.bwbcomeon.evidence.web;
 import com.bwbcomeon.evidence.dto.AuthUserVO;
 import com.bwbcomeon.evidence.dto.PageResult;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
+import com.bwbcomeon.evidence.dto.EvidenceSearchResultVO;
 import com.bwbcomeon.evidence.dto.Result;
 import com.bwbcomeon.evidence.exception.ForbiddenException;
 import com.bwbcomeon.evidence.exception.UnauthorizedException;
@@ -57,6 +58,25 @@ public class EvidenceVersionController {
         PageResult<EvidenceListItemVO> data = evidenceService.pageEvidence(
                 page, pageSize, projectId, status, uploader, recentDays, fileCategory, nameLike,
                 user.getId(), user.getRoleCode());
+        return Result.success(data);
+    }
+
+    /**
+     * 全局证据搜索（仅当前用户可见项目内，按关键字匹配证据标题或上传人姓名/账号）
+     * GET /api/evidence/global-search?keyword=&page=1&pageSize=10
+     */
+    @GetMapping("/global-search")
+    public Result<PageResult<EvidenceSearchResultVO>> globalSearch(
+            HttpServletRequest request,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        PageResult<EvidenceSearchResultVO> data = evidenceService.globalSearchEvidence(
+                keyword, page, pageSize, user.getId(), user.getRoleCode());
         return Result.success(data);
     }
 

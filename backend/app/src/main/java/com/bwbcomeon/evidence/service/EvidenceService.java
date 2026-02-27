@@ -2,6 +2,7 @@ package com.bwbcomeon.evidence.service;
 
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.EvidenceResponse;
+import com.bwbcomeon.evidence.dto.EvidenceSearchResultVO;
 import com.bwbcomeon.evidence.dto.PermissionBits;
 import com.bwbcomeon.evidence.dto.InvalidateAuditInfo;
 import com.bwbcomeon.evidence.dto.LatestVersionVO;
@@ -410,6 +411,54 @@ public class EvidenceService {
             vo.setPermissions(bits);
             vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
             records.add(vo);
+        }
+        return new PageResult<>(total, records, page, pageSize);
+    }
+
+    /**
+     * 全局证据搜索：仅当前用户可见项目内，按关键字匹配证据标题或上传人姓名/账号，默认排除已作废。
+     * 【极其重要】复用 getVisibleProjectIds 作为查询强制前置条件，防止越权。
+     */
+    public PageResult<EvidenceSearchResultVO> globalSearchEvidence(
+            String keyword, int page, int pageSize,
+            Long currentUserId, String roleCode) {
+        List<Long> visibleIds = getVisibleProjectIds(currentUserId, roleCode);
+        if (visibleIds.isEmpty()) {
+            return new PageResult<>(0, new ArrayList<>(), page, pageSize);
+        }
+        if (keyword == null || keyword.isBlank()) {
+            return new PageResult<>(0, new ArrayList<>(), page, pageSize);
+        }
+        String keywordParam = keyword.trim();
+        long offset = (long) (page - 1) * pageSize;
+        int limit = Math.min(Math.max(1, pageSize), 100);
+
+        List<EvidenceSearchResultVO> records = evidenceItemMapper.selectGlobalSearch(
+                visibleIds, keywordParam, offset, limit);
+        long total = evidenceItemMapper.countGlobalSearch(visibleIds, keywordParam);
+
+        if (records.isEmpty()) {
+            return new PageResult<>(total, new ArrayList<>(), page, pageSize);
+        }
+        List<Long> evidenceIds = records.stream()
+                .map(EvidenceSearchResultVO::getEvidenceId)
+                .collect(Collectors.toList());
+        List<EvidenceVersion> latestVersions = evidenceVersionMapper.selectLatestVersionsByEvidenceIds(evidenceIds);
+        Map<Long, EvidenceVersion> versionMap = latestVersions.stream()
+                .collect(Collectors.toMap(EvidenceVersion::getEvidenceId, v -> v));
+
+        for (EvidenceSearchResultVO vo : records) {
+            EvidenceVersion latest = versionMap.get(vo.getEvidenceId());
+            if (latest != null) {
+                LatestVersionVO lv = new LatestVersionVO();
+                lv.setVersionId(latest.getId());
+                lv.setVersionNo(latest.getVersionNo());
+                lv.setOriginalFilename(latest.getOriginalFilename());
+                lv.setFilePath(latest.getFilePath());
+                lv.setFileSize(latest.getFileSize());
+                lv.setCreatedAt(latest.getCreatedAt());
+                vo.setLatestVersion(lv);
+            }
         }
         return new PageResult<>(total, records, page, pageSize);
     }
