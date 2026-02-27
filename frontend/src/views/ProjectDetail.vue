@@ -78,13 +78,14 @@
                       <span class="key-missing-category-label">未上传</span>
                       <div class="key-missing-tags">
                         <van-tag
-                          v-for="name in displayedKeyMissing.notUploaded"
-                          :key="'u-' + name"
+                          v-for="entry in displayedKeyMissing.notUploaded"
+                          :key="'u-' + entry.stageCode + '-' + entry.evidenceTypeCode"
                           plain
                           type="danger"
-                          class="key-missing-tag"
+                          class="key-missing-tag key-missing-tag--clickable"
+                          @click="scrollToEvidence(entry)"
                         >
-                          {{ name }}
+                          {{ entry.displayName }}
                         </van-tag>
                       </div>
                     </div>
@@ -92,12 +93,13 @@
                       <span class="key-missing-category-label">需补充</span>
                       <div class="key-missing-tags key-missing-shortfall-wrap">
                         <span
-                          v-for="item in displayedKeyMissing.shortfall"
-                          :key="'s-' + item.displayName"
-                          class="key-missing-shortfall-item"
+                          v-for="entry in displayedKeyMissing.shortfall"
+                          :key="'s-' + entry.stageCode + '-' + entry.evidenceTypeCode"
+                          class="key-missing-shortfall-item key-missing-shortfall-item--clickable"
+                          @click="scrollToEvidence(entry)"
                         >
-                          {{ item.displayName }}
-                          <span class="key-missing-shortfall-num">（还差 {{ item.shortfall }} 份）</span>
+                          {{ entry.displayName }}
+                          <span class="key-missing-shortfall-num">（还差 {{ entry.shortfall }} 份）</span>
                         </span>
                       </div>
                     </div>
@@ -105,13 +107,14 @@
                       <span class="key-missing-category-label">待提交</span>
                       <div class="key-missing-tags">
                         <van-tag
-                          v-for="name in displayedKeyMissing.notSubmitted"
-                          :key="'n-' + name"
+                          v-for="entry in displayedKeyMissing.notSubmitted"
+                          :key="'n-' + entry.stageCode + '-' + entry.evidenceTypeCode"
                           plain
                           type="primary"
-                          class="key-missing-tag"
+                          class="key-missing-tag key-missing-tag--clickable"
+                          @click="scrollToEvidence(entry)"
                         >
-                          {{ name }}
+                          {{ entry.displayName }}
                         </van-tag>
                       </div>
                     </div>
@@ -175,13 +178,14 @@
                       <span class="key-missing-category-label">未上传</span>
                       <div class="key-missing-tags">
                         <van-tag
-                          v-for="name in displayedKeyMissing.notUploaded"
-                          :key="'u-' + name"
+                          v-for="entry in displayedKeyMissing.notUploaded"
+                          :key="'u-' + entry.stageCode + '-' + entry.evidenceTypeCode"
                           plain
                           type="danger"
-                          class="key-missing-tag"
+                          class="key-missing-tag key-missing-tag--clickable"
+                          @click="scrollToEvidence(entry)"
                         >
-                          {{ name }}
+                          {{ entry.displayName }}
                         </van-tag>
                       </div>
                     </div>
@@ -189,12 +193,13 @@
                       <span class="key-missing-category-label">需补充</span>
                       <div class="key-missing-tags key-missing-shortfall-wrap">
                         <span
-                          v-for="item in displayedKeyMissing.shortfall"
-                          :key="'s-' + item.displayName"
-                          class="key-missing-shortfall-item"
+                          v-for="entry in displayedKeyMissing.shortfall"
+                          :key="'s-' + entry.stageCode + '-' + entry.evidenceTypeCode"
+                          class="key-missing-shortfall-item key-missing-shortfall-item--clickable"
+                          @click="scrollToEvidence(entry)"
                         >
-                          {{ item.displayName }}
-                          <span class="key-missing-shortfall-num">（还差 {{ item.shortfall }} 份）</span>
+                          {{ entry.displayName }}
+                          <span class="key-missing-shortfall-num">（还差 {{ entry.shortfall }} 份）</span>
                         </span>
                       </div>
                     </div>
@@ -202,13 +207,14 @@
                       <span class="key-missing-category-label">待提交</span>
                       <div class="key-missing-tags">
                         <van-tag
-                          v-for="name in displayedKeyMissing.notSubmitted"
-                          :key="'n-' + name"
+                          v-for="entry in displayedKeyMissing.notSubmitted"
+                          :key="'n-' + entry.stageCode + '-' + entry.evidenceTypeCode"
                           plain
                           type="primary"
-                          class="key-missing-tag"
+                          class="key-missing-tag key-missing-tag--clickable"
+                          @click="scrollToEvidence(entry)"
                         >
-                          {{ name }}
+                          {{ entry.displayName }}
                         </van-tag>
                       </div>
                     </div>
@@ -253,6 +259,7 @@
                   <div
                     v-for="(item, idx) in (s.items || [])"
                     :key="item.evidenceTypeCode + '-' + idx"
+                    :id="'evidence-card-' + s.stageCode + '-' + item.evidenceTypeCode"
                     class="evidence-card"
                   >
                     <!-- 卡片标题行：大点击区域列表项，右侧状态透出 + 箭头 -->
@@ -263,7 +270,10 @@
                         <van-tag v-else type="default" size="mini">选填</van-tag>
                       </div>
                       <div class="evidence-card-status">
-                        <span class="card-status-text" :class="{ 'status--pending': (item.minCount ?? 1) > 0 && (item.uploadCount ?? item.currentCount) === 0 }">
+                        <span
+                          class="card-status-text"
+                          :class="{ 'card-status-text--insufficient': (item.minCount ?? 1) > 0 && ((item.uploadCount ?? item.currentCount) < (item.minCount ?? 1)) }"
+                        >
                           {{ (item.minCount ?? 1) === 0 ? `选填（已 ${item.uploadCount ?? item.currentCount} 份）` : `已 ${item.uploadCount ?? item.currentCount} / 需 ${item.minCount ?? 1} 份` }}
                         </span>
                         <van-icon name="arrow" class="card-arrow" />
@@ -279,16 +289,29 @@
                           class="grid-item"
                           @click="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                         >
-                          <!-- 图片缩略图：圆角、cover，右上角删除图标 -->
-                          <div v-if="isImageType(ev.contentType) && ev.latestVersion" class="grid-thumb" @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)">
+                          <!-- 图片缩略图：圆角、cover，左下角状态标签；不合格时半透明遮罩 -->
+                          <div
+                            v-if="isImageType(ev.contentType) && ev.latestVersion"
+                            class="grid-thumb"
+                            :class="{ 'grid-thumb--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID' }"
+                            @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
+                          >
                             <img :src="`/api/evidence/versions/${ev.latestVersion.versionId}/download`" :alt="ev.title" />
                             <div class="grid-thumb-overlay">
-                              <van-tag :type="evidenceListStatusTagType(ev)" size="mini">{{ evidenceListStatusText(ev) }}</van-tag>
+                              <span class="evidence-badge" :class="'evidence-badge--' + evidenceBadgeType(ev)">
+                                {{ evidenceBadgeText(ev) }}
+                              </span>
                             </div>
                             <button v-if="route.query.from !== 'evidence-by-project'" type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
-                          <!-- 非图片：文档类列表式展示，左侧图标、中间文件名、右侧删除 -->
-                          <div v-else class="grid-file" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }" @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)">
+                          <!-- 非图片：文档类列表式展示，左下角状态标签 -->
+                          <div
+                            v-else
+                            class="grid-file"
+                            :class="{ 'grid-file--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID' }"
+                            :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }"
+                            @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
+                          >
                             <span class="grid-file-type-badge" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).color }">
                               {{ getFileIconConfig(getEvidenceFileName(ev)).label }}
                             </span>
@@ -298,18 +321,23 @@
                               :color="getFileIconConfig(getEvidenceFileName(ev)).color"
                             />
                             <span class="grid-file-name">{{ ev.latestVersion?.originalFilename || ev.title }}</span>
-                            <van-tag :type="evidenceListStatusTagType(ev)" size="mini">{{ evidenceListStatusText(ev) }}</van-tag>
+                            <span class="evidence-badge evidence-badge--file" :class="'evidence-badge--' + evidenceBadgeType(ev)">
+                              {{ evidenceBadgeText(ev) }}
+                            </span>
                             <button v-if="route.query.from !== 'evidence-by-project'" type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                         </div>
-                        <!-- 上传入口：虚线框 + 号；从「按项目查看证据」进入时仅查看，不显示 -->
+                        <!-- 上传入口：自定义大加号 + 动态文案（未达标：继续上传 + 还差 X 张；已达标：上传更多） -->
                         <div
                           v-if="canUpload && s.stageId && route.query.from !== 'evidence-by-project'"
                           class="grid-item grid-upload-btn"
                           @click="openUploadForItem(s, item)"
                         >
-                          <van-icon name="plus" size="24" color="var(--van-gray-5)" />
-                          <span class="grid-upload-text">上传</span>
+                          <div class="grid-upload-inner">
+                            <span class="grid-upload-plus">+</span>
+                            <span class="grid-upload-label">{{ uploadShortfall(s, item) > 0 ? '继续上传' : '上传更多' }}</span>
+                            <span v-if="uploadShortfall(s, item) > 0" class="grid-upload-hint">(还差 {{ uploadShortfall(s, item) }} 张)</span>
+                          </div>
                         </div>
                       </template>
                     </div>
@@ -519,7 +547,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   NavBar,
@@ -648,15 +676,26 @@ function memberRoleLabel(role: string): string {
   return memberRoleLabels[role] || role
 }
 
-/** 关键缺失详情：按「未上传」「已上传未提交」「数量不足」分类，供界面分段展示 */
+/** 关键缺失项：含 stageCode、evidenceTypeCode 用于点击后滚动定位（若后端改为返回 stageId/evidenceId，在此做映射即可） */
+interface KeyMissingTarget {
+  displayName: string
+  stageCode: string
+  evidenceTypeCode: string
+  shortfall?: number
+}
+
+/** 关键缺失详情：按「未上传」「已上传未提交」「数量不足」分类，每项带定位信息 */
 const keyMissingDetails = computed(() => {
   const progress = stageProgress.value
-  if (!progress?.stages?.length) {
-    return { notUploaded: [] as string[], notSubmitted: [] as string[], shortfall: [] as { displayName: string; shortfall: number }[] }
+  const empty = {
+    notUploaded: [] as KeyMissingTarget[],
+    notSubmitted: [] as KeyMissingTarget[],
+    shortfall: [] as (KeyMissingTarget & { shortfall: number })[]
   }
-  const notUploaded: string[] = []
-  const notSubmitted: string[] = []
-  const shortfall: { displayName: string; shortfall: number }[] = []
+  if (!progress?.stages?.length) return empty
+  const notUploaded: KeyMissingTarget[] = []
+  const notSubmitted: KeyMissingTarget[] = []
+  const shortfall: (KeyMissingTarget & { shortfall: number })[] = []
   const seenGroups = new Set<string>()
 
   for (const stage of progress.stages) {
@@ -665,29 +704,33 @@ const keyMissingDetails = computed(() => {
       const required = item.required === true || item.isRequired === true
       const inGroup = !!item.ruleGroup && !!item.groupDisplayName
       const groupNotCompleted = inGroup && item.groupCompleted === false
+      const stageCode = stage.stageCode
+      const evidenceTypeCode = item.evidenceTypeCode
 
       if (inGroup && groupNotCompleted) {
-        const key = `${stage.stageCode}:${item.ruleGroup}`
+        const key = `${stageCode}:${item.ruleGroup}`
         if (seenGroups.has(key)) continue
         seenGroups.add(key)
         const groupItems = items.filter((i: StageItemVO) => i.ruleGroup === item.ruleGroup)
         const allZero = groupItems.every((i: StageItemVO) => (i.uploadCount ?? 0) === 0)
         const anyCompleted = groupItems.some((i: StageItemVO) => i.completed === true)
-        const name = item.groupDisplayName || item.displayName
-        if (allZero) notUploaded.push(name)
-        else if (!anyCompleted) notSubmitted.push(name)
-        else shortfall.push({ displayName: name, shortfall: 1 })
+        const displayName = item.groupDisplayName || item.displayName
+        const target = { displayName, stageCode, evidenceTypeCode }
+        if (allZero) notUploaded.push(target)
+        else if (!anyCompleted) notSubmitted.push(target)
+        else shortfall.push({ ...target, shortfall: 1 })
         continue
       }
 
       if (!required || item.completed) continue
-      const name = item.displayName
+      const displayName = item.displayName
       const up = item.uploadCount ?? 0
       const cur = item.currentCount ?? 0
       const min = item.minCount ?? 1
-      if (up === 0) notUploaded.push(name)
-      else if (cur === 0) notSubmitted.push(name)
-      else shortfall.push({ displayName: name, shortfall: Math.max(0, min - cur) })
+      const target = { displayName, stageCode, evidenceTypeCode }
+      if (up === 0) notUploaded.push(target)
+      else if (cur === 0) notSubmitted.push(target)
+      else shortfall.push({ ...target, shortfall: Math.max(0, min - cur) })
     }
   }
   return { notUploaded, notSubmitted, shortfall }
@@ -729,6 +772,46 @@ const keyMissingHiddenCount = computed(() => {
     d.shortfall.length - shown.shortfall.length
   )
 })
+
+const HIGHLIGHT_FLASH_DURATION = 1500
+
+/** 证据管理 Tab 的索引（与 van-tabs 顺序一致：0=详情/基本信息，1=证据） */
+const EVIDENCE_TAB_INDEX = 1
+
+/**
+ * 点击关键缺失项：跨 Tab 时先切到证据管理 → 等待渲染 → 展开对应阶段 → 再等待展开 → 平滑滚动 → 高亮闪烁
+ * @param entry 当前项，含 stageCode、evidenceTypeCode（若数据结构为 tabName/stageId/evidenceId，在此做映射即可）
+ */
+async function scrollToEvidence(entry: KeyMissingTarget) {
+  const { stageCode, evidenceTypeCode } = entry
+
+  // 1. 跨 Tab 切换：若当前不是“证据管理”Tab，先切换过去
+  if (activeTab.value !== EVIDENCE_TAB_INDEX) {
+    activeTab.value = EVIDENCE_TAB_INDEX
+    await nextTick()
+  }
+
+  // 2. 第一次 DOM 等待：证据管理 Tab 内容挂载完成
+  await nextTick()
+
+  // 3. 展开对应折叠面板（van-collapse v-model 为 expandedStages，项 name 为 stageCode）
+  if (!expandedStages.value.includes(stageCode)) {
+    expandedStages.value = [...expandedStages.value, stageCode]
+  }
+
+  // 4. 第二次 DOM 等待：折叠面板撑开，获得真实高度
+  await nextTick()
+
+  const el = document.getElementById(`evidence-card-${stageCode}-${evidenceTypeCode}`)
+  if (!el) return
+
+  // 5. 平滑滚动到视区中间
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  // 6. 视觉高亮：短暂黄色闪烁后移除
+  el.classList.add('highlight-flash')
+  setTimeout(() => el.classList.remove('highlight-flash'), HIGHLIGHT_FLASH_DURATION)
+}
 
 // 证据列表相关
 const evidenceList = ref<EvidenceListItem[]>([])
@@ -821,6 +904,27 @@ function evidenceListStatusText(evidence: EvidenceListItem) {
 }
 function evidenceListStatusTagType(evidence: EvidenceListItem) {
   return evidenceStatusTagType(getEffectiveEvidenceStatus(evidence))
+}
+
+/** 证据状态 → 现场展示三类：待提交 / 已提交 / 不合格 */
+function evidenceBadgeType(evidence: EvidenceListItem): 'pending' | 'submitted' | 'rejected' {
+  const status = getEffectiveEvidenceStatus(evidence)
+  if (status === 'INVALID') return 'rejected'
+  if (status === 'SUBMITTED' || status === 'ARCHIVED') return 'submitted'
+  return 'pending'
+}
+function evidenceBadgeText(evidence: EvidenceListItem): string {
+  const status = getEffectiveEvidenceStatus(evidence)
+  if (status === 'INVALID') return '不合格'
+  if (status === 'SUBMITTED' || status === 'ARCHIVED') return '已提交'
+  return '待提交'
+}
+
+/** 当前项还差几张（用于上传入口文案） */
+function uploadShortfall(_stage: StageVO, item: StageItemVO): number {
+  const need = item.minCount ?? 1
+  const have = item.uploadCount ?? item.currentCount ?? 0
+  return Math.max(0, need - have)
 }
 
 // 打开上传弹窗（重置为阶段1）
@@ -2072,6 +2176,22 @@ onMounted(() => {
 .key-missing-toggle:active {
   opacity: 0.8;
 }
+.key-missing-tag--clickable,
+.key-missing-shortfall-item--clickable {
+  cursor: pointer;
+}
+.key-missing-shortfall-item--clickable {
+  display: inline-block;
+}
+/* 点击关键缺失后滚动到的证据卡片高亮闪烁（约 1.5 秒） */
+.evidence-card.highlight-flash {
+  animation: highlight-flash 1.5s ease-out;
+}
+@keyframes highlight-flash {
+  0% { background-color: rgba(255, 193, 7, 0.5); }
+  30% { background-color: rgba(255, 193, 7, 0.35); }
+  100% { background-color: transparent; }
+}
 .archive-row {
   margin-top: 10px;
 }
@@ -2151,8 +2271,9 @@ onMounted(() => {
   font-size: 13px;
   color: var(--app-text-secondary);
 }
-.card-status-text.status--pending {
-  color: #ee0a24;
+.card-status-text.card-status-text--insufficient {
+  color: var(--van-red);
+  font-weight: 500;
 }
 .card-arrow {
   color: var(--app-text-secondary);
@@ -2202,10 +2323,50 @@ onMounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 2px 4px;
-  background: linear-gradient(transparent, rgba(0,0,0,0.4));
+  padding: 4px 6px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.5));
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  align-items: center;
+}
+.grid-thumb--rejected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.evidence-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+  line-height: 1.2;
+}
+.evidence-badge--pending {
+  background: var(--van-orange);
+}
+.evidence-badge--submitted {
+  background: var(--van-primary-color);
+}
+.evidence-badge--rejected {
+  background: var(--van-red);
+}
+.grid-file--rejected::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 0;
+}
+.grid-file .evidence-badge--file {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  z-index: 1;
 }
 .grid-thumb-delete {
   position: absolute;
@@ -2282,21 +2443,39 @@ onMounted(() => {
 .grid-file-delete:active {
   background: rgba(0, 0, 0, 0.6);
 }
-/* 上传入口：虚线框 */
+/* 上传入口：自定义大加号 + 动态文案 */
 .grid-upload-btn {
   border: 2px dashed var(--van-gray-4);
   background: transparent;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   transition: border-color 0.2s, background 0.2s;
 }
 .grid-upload-btn:active {
   border-color: var(--van-primary-color);
   background: rgba(25, 137, 250, 0.06);
 }
-.grid-upload-text {
+.grid-upload-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.grid-upload-plus {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--van-gray-5);
+  line-height: 1;
+}
+.grid-upload-label {
   font-size: 12px;
-  color: var(--app-text-secondary);
+  color: var(--van-gray-7);
+}
+.grid-upload-hint {
+  font-size: 11px;
+  color: var(--van-red);
+  font-weight: 500;
 }
 
 .upload-context-cell {
