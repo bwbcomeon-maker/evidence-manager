@@ -112,6 +112,7 @@ import {
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
 import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
 import { compressImageIfNeeded } from '@/utils/imageCompress'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -239,9 +240,9 @@ async function onSaveDraft() {
     } else {
       showToast(res?.message || '保存失败')
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     closeToast()
-    showToast(e?.message || '保存失败')
+    showToast(getFriendlyErrorMessage(e, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -271,8 +272,8 @@ async function onSubmit() {
     } else {
       showToast(res?.message || '提交失败')
     }
-  } catch (e: any) {
-    showToast(e?.message || '提交失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '提交失败'))
   } finally {
     submitting.value = false
   }

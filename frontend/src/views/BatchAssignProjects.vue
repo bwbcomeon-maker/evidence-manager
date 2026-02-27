@@ -107,6 +107,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getProjects, batchAssignUserToProjects, type ProjectVO } from '@/api/projects'
 import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 import { showToast } from 'vant'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -218,8 +219,8 @@ async function onSubmit() {
     } else {
       showToast(res.message || '分配失败')
     }
-  } catch (e: any) {
-    showToast(e?.response?.data?.message || e?.message || '分配失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '分配失败'))
   } finally {
     submitting.value = false
   }

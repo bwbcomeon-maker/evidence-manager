@@ -97,6 +97,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { changePassword, verifyPassword } from '@/api/auth'
 import { showToast } from 'vant'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -179,9 +180,8 @@ async function onChangePwdConfirm(action: string): Promise<boolean> {
       showToast(getChangePwdFriendlyMessage(verifyRes.message) || '原始密码不正确，不允许修改')
       return false
     }
-  } catch (e: any) {
-    const data = e?.response?.data
-    const msg = (typeof data === 'object' && data?.message) || (typeof data === 'string' && data) || e?.message || ''
+  } catch (e: unknown) {
+    const msg = getFriendlyErrorMessage(e, '')
     showToast(getChangePwdFriendlyMessage(msg) || '原始密码不正确，不允许修改')
     return false
   }
@@ -197,17 +197,12 @@ async function onChangePwdConfirm(action: string): Promise<boolean> {
     }
     showToast(getChangePwdFriendlyMessage(res.message))
     return false
-  } catch (e: any) {
-    const data = e?.response?.data
-    const msg =
-      (typeof data === 'object' && data?.message) ||
-      (typeof data === 'string' && data) ||
-      e?.message ||
-      ''
-    const isNotFound =
-      e?.response?.status === 404 || (typeof msg === 'string' && msg.includes('No static resource'))
+  } catch (e: unknown) {
+    const err = e as { response?: { status?: number } }
+    const isNotFound = err?.response?.status === 404
+    const msg = getFriendlyErrorMessage(e, '修改失败')
     showToast(
-      isNotFound ? '修改密码接口不可用，请确认后端已重新编译并启动' : getChangePwdFriendlyMessage(msg || '修改失败')
+      isNotFound ? '修改密码接口不可用，请确认后端已重新编译并启动' : getChangePwdFriendlyMessage(msg)
     )
     return false
   }

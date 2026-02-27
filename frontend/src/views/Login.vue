@@ -63,6 +63,7 @@ import { showToast } from 'vant'
 import QRCode from 'qrcode'
 import { login } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 // ---------- 手机扫码访问（开发用） ----------
 const showQrPopup = ref(false)
@@ -161,13 +162,7 @@ const onSubmit = async () => {
       showToast(res.message || '登录失败')
     }
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string }; status?: number }; message?: string; code?: string }
-    const msg =
-      err?.response?.data?.message ??
-      (err?.response ? undefined : '网络错误，请确认后端已启动（端口 8081）') ??
-      (err?.code === 'ECONNABORTED' ? '请求超时' : err?.message) ??
-      '用户名或密码错误'
-    showToast(msg)
+    showToast(getFriendlyErrorMessage(e, '用户名或密码错误'))
   } finally {
     loading.value = false
   }

@@ -139,6 +139,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 import {
   getAdminUserPage,
   createAdminUser,
@@ -315,10 +316,7 @@ async function onFormSubmit() {
     showFormPopup.value = false
     loadFirstPage()
   } catch (e: unknown) {
-    const msg = (e as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
-      ?? (e as Error)?.message
-      ?? '操作失败'
-    showToast(msg)
+    showToast(getFriendlyErrorMessage(e, '操作失败'))
   } finally {
     formLoading.value = false
   }
@@ -330,8 +328,7 @@ async function toggleEnable(u: AdminUserItem, enabled: boolean) {
     u.enabled = enabled
     showToast(enabled ? '已启用' : '已禁用')
   } catch (e: unknown) {
-    const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'
-    showToast(msg)
+    showToast(getFriendlyErrorMessage(e, '操作失败'))
   }
 }
 
@@ -374,8 +371,7 @@ async function doDelete() {
     deleteTarget.value = null
     loadFirstPage()
   } catch (e: unknown) {
-    const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '删除失败'
-    showToast(msg)
+    showToast(getFriendlyErrorMessage(e, '删除失败'))
   }
 }
 

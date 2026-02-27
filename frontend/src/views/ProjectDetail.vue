@@ -69,22 +69,69 @@
                 <van-progress :percentage="stageProgress.overallCompletionPercent" stroke-width="8" />
                 <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
               </div>
-              <div v-if="stageProgress.keyMissing?.length" class="key-missing-row">
-                <span class="key-missing-label">关键缺失：</span>
-                <span class="key-missing-list">{{ (stageProgress.keyMissing || []).slice(0, 5).join('、') }}</span>
+              <div v-if="hasKeyMissing" class="key-missing-card">
+                <div class="key-missing-card-inner">
+                  <van-icon name="warning-o" class="key-missing-icon" />
+                  <div class="key-missing-body">
+                    <div class="key-missing-title">关键缺失</div>
+                    <div v-if="displayedKeyMissing.notUploaded.length" class="key-missing-category">
+                      <span class="key-missing-category-label">未上传</span>
+                      <div class="key-missing-tags">
+                        <van-tag
+                          v-for="name in displayedKeyMissing.notUploaded"
+                          :key="'u-' + name"
+                          plain
+                          type="danger"
+                          class="key-missing-tag"
+                        >
+                          {{ name }}
+                        </van-tag>
+                      </div>
+                    </div>
+                    <div v-if="displayedKeyMissing.shortfall.length" class="key-missing-category">
+                      <span class="key-missing-category-label">需补充</span>
+                      <div class="key-missing-tags key-missing-shortfall-wrap">
+                        <span
+                          v-for="item in displayedKeyMissing.shortfall"
+                          :key="'s-' + item.displayName"
+                          class="key-missing-shortfall-item"
+                        >
+                          {{ item.displayName }}
+                          <span class="key-missing-shortfall-num">（还差 {{ item.shortfall }} 份）</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div v-if="displayedKeyMissing.notSubmitted.length" class="key-missing-category">
+                      <span class="key-missing-category-label">待提交</span>
+                      <div class="key-missing-tags">
+                        <van-tag
+                          v-for="name in displayedKeyMissing.notSubmitted"
+                          :key="'n-' + name"
+                          plain
+                          type="primary"
+                          class="key-missing-tag"
+                        >
+                          {{ name }}
+                        </van-tag>
+                      </div>
+                    </div>
+                    <div v-if="keyMissingHasMore && !keyMissingExpanded" class="key-missing-toggle" @click="keyMissingExpanded = true">
+                      展开（还有 {{ keyMissingHiddenCount }} 项）
+                    </div>
+                    <div v-else-if="keyMissingHasMore && keyMissingExpanded" class="key-missing-toggle" @click="keyMissingExpanded = false">
+                      收起
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="archive-row">
                 <van-button
                   type="primary"
-                  :disabled="!stageProgress.canArchive || project?.status === 'archived'"
-                  :title="!stageProgress.canArchive ? (stageProgress.archiveBlockReason || '不满足归档条件') : ''"
-                  @click="handleArchive"
+                  :class="{ 'archive-btn--disabled': !stageProgress.canArchive || project?.status === 'archived' }"
+                  @click="onArchiveClick"
                 >
                   申请归档
                 </van-button>
-                <span v-if="!stageProgress.canArchive && stageProgress.archiveBlockReason" class="archive-block-tip">
-                  {{ stageProgress.archiveBlockReason }}
-                </span>
               </div>
             </div>
             <van-loading v-else-if="stageProgressLoading" class="stage-progress-loading" vertical>加载阶段进度...</van-loading>
@@ -119,22 +166,69 @@
                 <van-progress :percentage="stageProgress.overallCompletionPercent" stroke-width="8" />
                 <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
               </div>
-              <div v-if="stageProgress.keyMissing?.length" class="key-missing-row">
-                <span class="key-missing-label">关键缺失：</span>
-                <span class="key-missing-list">{{ (stageProgress.keyMissing || []).slice(0, 5).join('、') }}</span>
+              <div v-if="hasKeyMissing" class="key-missing-card">
+                <div class="key-missing-card-inner">
+                  <van-icon name="warning-o" class="key-missing-icon" />
+                  <div class="key-missing-body">
+                    <div class="key-missing-title">关键缺失</div>
+                    <div v-if="displayedKeyMissing.notUploaded.length" class="key-missing-category">
+                      <span class="key-missing-category-label">未上传</span>
+                      <div class="key-missing-tags">
+                        <van-tag
+                          v-for="name in displayedKeyMissing.notUploaded"
+                          :key="'u-' + name"
+                          plain
+                          type="danger"
+                          class="key-missing-tag"
+                        >
+                          {{ name }}
+                        </van-tag>
+                      </div>
+                    </div>
+                    <div v-if="displayedKeyMissing.shortfall.length" class="key-missing-category">
+                      <span class="key-missing-category-label">需补充</span>
+                      <div class="key-missing-tags key-missing-shortfall-wrap">
+                        <span
+                          v-for="item in displayedKeyMissing.shortfall"
+                          :key="'s-' + item.displayName"
+                          class="key-missing-shortfall-item"
+                        >
+                          {{ item.displayName }}
+                          <span class="key-missing-shortfall-num">（还差 {{ item.shortfall }} 份）</span>
+                        </span>
+                      </div>
+                    </div>
+                    <div v-if="displayedKeyMissing.notSubmitted.length" class="key-missing-category">
+                      <span class="key-missing-category-label">待提交</span>
+                      <div class="key-missing-tags">
+                        <van-tag
+                          v-for="name in displayedKeyMissing.notSubmitted"
+                          :key="'n-' + name"
+                          plain
+                          type="primary"
+                          class="key-missing-tag"
+                        >
+                          {{ name }}
+                        </van-tag>
+                      </div>
+                    </div>
+                    <div v-if="keyMissingHasMore && !keyMissingExpanded" class="key-missing-toggle" @click="keyMissingExpanded = true">
+                      展开（还有 {{ keyMissingHiddenCount }} 项）
+                    </div>
+                    <div v-else-if="keyMissingHasMore && keyMissingExpanded" class="key-missing-toggle" @click="keyMissingExpanded = false">
+                      收起
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="archive-row">
                 <van-button
                   type="primary"
-                  :disabled="!stageProgress.canArchive || project?.status === 'archived'"
-                  :title="!stageProgress.canArchive ? (stageProgress.archiveBlockReason || '不满足归档条件') : ''"
-                  @click="handleArchive"
+                  :class="{ 'archive-btn--disabled': !stageProgress.canArchive || project?.status === 'archived' }"
+                  @click="onArchiveClick"
                 >
                   申请归档
                 </van-button>
-                <span v-if="!stageProgress.canArchive && stageProgress.archiveBlockReason" class="archive-block-tip">
-                  {{ stageProgress.archiveBlockReason }}
-                </span>
               </div>
             </div>
             <van-loading v-else-if="stageProgressLoading" class="stage-progress-loading" vertical>加载阶段进度...</van-loading>
@@ -481,6 +575,7 @@ import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
 import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
 import { compressImageIfNeeded } from '@/utils/imageCompress'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 interface Project {
   id: number
@@ -552,6 +647,88 @@ const sortedMembers = computed(() => {
 function memberRoleLabel(role: string): string {
   return memberRoleLabels[role] || role
 }
+
+/** 关键缺失详情：按「未上传」「已上传未提交」「数量不足」分类，供界面分段展示 */
+const keyMissingDetails = computed(() => {
+  const progress = stageProgress.value
+  if (!progress?.stages?.length) {
+    return { notUploaded: [] as string[], notSubmitted: [] as string[], shortfall: [] as { displayName: string; shortfall: number }[] }
+  }
+  const notUploaded: string[] = []
+  const notSubmitted: string[] = []
+  const shortfall: { displayName: string; shortfall: number }[] = []
+  const seenGroups = new Set<string>()
+
+  for (const stage of progress.stages) {
+    const items = stage.items || []
+    for (const item of items) {
+      const required = item.required === true || item.isRequired === true
+      const inGroup = !!item.ruleGroup && !!item.groupDisplayName
+      const groupNotCompleted = inGroup && item.groupCompleted === false
+
+      if (inGroup && groupNotCompleted) {
+        const key = `${stage.stageCode}:${item.ruleGroup}`
+        if (seenGroups.has(key)) continue
+        seenGroups.add(key)
+        const groupItems = items.filter((i: StageItemVO) => i.ruleGroup === item.ruleGroup)
+        const allZero = groupItems.every((i: StageItemVO) => (i.uploadCount ?? 0) === 0)
+        const anyCompleted = groupItems.some((i: StageItemVO) => i.completed === true)
+        const name = item.groupDisplayName || item.displayName
+        if (allZero) notUploaded.push(name)
+        else if (!anyCompleted) notSubmitted.push(name)
+        else shortfall.push({ displayName: name, shortfall: 1 })
+        continue
+      }
+
+      if (!required || item.completed) continue
+      const name = item.displayName
+      const up = item.uploadCount ?? 0
+      const cur = item.currentCount ?? 0
+      const min = item.minCount ?? 1
+      if (up === 0) notUploaded.push(name)
+      else if (cur === 0) notSubmitted.push(name)
+      else shortfall.push({ displayName: name, shortfall: Math.max(0, min - cur) })
+    }
+  }
+  return { notUploaded, notSubmitted, shortfall }
+})
+
+/** 是否有任意关键缺失（用于是否展示关键缺失区块） */
+const hasKeyMissing = computed(() => {
+  const d = keyMissingDetails.value
+  return d.notUploaded.length > 0 || d.notSubmitted.length > 0 || d.shortfall.length > 0
+})
+
+/** 关键缺失展开/收起：缺失总数 > 6 时默认收起，只展示前 6 条（按类均分） */
+const keyMissingExpanded = ref(false)
+const KEY_MISSING_COLLAPSE_THRESHOLD = 6
+const displayedKeyMissing = computed(() => {
+  const d = keyMissingDetails.value
+  const total = d.notUploaded.length + d.notSubmitted.length + d.shortfall.length
+  const needCollapse = total > KEY_MISSING_COLLAPSE_THRESHOLD && !keyMissingExpanded.value
+  if (!needCollapse) return d
+  const cap = 2
+  return {
+    notUploaded: d.notUploaded.slice(0, cap),
+    notSubmitted: d.notSubmitted.slice(0, cap),
+    shortfall: d.shortfall.slice(0, cap)
+  }
+})
+const keyMissingHasMore = computed(() => {
+  const d = keyMissingDetails.value
+  const total = d.notUploaded.length + d.notSubmitted.length + d.shortfall.length
+  return total > KEY_MISSING_COLLAPSE_THRESHOLD
+})
+const keyMissingHiddenCount = computed(() => {
+  if (!keyMissingHasMore.value || keyMissingExpanded.value) return 0
+  const d = keyMissingDetails.value
+  const shown = displayedKeyMissing.value
+  return (
+    d.notUploaded.length - shown.notUploaded.length +
+    d.notSubmitted.length - shown.notSubmitted.length +
+    d.shortfall.length - shown.shortfall.length
+  )
+})
 
 // 证据列表相关
 const evidenceList = ref<EvidenceListItem[]>([])
@@ -742,8 +919,8 @@ async function onHasProcurementChange(value: boolean) {
     } else {
       showToast(res?.message || '更新失败')
     }
-  } catch (e: any) {
-    showToast(e?.message || '更新失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '更新失败'))
   }
 }
 
@@ -821,9 +998,9 @@ const loadEvidenceList = async () => {
     } else {
       showToast(response.message || '加载失败')
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Load evidence list error:', error)
-    showToast(error.message || '加载失败')
+    showToast(getFriendlyErrorMessage(error, '加载失败'))
   } finally {
     loading.value = false
     refreshing.value = false
@@ -892,7 +1069,7 @@ const handleDownload = async (evidence: EvidenceListItem) => {
     showSuccessToast('下载成功')
   } catch (error: any) {
     console.error('Download error:', error)
-    showToast(error.message || '下载失败')
+    showToast(getFriendlyErrorMessage(error, '下载失败'))
   } finally {
     closeToast()
   }
@@ -930,7 +1107,7 @@ const handlePreview = async (evidence: EvidenceListItem) => {
     setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
   } catch (error: any) {
     console.error('Preview error:', error)
-    showToast(error.message || '预览失败')
+    showToast(getFriendlyErrorMessage(error, '预览失败'))
   } finally {
     closeToast()
   }
@@ -1055,7 +1232,7 @@ const handleUpload = async () => {
   } catch (error: any) {
     closeToast()
     console.error('Upload error:', error)
-    showToast(error?.message || '上传失败')
+    showToast(getFriendlyErrorMessage(error, '上传失败'))
   } finally {
     uploading.value = false
   }
@@ -1086,7 +1263,7 @@ async function handleUploadResultSubmit() {
       showToast(res?.message || '提交失败')
     }
   } catch (e: any) {
-    showToast(e?.message || '提交失败')
+    showToast(getFriendlyErrorMessage(e, '提交失败'))
   } finally {
     submitLoading.value = false
   }
@@ -1114,7 +1291,7 @@ async function handleUploadResultDelete() {
       showToast(res?.message || '删除失败')
     }
   } catch (e: any) {
-    showToast(e?.message || '删除失败')
+    showToast(getFriendlyErrorMessage(e, '删除失败'))
   } finally {
     deleteLoading.value = false
   }
@@ -1155,7 +1332,7 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
     showToast(res?.message || '作废失败')
     return false
   } catch (e: any) {
-    showToast(e?.message || '作废失败')
+    showToast(getFriendlyErrorMessage(e, '作废失败'))
     return false
   } finally {
     invalidateLoading.value = false
@@ -1400,10 +1577,19 @@ async function doArchive(): Promise<boolean> {
       archiveBlockData.value = structured.data as ArchiveBlockVO
       showArchiveBlockDialog.value = true
     } else {
-      showToast((err as Error)?.message ?? '归档失败')
+      showToast(getFriendlyErrorMessage(err, '归档失败'))
     }
     return false
   }
+}
+
+/** 申请归档按钮点击：不可归档时拦截并 Toast 提示，可归档时执行 handleArchive */
+function onArchiveClick() {
+  if (!stageProgress.value?.canArchive || project.value?.status === 'archived') {
+    showToast('请先补全关键证据再申请归档')
+    return
+  }
+  handleArchive()
 }
 
 /** 申请归档：若有草稿则先弹窗列出草稿并确认，确认后再归档；无草稿则直接归档 */
@@ -1804,24 +1990,99 @@ onMounted(() => {
   font-weight: 500;
   min-width: 36px;
 }
-.key-missing-row {
+/* 关键缺失：浅色警示卡片 + 分类标签 */
+.key-missing-card {
+  margin-top: 10px;
+}
+.key-missing-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: linear-gradient(135deg, #fff5f5 0%, #fff8e6 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 77, 79, 0.15);
+}
+.key-missing-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 18px;
+  color: var(--van-orange);
+}
+.key-missing-body {
+  flex: 1;
+  min-width: 0;
+}
+.key-missing-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--van-gray-8);
+  margin-bottom: 10px;
+}
+.key-missing-category {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.key-missing-category:last-of-type {
+  margin-bottom: 0;
+}
+.key-missing-category-label {
+  flex-shrink: 0;
+  width: 70px;
   font-size: 12px;
   color: var(--van-gray-6);
-  margin-bottom: 6px;
+  text-align: right;
+  line-height: 24px;
+  padding-top: 2px;
 }
-.key-missing-list {
-  word-break: break-all;
+.key-missing-tags {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.key-missing-tag {
+  margin: 0;
+}
+.key-missing-shortfall-wrap {
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.key-missing-shortfall-item {
+  font-size: 12px;
+  color: var(--van-gray-8);
+  line-height: 24px;
+}
+.key-missing-shortfall-num {
+  color: var(--van-red);
+  font-weight: 700;
+}
+.key-missing-toggle {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--van-blue);
+  cursor: pointer;
+  user-select: none;
+}
+.key-missing-toggle:active {
+  opacity: 0.8;
 }
 .archive-row {
   margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
-.archive-block-tip {
-  font-size: 12px;
-  color: var(--van-gray-6);
-  flex: 1;
+.archive-btn--disabled {
+  opacity: 0.6;
+  background: var(--van-gray-5) !important;
+  border-color: var(--van-gray-5) !important;
+  color: var(--van-gray-6) !important;
+}
+.archive-btn--disabled:active {
+  opacity: 0.6;
 }
 .stage-progress-loading {
   padding: 24px;

@@ -2,7 +2,56 @@
   <div class="evidence-detail">
     <template v-if="evidence">
       <div class="evidence-detail__container">
-        <div class="evidence-detail__card">
+        <div class="evidence-detail__card" :class="{ 'has-media': evidence.latestVersion }">
+          <!-- 媒体预览区：图片/视频/PDF 内嵌，其余占位 -->
+          <div v-if="evidence.latestVersion" class="evidence-detail__media">
+            <!-- 图片：点击全屏 -->
+            <template v-if="previewType === 'image'">
+              <img
+                :src="mediaBoxUrl"
+                class="media-box__img"
+                alt="预览"
+                @click="openFullscreenPreview"
+                @error="onMediaBoxImageError"
+              />
+            </template>
+            <!-- 视频：HTML5 播放器 -->
+            <template v-else-if="previewType === 'video'">
+              <video
+                :src="mediaBoxUrl"
+                class="media-box__video"
+                controls
+                controlslist="nodownload"
+                preload="metadata"
+                playsinline
+              />
+            </template>
+            <!-- PDF：iframe 内嵌 -->
+            <template v-else-if="previewType === 'pdf'">
+              <iframe
+                :src="mediaBoxUrl"
+                class="media-box__iframe"
+                title="PDF 预览"
+              />
+            </template>
+            <!-- Office：占位 + 提示 -->
+            <template v-else-if="previewType === 'office'">
+              <div class="media-box__placehold media-box__placehold--office">
+                <van-icon name="description" size="48" color="#969799" />
+                <p class="media-box__placehold-text">由于格式限制，请下载后查看</p>
+                <van-button class="btn-download-inline" icon="down" size="small" @click="handleDownload">下载</van-button>
+              </div>
+            </template>
+            <!-- 其他：文件图标 + 下载 -->
+            <template v-else>
+              <div class="media-box__placehold">
+                <van-icon :name="evidenceFileIcon.icon" size="56" :color="evidenceFileIcon.color" />
+                <p class="media-box__placehold-text">请下载后查看</p>
+                <van-button class="btn-download-inline" icon="down" size="small" @click="handleDownload">下载</van-button>
+              </div>
+            </template>
+          </div>
+
           <!-- 头部：类型图标 + 主标题 + 状态胶囊 -->
           <header class="evidence-detail__header">
             <div
@@ -34,13 +83,13 @@
             </div>
           </section>
 
-          <!-- 动态操作区：弹性布局，非全宽堆叠 -->
+          <!-- 动态操作区：图片/视频/PDF 不显示预览按钮，其余保留；下载/提交带图标与 hover 动效 -->
           <div class="evidence-detail__actions">
-            <van-button class="btn-primary" icon="eye-o" @click="handlePreview">预览</van-button>
-            <van-button class="btn-secondary" icon="down" plain @click="handleDownload">下载</van-button>
-            <van-button v-if="canSubmit" class="btn-primary" @click="handleSubmit">提交</van-button>
-            <van-button v-if="canDelete" class="btn-danger" icon="delete-o" plain @click="handleDelete">删除</van-button>
-            <van-button v-if="canVoid" class="btn-danger" icon="warning-o" plain @click="handleVoid">作废</van-button>
+            <van-button v-if="!hasInPagePreview" class="btn-primary action-btn" icon="eye-o" @click="handlePreview">预览</van-button>
+            <van-button class="btn-secondary action-btn" icon="down" plain @click="handleDownload">下载</van-button>
+            <van-button v-if="canSubmit" class="btn-primary action-btn" icon="success" @click="handleSubmit">提交</van-button>
+            <van-button v-if="canDelete" class="btn-danger action-btn" icon="delete-o" plain @click="handleDelete">删除</van-button>
+            <van-button v-if="canVoid" class="btn-danger action-btn" icon="warning-o" plain @click="handleVoid">作废</van-button>
           </div>
         </div>
       </div>
@@ -124,6 +173,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 import { formatDateTime } from '@/utils/format'
 import { getEffectiveEvidenceStatus, mapStatusToText } from '@/utils/evidenceStatus'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -230,6 +280,40 @@ const evidenceFileIcon = computed(() => {
   return { icon: 'description', color: '#969799', bg: '#f7f8fa' }
 })
 
+/** 媒体预览区：根据文件类型返回 image | video | pdf | office | other */
+const previewType = computed(() => {
+  const e = evidence.value
+  if (!e?.latestVersion) return 'other'
+  const ct = (e.contentType || '').toLowerCase()
+  const fn = e.latestVersion.originalFilename || ''
+  const ext = fn.includes('.') ? fn.slice(fn.lastIndexOf('.') + 1).toLowerCase() : ''
+  if (ct.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) return 'image'
+  if (ct.startsWith('video/') || ['mp4', 'mov', 'webm'].includes(ext)) return 'video'
+  if (ct.includes('pdf') || ext === 'pdf') return 'pdf'
+  if (OFFICE_MIMES.some(m => ct.includes(m)) || ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return 'office'
+  return 'other'
+})
+
+/** 媒体区/iframe 使用的下载 URL（同源带 Cookie） */
+const mediaBoxUrl = computed(() => {
+  const v = evidence.value?.latestVersion
+  return v ? `/api/evidence/versions/${v.versionId}/download` : ''
+})
+
+/** 是否已在页面内展示预览（图片/视频/PDF），可隐藏「预览」按钮 */
+const hasInPagePreview = computed(() => ['image', 'video', 'pdf'].includes(previewType.value))
+
+function openFullscreenPreview() {
+  if (!evidence.value?.latestVersion) return
+  previewContentType.value = evidence.value.contentType || ''
+  previewVersionId.value = evidence.value.latestVersion.versionId
+  showPreviewPopup.value = true
+}
+
+function onMediaBoxImageError() {
+  showToast('图片加载失败，请检查网络或使用下载')
+}
+
 /** 元数据项（用于 Grid 展示，不含标题与状态） */
 const metaItems = computed(() => {
   const e = evidence.value
@@ -330,8 +414,8 @@ async function handlePreview() {
     const w = window.open(url, '_blank', 'noopener,noreferrer')
     setTimeout(() => window.URL.revokeObjectURL(url), 60_000)
     if (!w) showToast('若未打开新窗口，请使用下载')
-  } catch (e: any) {
-    showToast(e.message || '预览失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '预览失败'))
   } finally {
     closeToast()
   }
@@ -358,8 +442,8 @@ async function handleDownload() {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     showSuccessToast('下载成功')
-  } catch (e: any) {
-    showToast(e.message || '下载失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '下载失败'))
   } finally {
     closeToast()
   }
@@ -380,8 +464,8 @@ async function handleSubmit() {
     } else {
       showToast(res?.message || '提交失败')
     }
-  } catch (e: any) {
-    showToast(e?.response?.data?.message || e?.message || '提交失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '提交失败'))
   } finally {
     closeToast()
   }
@@ -402,8 +486,8 @@ async function handleDelete() {
     } else {
       showToast(res?.message || '删除失败')
     }
-  } catch (e: any) {
-    showToast(e?.response?.data?.message || e?.message || '删除失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '删除失败'))
   } finally {
     closeToast()
   }
@@ -432,8 +516,8 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
     }
     showToast(res?.message || '作废失败')
     return false
-  } catch (e: any) {
-    showToast(e?.response?.data?.message || e?.message || '作废失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '作废失败'))
     return false
   } finally {
     closeToast()
@@ -458,18 +542,105 @@ onMounted(() => {
   margin: 0 auto;
   padding: 0 16px;
 }
-/* 卡片容器：白底、微阴影、圆角 */
+/* 卡片容器：白底、阴影、圆角；媒体区在顶部 */
 .evidence-detail__card {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06), 0 2px 16px rgba(0, 0, 0, 0.04);
-  padding: 24px 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  padding: 0 0 24px;
+}
+/* 媒体预览区：深灰底、固定高度范围，移动端缩小 */
+.evidence-detail__media {
+  min-height: 300px;
+  max-height: 500px;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 24px;
+  overflow: hidden;
+}
+@media (max-width: 767px) {
+  .evidence-detail__media {
+    min-height: 240px;
+    max-height: 360px;
+  }
+}
+.media-box__img {
+  width: 100%;
+  height: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  cursor: pointer;
+  display: block;
+}
+@media (max-width: 767px) {
+  .media-box__img {
+    max-height: 360px;
+  }
+}
+.media-box__video {
+  width: 100%;
+  max-height: 500px;
+  display: block;
+}
+@media (max-width: 767px) {
+  .media-box__video {
+    max-height: 360px;
+  }
+}
+.media-box__iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  max-height: 500px;
+  border: none;
+  display: block;
+}
+@media (max-width: 767px) {
+  .media-box__iframe {
+    min-height: 300px;
+    max-height: 360px;
+  }
+}
+.media-box__placehold {
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #b0b0b0;
+  width: 100%;
+  min-height: 300px;
+}
+@media (max-width: 767px) {
+  .media-box__placehold {
+    min-height: 240px;
+  }
+}
+.media-box__placehold--office {
+  background: #f7f8fa;
+  color: #646566;
+}
+.media-box__placehold-text {
+  margin: 0;
+  font-size: 14px;
+  color: inherit;
+}
+.btn-download-inline {
+  margin-top: 4px;
+}
+.evidence-detail__card:not(.has-media) .evidence-detail__header {
+  padding-top: 24px;
 }
 .evidence-detail__header {
   display: flex;
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 28px;
+  padding: 0 20px;
 }
 /* 文件类型图标：背景色块，类预览组件 */
 .evidence-detail__type-icon {
@@ -525,12 +696,13 @@ onMounted(() => {
   background: #fff1f0;
   color: #ee4d2d;
 }
-/* 元数据区：移动端单列，大屏双列 */
+/* 元数据区：移动端单列，大屏双列；增加呼吸感 */
 .evidence-detail__meta {
   display: grid;
   grid-template-columns: 1fr;
   gap: 20px 28px;
   margin-bottom: 28px;
+  padding: 0 20px;
 }
 @media (min-width: 768px) {
   .evidence-detail__meta {
@@ -541,6 +713,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 4px;
 }
 .meta-item__label {
   font-size: 12px;
@@ -560,6 +733,7 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-start;
+  padding: 0 20px;
 }
 @media (min-width: 768px) {
   .evidence-detail__actions {
@@ -568,6 +742,13 @@ onMounted(() => {
 }
 .evidence-detail__actions .van-button {
   min-width: 0;
+  transition: transform 0.2s ease;
+}
+.evidence-detail__actions .action-btn:hover {
+  transform: scale(1.02);
+}
+.evidence-detail__actions .action-btn:active {
+  transform: scale(0.98);
 }
 .evidence-detail__actions .btn-primary {
   background: var(--van-button-primary-background, #1989fa);

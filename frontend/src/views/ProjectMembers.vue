@@ -145,6 +145,7 @@ function showTip(message: string) {
 }
 import { getProjectDetail, getProjectMembers, addOrUpdateProjectMember, removeProjectMember, type ProjectMemberVO } from '@/api/projects'
 import { getUsers, type AuthUserSimpleVO } from '@/api/users'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 const route = useRoute()
 const router = useRouter()
@@ -235,8 +236,8 @@ async function loadMembers() {
     const res = await getProjectMembers(projectId.value)
     if (res.code === 0 && res.data) members.value = res.data
     else members.value = []
-  } catch (e: any) {
-    showTip(e?.message || '加载失败')
+  } catch (e: unknown) {
+    showTip(getFriendlyErrorMessage(e, '加载失败'))
     members.value = []
   } finally {
     loading.value = false
@@ -302,8 +303,8 @@ async function onEditConfirm(action: string): Promise<boolean> {
     }
     showTip(toFriendlyTip(res.message) || '更新失败')
     return false
-  } catch (e: any) {
-    showTip(toFriendlyTip(getResponseMessage(e)) || '更新失败')
+  } catch (e: unknown) {
+    showTip(toFriendlyTip(getFriendlyErrorMessage(e, '')) || '更新失败')
     return false
   }
 }
@@ -386,14 +387,10 @@ async function onAddConfirm(action: string): Promise<boolean> {
     }
     showTip(toFriendlyTip(res.message) || '添加失败')
     return false
-  } catch (e: any) {
-    showTip(toFriendlyTip(getResponseMessage(e)) || '添加失败')
+  } catch (e: unknown) {
+    showTip(toFriendlyTip(getFriendlyErrorMessage(e, '')) || '添加失败')
     return false
   }
-}
-
-function getResponseMessage(e: any): string {
-  return (e?.response?.data?.message ?? e?.message ?? '') as string
 }
 
 function removeMember(m: ProjectMemberVO) {
@@ -407,8 +404,8 @@ function removeMember(m: ProjectMemberVO) {
         } else {
           showTip(toFriendlyTip(res.message) || '无法移除')
         }
-      } catch (e: any) {
-        showTip(toFriendlyTip(getResponseMessage(e)) || '无法移除')
+      } catch (e: unknown) {
+        showTip(toFriendlyTip(getFriendlyErrorMessage(e, '')) || '无法移除')
       }
     })
     .catch(() => {})

@@ -154,6 +154,7 @@ import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Sw
 import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, type ProjectVO, type ProjectImportResult } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
+import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 interface Project {
   id: number
@@ -217,8 +218,8 @@ async function onImportSubmit() {
     } else {
       showToast(res.message || '导入失败')
     }
-  } catch (e: any) {
-    showToast(e?.message || '导入失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '导入失败'))
   } finally {
     importLoading.value = false
   }
@@ -315,8 +316,8 @@ const onCreateSubmit = async () => {
     ]
     showToast('创建成功')
     router.push(`/projects/${data.id}`)
-  } catch (e) {
-    showToast('创建失败')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '创建失败'))
   } finally {
     createLoading.value = false
   }
