@@ -864,6 +864,9 @@ const showBizTypePicker = ref(false)
 const showInvalidateReasonDialog = ref(false)
 const invalidateReasonText = ref('')
 const pendingInvalidateEvidenceId = ref<number | null>(null)
+/** 从网格作废时用于确认后刷新该分类列表 */
+const pendingInvalidateStageCode = ref<string | null>(null)
+const pendingInvalidateEvidenceTypeCode = ref<string | null>(null)
 const auth = useAuthStore()
 
 /** V1：上传按钮仅在后端返回 canUpload 时显示 */
@@ -969,7 +972,7 @@ function goToEvidenceDetail(id: number, stageCode?: string) {
   router.push({ path: `/evidence/detail/${id}`, query })
 }
 
-/** 网格内删除/作废证据：草稿物理删除，已提交则作废；刷新当前类别列表 */
+/** 网格内删除/作废证据：草稿物理删除，已提交则先弹窗填写作废原因再作废 */
 async function onDeleteEvidence(ev: EvidenceListItem, stage?: StageVO, evidenceItem?: StageItemVO) {
   const id = ev.evidenceId
   const status = getEffectiveEvidenceStatus(ev)
@@ -985,15 +988,12 @@ async function onDeleteEvidence(ev: EvidenceListItem, stage?: StageVO, evidenceI
         showToast(res?.message || '删除失败')
       }
     } else {
-      await showConfirmDialog({ title: '确认作废', message: '作废后不可恢复，确定继续？' })
-      const res = (await invalidateEvidence(id, '用户从项目证据列表作废')) as { code: number; message?: string }
-      if (res?.code === 0) {
-        showToast('已作废')
-        if (stage?.stageCode && evidenceItem?.evidenceTypeCode) loadEvidenceForItem(stage.stageCode, evidenceItem.evidenceTypeCode)
-        loadStageProgress()
-      } else {
-        showToast(res?.message || '作废失败')
-      }
+      // 已提交：先弹出填写作废原因弹窗，确认后再调用作废接口
+      pendingInvalidateEvidenceId.value = id
+      pendingInvalidateStageCode.value = stage?.stageCode ?? null
+      pendingInvalidateEvidenceTypeCode.value = evidenceItem?.evidenceTypeCode ?? null
+      invalidateReasonText.value = ''
+      showInvalidateReasonDialog.value = true
     }
   } catch {
     // 用户取消
@@ -1407,6 +1407,8 @@ async function handleUploadResultDelete() {
 function handleUploadResultInvalidate() {
   if (!uploadResult.value) return
   pendingInvalidateEvidenceId.value = uploadResult.value.evidenceId
+  pendingInvalidateStageCode.value = null
+  pendingInvalidateEvidenceTypeCode.value = null
   invalidateReasonText.value = ''
   showInvalidateReasonDialog.value = true
 }
@@ -1420,6 +1422,7 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
   }
   const id = pendingInvalidateEvidenceId.value
   if (id == null) return true
+  const fromGrid = pendingInvalidateStageCode.value != null && pendingInvalidateEvidenceTypeCode.value != null
   invalidateLoading.value = true
   try {
     const res = (await invalidateEvidence(id, reason)) as { code: number; message?: string }
@@ -1429,9 +1432,15 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
       }
       showSuccessToast('已作废')
       onRefresh()
-      refreshCurrentItemEvidences()
+      if (fromGrid && pendingInvalidateStageCode.value && pendingInvalidateEvidenceTypeCode.value) {
+        loadEvidenceForItem(pendingInvalidateStageCode.value, pendingInvalidateEvidenceTypeCode.value)
+      } else {
+        refreshCurrentItemEvidences()
+      }
       loadStageProgress()
       pendingInvalidateEvidenceId.value = null
+      pendingInvalidateStageCode.value = null
+      pendingInvalidateEvidenceTypeCode.value = null
       invalidateReasonText.value = ''
       return true
     }

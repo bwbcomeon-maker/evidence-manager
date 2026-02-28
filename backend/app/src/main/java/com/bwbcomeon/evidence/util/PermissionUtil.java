@@ -85,10 +85,10 @@ public class PermissionUtil {
      * @param projectId 项目ID
      * @param userId    当前用户 sys_user.id
      * @param roleCode  sys_user.role_code（SYSTEM_ADMIN 则直接通过）
-     * @throws BusinessException 无权限时 403
+     * @throws BusinessException 无权限时 403，文案为「仅项目责任人可作废证据」
      */
     public void checkCanInvalidate(Long projectId, Long userId, String roleCode) {
-        checkCanArchive(projectId, userId, roleCode);
+        checkProjectOwnerEvidenceAction(projectId, userId, roleCode, "作废证据");
     }
 
     /**
@@ -98,9 +98,16 @@ public class PermissionUtil {
      * @param projectId 项目ID
      * @param userId    当前用户 sys_user.id
      * @param roleCode  sys_user.role_code（SYSTEM_ADMIN 则直接通过）
-     * @throws BusinessException 无权限时 403
+     * @throws BusinessException 无权限时 403，文案为「仅项目责任人可归档证据」
      */
     public void checkCanArchive(Long projectId, Long userId, String roleCode) {
+        checkProjectOwnerEvidenceAction(projectId, userId, roleCode, "归档证据");
+    }
+
+    /**
+     * 项目责任人证据操作权限校验（归档/作废同源逻辑，区分提示文案）
+     */
+    private void checkProjectOwnerEvidenceAction(Long projectId, Long userId, String roleCode, String actionLabel) {
         if (roleCode != null && "SYSTEM_ADMIN".equals(roleCode)) {
             return;
         }
@@ -115,7 +122,7 @@ public class PermissionUtil {
         if (acl != null && "owner".equals(acl.getRole())) {
             return;
         }
-        throw new BusinessException(403, "仅项目责任人可归档证据");
+        throw new BusinessException(403, "仅项目责任人可" + actionLabel);
     }
 
     /**

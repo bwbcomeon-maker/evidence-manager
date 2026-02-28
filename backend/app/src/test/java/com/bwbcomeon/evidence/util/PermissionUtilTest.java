@@ -101,6 +101,34 @@ class PermissionUtilTest {
         // no throw
     }
 
+    @Test
+    void checkCanInvalidate_editor_throws_403() {
+        when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
+        AuthProjectAcl editorAcl = new AuthProjectAcl();
+        editorAcl.setProjectId(PROJECT_ID);
+        editorAcl.setSysUserId(EDITOR_USER_ID);
+        editorAcl.setRole("editor");
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(EDITOR_USER_ID))).thenReturn(editorAcl);
+
+        assertThatThrownBy(() -> permissionUtil.checkCanInvalidate(PROJECT_ID, EDITOR_USER_ID, "USER"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅项目责任人可作废证据");
+    }
+
+    @Test
+    void checkCanInvalidate_viewer_throws_403() {
+        when(projectMapper.selectById(PROJECT_ID)).thenReturn(project);
+        AuthProjectAcl viewerAcl = new AuthProjectAcl();
+        viewerAcl.setProjectId(PROJECT_ID);
+        viewerAcl.setSysUserId(VIEWER_USER_ID);
+        viewerAcl.setRole("viewer");
+        when(authProjectAclMapper.selectByProjectIdAndSysUserId(eq(PROJECT_ID), eq(VIEWER_USER_ID))).thenReturn(viewerAcl);
+
+        assertThatThrownBy(() -> permissionUtil.checkCanInvalidate(PROJECT_ID, VIEWER_USER_ID, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("仅项目责任人可作废证据");
+    }
+
     // ---------- Phase 4 P2-2: computeProjectPermissionBits 回归 ----------
 
     @Test
