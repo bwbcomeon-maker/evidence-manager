@@ -24,7 +24,11 @@
       :title="(route.meta.title as string) || '证据管理'"
       fixed
       placeholder
-    />
+    >
+      <template #right>
+        <span />
+      </template>
+    </van-nav-bar>
     <main
       class="layout-content"
       :class="{ 'layout-content--with-tabbar': showTabbar }"
@@ -182,7 +186,14 @@ function onBack() {
   min-height: 60px;
   padding: 8px 0;
 }
-/* 无返回时的 NavBar 文字（保留兼容） */
+/* 无返回时的 NavBar：消除底部空隙，便于项目列表等页搜索框上移 */
+.main-layout :deep(.van-nav-bar) {
+  margin-bottom: 0;
+}
+/* 导航栏占位与主内容之间无额外空隙（避免灰色鸿沟 >30px） */
+.main-layout :deep(.van-nav-bar__placeholder) {
+  margin-bottom: 0;
+}
 :deep(.van-nav-bar__text) {
   font-weight: 600;
 }

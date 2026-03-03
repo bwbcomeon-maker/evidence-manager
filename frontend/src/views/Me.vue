@@ -19,6 +19,17 @@
         @click="goToAdminUsers"
       />
       <van-cell
+        title="我的待办"
+        icon="todo-list-o"
+        is-link
+        class="me-cell"
+        @click="goToTodos"
+      >
+        <template #value>
+          <van-badge v-if="unreadTodoCount > 0" :content="unreadTodoCount" max="99" />
+        </template>
+      </van-cell>
+      <van-cell
         title="修改密码"
         icon="lock"
         is-link
@@ -92,19 +103,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { changePassword, verifyPassword } from '@/api/auth'
+import { getTodos } from '@/api/notifications'
 import { showToast } from 'vant'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 
 const router = useRouter()
 const auth = useAuthStore()
+const unreadTodoCount = ref(0)
+
 /** 进入用户管理：带时间戳 push，避免历史栈中旧实例被复用 */
 function goToAdminUsers() {
   router.push({ path: '/admin/users', query: { _t: String(Date.now()) } })
 }
+
+function goToTodos() {
+  router.push('/todos')
+}
+
+onMounted(async () => {
+  try {
+    const res = await getTodos({ unreadOnly: true })
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      unreadTodoCount.value = res.data.length
+    }
+  } catch {
+    // 静默失败，不阻塞页面
+  }
+})
 const showChangePwd = ref(false)
 const showOldPwd = ref(false)
 const showNewPwd = ref(false)

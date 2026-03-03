@@ -46,6 +46,11 @@ public interface ProjectMapper {
     int update(Project project);
 
     /**
+     * 按项目ID更新状态（用于归档审批流）
+     */
+    int updateStatusById(@Param("id") Long id, @Param("status") String status);
+
+    /**
      * 根据ID删除项目
      */
     int deleteById(@Param("id") Long id);

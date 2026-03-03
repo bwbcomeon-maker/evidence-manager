@@ -39,7 +39,7 @@
               <div class="media-box__placehold media-box__placehold--office">
                 <van-icon name="description" size="48" color="#969799" />
                 <p class="media-box__placehold-text">由于格式限制，请下载后查看</p>
-                <van-button class="btn-download-inline" icon="down" size="small" @click="handleDownload">下载</van-button>
+                <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
               </div>
             </template>
             <!-- 其他：文件图标 + 下载 -->
@@ -47,7 +47,7 @@
               <div class="media-box__placehold">
                 <van-icon :name="evidenceFileIcon.icon" size="56" :color="evidenceFileIcon.color" />
                 <p class="media-box__placehold-text">请下载后查看</p>
-                <van-button class="btn-download-inline" icon="down" size="small" @click="handleDownload">下载</van-button>
+                <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
               </div>
             </template>
           </div>
@@ -86,7 +86,7 @@
           <!-- 动态操作区：图片/视频/PDF 不显示预览按钮，其余保留；下载/提交带图标与 hover 动效 -->
           <div class="evidence-detail__actions">
             <van-button v-if="!hasInPagePreview" class="btn-primary action-btn" icon="eye-o" @click="handlePreview">预览</van-button>
-            <van-button class="btn-secondary action-btn" icon="down" plain @click="handleDownload">下载</van-button>
+            <van-button class="btn-secondary action-btn" icon="down" plain :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
             <van-button v-if="canSubmit" class="btn-primary action-btn" icon="success" @click="handleSubmit">提交</van-button>
             <van-button v-if="canDelete" class="btn-danger action-btn" icon="delete-o" plain @click="handleDelete">删除</van-button>
             <van-button v-if="canVoid" class="btn-danger action-btn" icon="warning-o" plain @click="handleVoid">作废</van-button>
@@ -160,7 +160,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, closeToast, showConfirmDialog } from 'vant'
+import { Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, showFailToast, closeToast, showConfirmDialog } from 'vant'
+import 'vant/es/toast/style'
 import {
   downloadVersionFile,
   getEvidenceById,
@@ -188,6 +189,8 @@ const showInvalidateReasonDialog = ref(false)
 const invalidateReasonText = ref('')
 /** 预览弹层：页面内展示，避免手机端 window.open 被拦截 */
 const showPreviewPopup = ref(false)
+/** 下载中状态，用于按钮 loading 与防重复点击 */
+const isDownloading = ref(false)
 const previewVersionId = ref<number | null>(null)
 const previewContentType = ref<string>('')
 const previewImageUrl = computed(() =>
@@ -440,23 +443,55 @@ async function handleDownload() {
     showToast('暂无版本文件')
     return
   }
+  if (isDownloading.value) return
+  isDownloading.value = true
+  closeToast()
+  const versionId = evidence.value.latestVersion.versionId
+  const filename = evidence.value.latestVersion.originalFilename || 'download'
+  const downloadUrl = `${getApiBaseUrl()}/evidence/versions/${versionId}/download`
   try {
-    showLoadingToast({ message: '下载中...', forbidClick: true, duration: 0 })
-    const blob = await downloadVersionFile(evidence.value.latestVersion.versionId)
-    const url = window.URL.createObjectURL(blob)
+    const response = await fetch(downloadUrl, {
+      method: 'GET',
+      credentials: 'include'
+    })
+    if (!response.ok) throw new Error('Network response was not ok')
+    const blob = await response.blob()
+    const objectUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
-    link.download = evidence.value.latestVersion.originalFilename
+    link.href = objectUrl
+    link.download = filename
+    link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-    showSuccessToast('下载成功')
+    window.URL.revokeObjectURL(objectUrl)
+    showSuccessToast('已触发下载，请留意系统通知或相册')
   } catch (e: unknown) {
-    showToast(getFriendlyErrorMessage(e, '下载失败'))
+    console.error('下载失败:', e)
+    if (isInAppBrowser()) {
+      showToast({
+        message: '请点击右上角在浏览器中打开后下载',
+        duration: 3000
+      })
+    } else {
+      showFailToast('下载失败，请尝试长按图片保存')
+    }
   } finally {
-    closeToast()
+    isDownloading.value = false
   }
+}
+
+/** 与 api/http 保持一致，用于 fetch 下载 URL */
+function getApiBaseUrl(): string {
+  let base = import.meta.env.VITE_API_BASE_URL ?? '/api'
+  if (base !== '/api' && !base.endsWith('/api')) base = base.replace(/\/?$/, '') + '/api'
+  return base.endsWith('/') ? base.slice(0, -1) : base
+}
+
+/** 是否处于微信/企业微信/钉钉等内置浏览器（下载可能受限） */
+function isInAppBrowser(): boolean {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : ''
+  return /micromessenger|wxwork|dingtalk|aliapp/i.test(ua)
 }
 
 async function handleSubmit() {

@@ -1,94 +1,106 @@
 <template>
-  <div class="project-list">
-    <div class="content">
-      <!-- 顶部操作区：横向滑动按钮组，主按钮突出 -->
-      <div class="action-bar">
-        <div class="action-bar-scroll">
-          <van-button
-            v-if="canCreateProject"
-            type="primary"
-            size="small"
-            class="action-btn action-btn--primary"
-            @click="showCreate = true"
-          >
-            新建项目
-          </van-button>
-          <van-button
-            v-if="canImportProjects"
-            plain
-            size="small"
-            class="action-btn"
-            @click="showImport = true"
-          >
-            批量导入
-          </van-button>
-          <van-button
-            v-if="canBatchAssign"
-            plain
-            size="small"
-            class="action-btn"
-            @click="go('/batch-assign-projects')"
-          >
-            批量分配项目
-          </van-button>
-        </div>
-      </div>
+  <div class="project-page-container">
+    <div class="unified-header">
+      <van-search
+        v-model="searchKeyword"
+        placeholder="请输入项目名称或项目编号"
+        shape="round"
+        background="transparent"
+        input-align="left"
+        class="flex-search"
+        @update:model-value="onSearchInput"
+        @search="fetchProjectList"
+      />
+      <van-dropdown-menu class="flex-filter">
+        <van-dropdown-item v-model="projectStatus" title="状态" :options="statusOptions" @change="fetchProjectList" />
+      </van-dropdown-menu>
+    </div>
 
-      <!-- 搜索与筛选：吸顶，左右 Flex（搜索 + 状态下拉），白底描边提升层级 -->
-      <div class="search-filter-bar">
-        <van-search
-          v-model="searchKeyword"
-          shape="round"
-          background="transparent"
-          placeholder="请输入项目名称或项目编号"
-          @update:model-value="onSearchInput"
-          @search="fetchProjectList"
-        />
-        <van-dropdown-menu class="filter-dropdown">
-          <van-dropdown-item v-model="projectStatus" title="状态" :options="statusOptions" @change="fetchProjectList" />
-        </van-dropdown-menu>
-      </div>
-
-      <van-pull-refresh v-model="loading" @refresh="onRefresh">
-        <van-list
-          v-model:loading="listLoading"
-          :finished="finished"
-          finished-text="没有更多了"
-          @load="onLoad"
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <div class="action-bar-scroll">
+        <van-button
+          v-if="canCreateProject"
+          type="primary"
+          size="small"
+          class="action-btn action-btn--primary"
+          @click="showCreate = true"
         >
-          <div
-            v-for="project in projects"
-            :key="project.id"
-            class="project-card"
-            @click="goToDetail(project.id)"
+          新建项目
+        </van-button>
+        <van-button
+          v-if="canImportProjects"
+          plain
+          size="small"
+          class="action-btn"
+          @click="showImport = true"
+        >
+          批量导入
+        </van-button>
+        <van-button
+          v-if="canBatchAssign"
+          plain
+          size="small"
+          class="action-btn"
+          @click="go('/batch-assign-projects')"
+        >
+          批量分配项目
+        </van-button>
+      </div>
+    </div>
+
+    <div class="project-list-wrapper">
+        <van-pull-refresh v-model="loading" @refresh="onRefresh">
+          <van-list
+            v-model:loading="listLoading"
+            :finished="finished"
+            finished-text="没有更多了"
+            @load="onLoad"
           >
-            <div class="project-card-body">
-              <div class="project-card-header">
-                <h3 class="project-card-title">{{ project.name }}</h3>
-                <span class="project-card-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
-                  {{ project.status === 'active' ? '进行中' : '已归档' }}
-                </span>
+            <div
+              v-for="project in projects"
+              :key="project.id"
+              class="project-card"
+              :class="{ 'project-card--pending-approval': isPMOOrAdmin && project.status === 'pending_approval' }"
+              @click="goToDetail(project.id)"
+            >
+              <div class="project-card-body">
+                <div class="project-card-header">
+                  <h3 class="project-card-title" :title="project.name">{{ project.name }}</h3>
+                  <span class="project-card-badge-wrap">
+                    <span class="project-card-badge" :class="projectStatusBadgeClass(project.status)">
+                      {{ projectStatusText(project.status) }}
+                    </span>
+                    <van-badge
+                      v-if="isPMOOrAdmin && project.status === 'pending_approval'"
+                      dot
+                      class="project-card-pending-dot"
+                    />
+                  </span>
+                </div>
+                <div v-if="project.description" class="project-desc">{{ project.description }}</div>
+                <div class="project-meta-row">
+                  <span class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
+                    项目经理：{{ project.currentPmDisplayName || '未分配' }}
+                  </span>
+                  <span v-if="project.createdByDisplayName" class="project-creator">创建人：{{ project.createdByDisplayName }}</span>
+                </div>
               </div>
-              <div v-if="project.description" class="project-desc">{{ project.description }}</div>
-              <div class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
-                项目经理：{{ project.currentPmDisplayName || '未分配' }}
+              <div class="project-card-actions">
+                <button
+                  type="button"
+                  class="card-action-upload card-action-upload--small"
+                  @click.stop="goToEvidenceTab(project)"
+                >
+                  <span class="card-action-upload-icon">📤</span>
+                  <span>上传证据</span>
+                </button>
               </div>
             </div>
-            <div class="project-card-actions">
-              <button
-                type="button"
-                class="card-action-upload"
-                @click.stop="goToEvidenceTab(project)"
-              >
-                <span class="card-action-upload-icon">📤</span>
-                <span>上传证据</span>
-              </button>
-            </div>
-          </div>
-          <van-empty v-if="!loading && !listLoading && listError" :description="listError" />
-          <van-empty v-else-if="!loading && !listLoading && projects.length === 0" description="暂无项目" />
-        </van-list>
-      </van-pull-refresh>
+            <van-empty v-if="!loading && !listLoading && listError" :description="listError" />
+            <van-empty v-else-if="!loading && !listLoading && projects.length === 0" description="暂无项目" />
+          </van-list>
+        </van-pull-refresh>
     </div>
 
     <van-popup v-model:show="showCreate" position="bottom" round :style="{ maxHeight: '88vh', padding: '0' }">
@@ -165,7 +177,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Switch, Search, DropdownMenu, DropdownItem } from 'vant'
+import { Badge, Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Switch, Search, DropdownMenu, DropdownItem } from 'vant'
 import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, type ProjectVO, type ProjectImportResult } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
@@ -196,6 +208,30 @@ const canBatchAssign = computed(() => {
   const code = auth.currentUser?.roleCode
   return code === 'SYSTEM_ADMIN' || code === 'PMO'
 })
+/** PMO 或系统管理员（待审批项目需在列表显眼提示） */
+const isPMOOrAdmin = computed(() => {
+  const code = auth.currentUser?.roleCode
+  return code === 'PMO' || code === 'SYSTEM_ADMIN'
+})
+
+/** 项目状态展示文案（与详情页一致） */
+function projectStatusText(status: string): string {
+  if (status === 'active') return '进行中'
+  if (status === 'pending_approval') return '待审批'
+  if (status === 'returned') return '已退回'
+  if (status === 'archived') return '已归档'
+  return status || '—'
+}
+
+/** 项目状态标签样式类：active 蓝 / pending_approval 橙 / returned 红 / archived 灰 */
+function projectStatusBadgeClass(status: string): string {
+  if (status === 'active') return 'badge--active'
+  if (status === 'pending_approval') return 'badge--pending'
+  if (status === 'returned') return 'badge--returned'
+  if (status === 'archived') return 'badge--archived'
+  return 'badge--archived'
+}
+
 function go(path: string) {
   router.push(path)
 }
@@ -213,6 +249,8 @@ const projectStatus = ref<string | number>('')
 const statusOptions = [
   { text: '全部状态', value: '' },
   { text: '进行中', value: 'active' },
+  { text: '待审批', value: 'pending_approval' },
+  { text: '已退回', value: 'returned' },
   { text: '已归档', value: 'archived' }
 ]
 
@@ -387,18 +425,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.project-list {
+/* 页面：浅灰底色；搜索区+卡片：纯白。顶部仅留 6px 与导航栏间距，对齐证据管理页紧凑感 */
+.project-page-container {
   min-height: 100vh;
-  background: var(--app-bg);
+  background: #eef0f3;
+  padding: 6px 16px 16px;
 }
 
-.content {
-  padding: 16px;
-}
-
-/* 顶部操作区：横向滑动按钮组 */
 .action-bar {
-  margin-bottom: 16px;
+  margin-top: 0;
+  margin-bottom: 8px;
   -webkit-overflow-scrolling: touch;
 }
 .action-bar-scroll {
@@ -406,7 +442,7 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   overflow-x: auto;
-  padding: 4px 0;
+  padding: 2px 0;
   min-height: var(--app-tap-min-height);
 }
 .action-bar-scroll::-webkit-scrollbar {
@@ -422,97 +458,157 @@ onMounted(() => {
   border-color: var(--app-primary) !important;
 }
 
-/* 搜索与筛选：吸顶，Flex 左右结构，白底+描边强化层级 */
-.search-filter-bar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+/* 搜索+筛选：同一行、紧凑、纯白背景，底部无外边距（强制覆盖） */
+.unified-header {
   display: flex;
-  align-items: stretch;
-  gap: 10px;
-  margin-top: 12px;
-  margin-bottom: 16px;
-  background: var(--app-bg);
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 16px;
+  margin-top: 0;
+  margin-bottom: 0 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
-.search-filter-bar :deep(.van-search) {
+.flex-search {
   flex: 1;
   min-width: 0;
   padding: 0;
+}
+.flex-search :deep(.van-search) {
+  padding: 0;
   background: transparent;
 }
-.search-filter-bar :deep(.van-search__content) {
-  background: #ffffff;
-  border: 1px solid #dcdfe6;
+.flex-search :deep(.van-search__content) {
+  background: #f5f6f8;
+  border: none;
   border-radius: 20px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  min-height: 36px;
 }
-.filter-dropdown {
+.flex-search :deep(.van-field__control) {
+  text-align: left;
+}
+.flex-filter {
   flex-shrink: 0;
-  align-self: stretch;
 }
-.filter-dropdown :deep(.van-dropdown-menu__bar) {
+.flex-filter :deep(.van-dropdown-menu__bar) {
   height: 36px;
   min-height: 36px;
+  background: #f5f6f8;
+  border: none;
+  border-radius: 20px;
   box-shadow: none;
-  background: #ffffff;
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
 }
-.filter-dropdown :deep(.van-dropdown-menu__title--active) {
+.flex-filter :deep(.van-dropdown-menu__title--active) {
   color: var(--van-primary-color);
 }
 
-/* 项目卡片列表 */
+/* 暴力消除 Vant 底层幽灵留白 */
+.project-list-wrapper {
+  /* 强行把整个列表区域向上平移，抵消掉 Vant 自带的顽固留白 */
+  margin-top: -16px !important;
+  position: relative;
+  z-index: 1; /* 确保上移后不会被顶部的背景遮挡 */
+}
+
+/* 列表首项无上边距，防止与搜索区间隙被撑大 */
+.project-page-container :deep(.van-list > div:first-child) {
+  margin-top: 0 !important;
+}
+
+/* 列表底部「没有更多了」紧凑 */
+.project-page-container :deep(.van-list__finished-text) {
+  font-size: 12px;
+  color: #969799;
+  padding: 6px 0 8px;
+}
+
+/* 项目卡片：白底与页面浅灰对比，无多余边框；首卡无上边距防叠加 */
 .project-card {
-  background: var(--app-card);
-  border-radius: var(--app-card-radius);
-  box-shadow: var(--app-card-shadow);
-  padding: 16px;
-  margin-bottom: 12px;
-  min-height: var(--app-tap-min-height);
+  background: #fff;
+  border-radius: var(--app-card-radius, 8px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  padding: 10px 12px;
+  margin-bottom: 8px;
   cursor: pointer;
+}
+.project-card:first-child {
+  margin-top: 0 !important;
 }
 .project-card:active {
   opacity: 0.96;
 }
 .project-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  min-height: 0;
 }
 .project-card-title {
   flex: 1;
-  font-size: 17px;
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
   color: #323233;
   margin: 0;
-  line-height: 1.35;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .project-card-badge {
   flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
   font-weight: 500;
+}
+.project-card-badge-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.project-card-pending-dot {
+  margin-left: 2px;
+}
+.project-card--pending-approval {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 2px rgba(237, 106, 12, 0.35);
 }
 .badge--active {
   background: rgba(0, 122, 255, 0.12);
   color: var(--app-primary);
+}
+.badge--pending {
+  background: #fff7e8;
+  color: #ed6a0c;
+}
+.badge--returned {
+  background: #fff1f0;
+  color: #ee0a24;
 }
 .badge--archived {
   background: #ebedf0;
   color: #969799;
 }
 .project-desc {
-  margin-top: 8px;
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  font-size: 13px;
   color: var(--app-text-secondary, #8E8E93);
-  line-height: 1.4;
+  line-height: 1.35;
 }
-.project-pm {
-  font-size: 12px;
+.project-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  margin-top: 2px;
+}
+.project-pm,
+.project-creator {
+  font-size: 11px;
   color: var(--app-text-secondary, #8E8E93);
 }
 .project-pm-assigned,
@@ -520,14 +616,13 @@ onMounted(() => {
   color: var(--app-text-secondary, #8E8E93);
 }
 
-/* 卡片主体与底部操作区 */
+/* 卡片主体与底部操作区：弱化分隔，压缩间距 */
 .project-card-body {
-  /* 主体内容区，无额外样式 */
+  /* 主体内容区 */
 }
 .project-card-actions {
-  border-top: 1px solid #f0f0f0;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 6px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -536,23 +631,25 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 34px;
+  gap: 4px;
   min-width: 0;
-  padding: 0 14px;
-  font-size: 14px;
+  padding: 0 10px;
+  font-size: 13px;
   color: var(--primary-color);
   background: transparent;
   border: 1px solid var(--primary-color);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+.card-action-upload--small {
+  height: 28px;
 }
 .card-action-upload:active {
   opacity: 0.8;
 }
 .card-action-upload-icon {
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
 }
 

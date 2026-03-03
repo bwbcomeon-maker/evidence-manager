@@ -13,9 +13,11 @@ import com.bwbcomeon.evidence.dto.ProjectMemberVO;
 import com.bwbcomeon.evidence.dto.StageProgressVO;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.Project;
+import com.bwbcomeon.evidence.entity.ProjectArchiveApplication;
 import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
+import com.bwbcomeon.evidence.mapper.ProjectArchiveApplicationMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.PermissionUtil;
@@ -49,10 +51,14 @@ public class ProjectService {
     private static final String ROLE_OWNER = "owner";
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_ARCHIVED = "archived";
+    private static final String STATUS_RETURNED = "returned";
     private static final DateTimeFormatter CREATED_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Autowired
     private ProjectMapper projectMapper;
+
+    @Autowired
+    private ProjectArchiveApplicationMapper projectArchiveApplicationMapper;
 
     @Autowired
     private AuthProjectAclMapper authProjectAclMapper;
@@ -197,9 +203,16 @@ public class ProjectService {
             }
         }
         Set<Long> ownerUserIds = new HashSet<>(projectIdToOwnerUserId.values());
-        List<SysUser> ownerUsers = ownerUserIds.isEmpty() ? new ArrayList<>() : sysUserMapper.selectByIds(new ArrayList<>(ownerUserIds));
+        Set<Long> creatorUserIds = new HashSet<>();
+        for (Project p : projects) {
+            if (p.getCreatedByUserId() != null) creatorUserIds.add(p.getCreatedByUserId());
+        }
+        Set<Long> allUserIds = new HashSet<>();
+        allUserIds.addAll(ownerUserIds);
+        allUserIds.addAll(creatorUserIds);
+        List<SysUser> users = allUserIds.isEmpty() ? new ArrayList<>() : sysUserMapper.selectByIds(new ArrayList<>(allUserIds));
         Map<Long, String> userIdToDisplayName = new HashMap<>();
-        for (SysUser u : ownerUsers) {
+        for (SysUser u : users) {
             userIdToDisplayName.put(u.getId(), resolveUserDisplayName(u));
         }
         List<ProjectVO> result = new ArrayList<>(projects.size());
@@ -209,6 +222,9 @@ public class ProjectService {
             if (pmUserId != null) {
                 vo.setCurrentPmUserId(pmUserId);
                 vo.setCurrentPmDisplayName(userIdToDisplayName.get(pmUserId));
+            }
+            if (p.getCreatedByUserId() != null) {
+                vo.setCreatedByDisplayName(userIdToDisplayName.get(p.getCreatedByUserId()));
             }
             result.add(vo);
         }
@@ -253,11 +269,21 @@ public class ProjectService {
         vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
         vo.setCanManageMembers(Boolean.TRUE.equals(bits.getCanManageMembers()));
         vo.setCanUpload(Boolean.TRUE.equals(bits.getCanUpload()));
+        if (project.getCreatedByUserId() != null) {
+            SysUser creator = sysUserMapper.selectById(project.getCreatedByUserId());
+            vo.setCreatedByDisplayName(creator != null ? resolveUserDisplayName(creator) : null);
+        }
         Long pmUserId = resolveAclOwnerUserId(projectId);
         if (pmUserId != null) {
             vo.setCurrentPmUserId(pmUserId);
             SysUser pmUser = sysUserMapper.selectById(pmUserId);
             vo.setCurrentPmDisplayName(pmUser != null ? resolveUserDisplayName(pmUser) : null);
+        }
+        if (STATUS_RETURNED.equals(project.getStatus())) {
+            ProjectArchiveApplication rejected = projectArchiveApplicationMapper.selectLatestRejectedByProjectId(projectId);
+            if (rejected != null && rejected.getRejectComment() != null) {
+                vo.setRejectComment(rejected.getRejectComment());
+            }
         }
         return vo;
     }
@@ -542,6 +568,7 @@ public class ProjectService {
         vo.setStatus(p.getStatus());
         vo.setHasProcurement(Boolean.TRUE.equals(p.getHasProcurement()));
         vo.setCreatedAt(createdAtStr);
+        vo.setCreatedByUserId(p.getCreatedByUserId());
         return vo;
     }
 }

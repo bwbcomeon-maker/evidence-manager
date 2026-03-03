@@ -13,6 +13,7 @@ import EvidenceTypeList from '@/views/evidence/EvidenceTypeList.vue'
 import EvidenceDetail from '@/views/evidence/EvidenceDetail.vue'
 import Me from '@/views/Me.vue'
 import Login from '@/views/Login.vue'
+import TodoCenter from '@/views/TodoCenter.vue'
 import AdminUsers from '@/views/AdminUsers.vue'
 import BatchAssignProjects from '@/views/BatchAssignProjects.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -89,6 +90,12 @@ const router = createRouter({
           name: 'Me',
           component: Me,
           meta: { title: '我的', showTabbar: true, showBack: false }
+        },
+        {
+          path: 'todos',
+          name: 'TodoCenter',
+          component: TodoCenter,
+          meta: { title: '我的待办', showTabbar: false, showBack: true }
         },
         {
           path: 'projects/:id',

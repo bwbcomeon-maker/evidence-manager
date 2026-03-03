@@ -24,6 +24,10 @@ public class ProjectVO {
     private Boolean hasProcurement;
     /** 创建时间（列表可无，详情展示用） */
     private String createdAt;
+    /** 项目创建人 sys_user.id */
+    private Long createdByUserId;
+    /** 项目创建人展示名（real_name 或 username） */
+    private String createdByDisplayName;
     /** V1 统一权限位（前端按钮只读此） */
     private PermissionBits permissions;
     /** @deprecated 兼容，与 permissions.canInvalidate 一致 */
@@ -40,4 +44,6 @@ public class ProjectVO {
     private Integer evidenceCompletionPercent;
     /** 关键缺失摘要，前若干条（列表扩展，便于前端展示） */
     private List<String> keyMissingSummary;
+    /** 退回原因（项目状态为 returned 时，来自最新一条 REJECTED 申请单的 reject_comment） */
+    private String rejectComment;
 }

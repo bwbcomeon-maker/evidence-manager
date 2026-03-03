@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.ArchiveRejectEvidenceMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.ArchiveRejectEvidence">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="application_id" property="applicationId" jdbcType="BIGINT"/>
+        <result column="evidence_id" property="evidenceId" jdbcType="BIGINT"/>
+        <result column="reject_comment" property="rejectComment" jdbcType="VARCHAR"/>
+        <result column="created_by" property="createdBy" jdbcType="BIGINT"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, application_id, evidence_id, reject_comment, created_by, created_at
+    </sql>
+
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.ArchiveRejectEvidence"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO archive_reject_evidence (application_id, evidence_id, reject_comment, created_by, created_at)
+        VALUES (#{applicationId}, #{evidenceId}, #{rejectComment}, #{createdBy}, COALESCE(#{createdAt}, CURRENT_TIMESTAMP))
+    </insert>
+
+    <select id="selectByApplicationId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM archive_reject_evidence
+        WHERE application_id = #{applicationId}
+        ORDER BY id ASC
+    </select>
+
+    <delete id="deleteByApplicationId">
+        DELETE FROM archive_reject_evidence WHERE application_id = #{applicationId}
+    </delete>
+</mapper>

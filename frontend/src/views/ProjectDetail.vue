@@ -1,12 +1,32 @@
 <template>
-  <div class="project-detail">
+  <div class="project-detail" :class="{ 'approval-bar-visible': project?.status === 'pending_approval' && isPMOOrAdmin }">
     <div class="content">
       <!-- 顶部摘要卡片：项目名称、状态胶囊、核心负责人 -->
       <div v-if="project && !projectLoading" class="detail-header-card">
+        <!-- 待审批时 PM 只读提示 -->
+        <van-notice-bar
+          v-if="project.status === 'pending_approval' && isPM"
+          left-icon="info-o"
+          color="#ed6a0c"
+          background="#fff7e8"
+          class="detail-notice-bar"
+        >
+          项目归档正在审核中，不可修改材料
+        </van-notice-bar>
+        <!-- 已退回时展示退回原因（或通用提示） -->
+        <van-notice-bar
+          v-else-if="project.status === 'returned'"
+          left-icon="warning-o"
+          color="#ee0a24"
+          background="#fff1f0"
+          class="detail-notice-bar"
+        >
+          {{ project.rejectComment || '项目归档申请已被退回，请根据意见修改后重新申请。' }}
+        </van-notice-bar>
         <h1 class="detail-header-title">{{ project.name }}</h1>
         <div class="detail-header-meta">
-          <span class="detail-header-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
-            {{ project.status === 'active' ? '进行中' : '已归档' }}
+          <span class="detail-header-badge" :class="statusBadgeClass">
+            {{ statusBadgeText }}
           </span>
           <span v-if="project.currentPmDisplayName" class="detail-header-responsible">负责人：{{ project.currentPmDisplayName }}</span>
         </div>
@@ -40,8 +60,8 @@
               <div class="info-row">
                 <span class="info-label">项目状态</span>
                 <span class="info-value">
-                  <span class="info-badge" :class="project.status === 'active' ? 'badge--active' : 'badge--archived'">
-                    {{ project.status === 'active' ? '进行中' : '已归档' }}
+                  <span class="info-badge" :class="statusBadgeClass">
+                    {{ statusBadgeText }}
                   </span>
                 </span>
               </div>
@@ -56,6 +76,10 @@
                   />
                   <span v-else>{{ project.hasProcurement ? '是' : '否' }}</span>
                 </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">项目创建人</span>
+                <span class="info-value">{{ project.createdByDisplayName || '—' }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">创建时间</span>
@@ -129,11 +153,12 @@
               </div>
               <div class="archive-row">
                 <van-button
+                  v-if="!(project.status === 'pending_approval' && isPM)"
                   type="primary"
-                  :class="{ 'archive-btn--disabled': !stageProgress.canArchive || project?.status === 'archived' }"
+                  :class="{ 'archive-btn--disabled': !canArchiveForApply || project?.status === 'archived' }"
                   @click="onArchiveClick"
                 >
-                  申请归档
+                  {{ project?.status === 'returned' ? '重新申请归档' : '申请归档' }}
                 </van-button>
               </div>
             </div>
@@ -229,11 +254,12 @@
               </div>
               <div class="archive-row">
                 <van-button
+                  v-if="!(project.status === 'pending_approval' && isPM)"
                   type="primary"
-                  :class="{ 'archive-btn--disabled': !stageProgress.canArchive || project?.status === 'archived' }"
+                  :class="{ 'archive-btn--disabled': !canArchiveForApply || project?.status === 'archived' }"
                   @click="onArchiveClick"
                 >
-                  申请归档
+                  {{ project?.status === 'returned' ? '重新申请归档' : '申请归档' }}
                 </van-button>
               </div>
             </div>
@@ -293,7 +319,7 @@
                           <div
                             v-if="isImageType(ev.contentType) && ev.latestVersion"
                             class="grid-thumb"
-                            :class="{ 'grid-thumb--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID' }"
+                            :class="{ 'grid-thumb--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID', 'grid-thumb--has-reject-comment': getDisplayRejectComment(ev) }"
                             @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                           >
                             <img :src="`/api/evidence/versions/${ev.latestVersion.versionId}/download`" :alt="ev.title" />
@@ -301,14 +327,25 @@
                               <span class="evidence-badge" :class="'evidence-badge--' + evidenceBadgeType(ev)">
                                 {{ evidenceBadgeText(ev) }}
                               </span>
+                              <template v-if="getDisplayRejectComment(ev)">
+                                <van-tag type="danger" size="mini" class="reject-tag-inline">不符合</van-tag>
+                                <span class="reject-reason-inline">{{ getDisplayRejectComment(ev) }}</span>
+                                <template v-if="project?.status === 'pending_approval' && isPMOOrAdmin">
+                                  <button type="button" class="grid-reject-btn" @click.stop="openMarkRejectDialog(ev, true)">修改</button>
+                                  <button type="button" class="grid-reject-btn" @click.stop="clearMarkReject(ev)">取消</button>
+                                </template>
+                              </template>
+                              <template v-else-if="project?.status === 'pending_approval' && isPMOOrAdmin">
+                                <button type="button" class="grid-reject-btn grid-reject-btn--mark" @click.stop="openMarkRejectDialog(ev, false)">标记不符合</button>
+                              </template>
                             </div>
-                            <button v-if="route.query.from !== 'evidence-by-project'" type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
+                            <button v-if="canUploadAndEdit && route.query.from !== 'evidence-by-project'" type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                           <!-- 非图片：文档类列表式展示，左下角状态标签 -->
                           <div
                             v-else
                             class="grid-file"
-                            :class="{ 'grid-file--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID' }"
+                            :class="{ 'grid-file--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID', 'grid-file--has-reject-comment': getDisplayRejectComment(ev) }"
                             :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }"
                             @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                           >
@@ -324,12 +361,21 @@
                             <span class="evidence-badge evidence-badge--file" :class="'evidence-badge--' + evidenceBadgeType(ev)">
                               {{ evidenceBadgeText(ev) }}
                             </span>
-                            <button v-if="route.query.from !== 'evidence-by-project'" type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
+                            <div v-if="getDisplayRejectComment(ev)" class="grid-file-reject-bar">
+                              <van-tag type="danger" size="mini">不符合</van-tag>
+                              <span class="reject-reason-inline">{{ getDisplayRejectComment(ev) }}</span>
+                              <template v-if="project?.status === 'pending_approval' && isPMOOrAdmin">
+                                <button type="button" class="grid-reject-btn" @click.stop="openMarkRejectDialog(ev, true)">修改</button>
+                                <button type="button" class="grid-reject-btn" @click.stop="clearMarkReject(ev)">取消</button>
+                              </template>
+                            </div>
+                            <button v-else-if="project?.status === 'pending_approval' && isPMOOrAdmin" type="button" class="grid-reject-btn grid-reject-btn--mark grid-file-mark-btn" @click.stop="openMarkRejectDialog(ev, false)">标记不符合</button>
+                            <button v-if="canUploadAndEdit && route.query.from !== 'evidence-by-project'" type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                         </div>
                         <!-- 上传入口：自定义大加号 + 动态文案（未达标：继续上传 + 还差 X 张；已达标：上传更多） -->
                         <div
-                          v-if="canUpload && s.stageId && route.query.from !== 'evidence-by-project'"
+                          v-if="canUploadAndEdit && s.stageId && route.query.from !== 'evidence-by-project'"
                           class="grid-item grid-upload-btn"
                           @click="openUploadForItem(s, item)"
                         >
@@ -357,6 +403,52 @@
         </van-button>
       </div>
     </div>
+
+    <!-- 审批操作区（PMO/管理员 + 项目待审批时固定底部） -->
+    <div v-if="project?.status === 'pending_approval' && isPMOOrAdmin" class="approval-bar-wrap">
+      <div class="approval-bar">
+        <van-button type="success" class="approval-btn" @click="onApproveClick">审批通过</van-button>
+        <van-button type="warning" class="approval-btn" @click="showRejectDialog = true">退回整改</van-button>
+      </div>
+    </div>
+
+    <!-- 退回整改弹窗 -->
+    <van-dialog
+      v-model:show="showRejectDialog"
+      title="退回整改"
+      show-cancel-button
+      confirm-button-text="确认退回"
+      :before-close="onRejectConfirm"
+    >
+      <van-field
+        v-model="rejectCommentText"
+        type="textarea"
+        rows="4"
+        placeholder="请填写退回原因（必填）"
+        maxlength="500"
+        show-word-limit
+        class="reject-reason-field"
+      />
+    </van-dialog>
+
+    <!-- 标记不符合弹窗（PMO 附件级打回原因，仅本地暂存） -->
+    <van-dialog
+      v-model:show="showMarkRejectDialog"
+      title="标记不符合"
+      show-cancel-button
+      confirm-button-text="确定"
+      :before-close="onMarkRejectConfirm"
+    >
+      <van-field
+        v-model="markRejectCommentText"
+        type="textarea"
+        rows="3"
+        placeholder="请填写不符合原因"
+        maxlength="300"
+        show-word-limit
+        class="reject-reason-field"
+      />
+    </van-dialog>
 
     <!-- 上传弹窗：两阶段（表单 -> 结果与操作） -->
     <van-dialog
@@ -588,7 +680,9 @@ import {
   getProjectDetail,
   getProjectMembers,
   getStageProgress,
-  archiveProject,
+  archiveApply,
+  archiveApprove,
+  archiveReject,
   updateProject,
   getStructuredErrorData,
   type ProjectMemberVO,
@@ -618,8 +712,10 @@ interface Project {
   canInvalidate?: boolean
   canUpload?: boolean
   canManageMembers?: boolean
-  currentPmUserId?: string
+  currentPmUserId?: number
   currentPmDisplayName?: string
+  /** 退回原因（returned 时后端可返回，暂无则前端展示通用提示） */
+  rejectComment?: string
 }
 
 const route = useRoute()
@@ -648,6 +744,15 @@ const archiveBlockData = ref<ArchiveBlockVO | null>(null)
 // 申请归档前草稿确认：存在草稿时展示列表，用户确认后再执行归档
 const showDraftConfirmDialog = ref(false)
 const draftListForArchive = ref<EvidenceListItem[]>([])
+// 退回整改弹窗
+const showRejectDialog = ref(false)
+const rejectCommentText = ref('')
+// PMO 附件级不符合：本地暂存，提交退回时一并发送（key = evidenceId）
+const localRejectMap = ref<Record<string, string>>({})
+// 标记不符合弹窗（evidenceId 当前正在编辑的）
+const showMarkRejectDialog = ref(false)
+const markRejectEvidenceId = ref<number | null>(null)
+const markRejectCommentText = ref('')
 
 /** 上传上下文：从某阶段某模板项点击「上传」时带入，用于提交时带 stageId + evidenceTypeCode */
 const uploadContext = ref<{ stageId: number; evidenceTypeCode: string; displayName: string } | null>(null)
@@ -869,6 +974,53 @@ const pendingInvalidateStageCode = ref<string | null>(null)
 const pendingInvalidateEvidenceTypeCode = ref<string | null>(null)
 const auth = useAuthStore()
 
+/** 当前用户是否为该项目项目经理（owner） */
+const isPM = computed(() => {
+  const p = project.value
+  const uid = auth.currentUser?.id
+  if (!p || uid == null) return false
+  return p.currentPmUserId != null && p.currentPmUserId === uid
+})
+
+/** 当前用户是否为 PMO 或系统管理员（可审批/退回） */
+const isPMOOrAdmin = computed(() => {
+  const code = auth.currentUser?.roleCode
+  return code === 'PMO' || code === 'SYSTEM_ADMIN'
+})
+
+/** 项目状态胶囊样式 */
+const statusBadgeClass = computed(() => {
+  const s = project.value?.status
+  if (s === 'active') return 'badge--active'
+  if (s === 'pending_approval') return 'badge--pending'
+  if (s === 'returned') return 'badge--returned'
+  if (s === 'archived') return 'badge--archived'
+  return 'badge--archived'
+})
+
+/** 项目状态展示文案 */
+const statusBadgeText = computed(() => {
+  const s = project.value?.status
+  if (s === 'active') return '进行中'
+  if (s === 'pending_approval') return '待审批'
+  if (s === 'returned') return '已退回'
+  if (s === 'archived') return '已归档'
+  return s || '—'
+})
+
+/** 是否允许点击「申请归档」：门禁通过且非已归档；待审批时 PM 不显示按钮（由上面 v-if 控制） */
+const canArchiveForApply = computed(() => {
+  return !!stageProgress.value?.canArchive && project.value?.status !== 'archived'
+})
+
+/** 上传+删除可见：有上传权限且在待审批时非 PM（PM 只读） */
+const canUploadAndEdit = computed(() => {
+  const can = project.value?.permissions?.canUpload === true || project.value?.canUpload === true
+  if (!can) return false
+  if (project.value?.status === 'pending_approval' && isPM.value) return false
+  return true
+})
+
 /** V1：上传按钮仅在后端返回 canUpload 时显示 */
 const canUpload = computed(() => project.value?.permissions?.canUpload === true || project.value?.canUpload === true)
 
@@ -1051,7 +1203,8 @@ const loadProject = async () => {
         canManageMembers: p.canManageMembers ?? false,
         canUpload: p.canUpload ?? p.permissions?.canUpload ?? false,
         currentPmUserId: p.currentPmUserId,
-        currentPmDisplayName: p.currentPmDisplayName
+        currentPmDisplayName: p.currentPmDisplayName,
+        rejectComment: (p as { rejectComment?: string }).rejectComment
       }
       loadMembers()
     } else {
@@ -1676,13 +1829,13 @@ function openUploadForItem(stage: StageVO, item: StageItemVO) {
   openUploadDialog()
 }
 
-/** 实际执行归档请求（供 handleArchive 与草稿确认弹窗确认后调用） */
+/** 实际执行归档申请（审批流）：调用 archiveApply，成功后刷新；门禁失败时弹窗 */
 async function doArchive(): Promise<boolean> {
   if (!projectId.value) return false
   try {
-    const res = await archiveProject(projectId.value)
+    const res = await archiveApply(projectId.value)
     if (res?.code === 0) {
-      showSuccessToast('归档成功')
+      showSuccessToast('已提交归档申请')
       loadProject()
       loadStageProgress()
       return true
@@ -1692,7 +1845,7 @@ async function doArchive(): Promise<boolean> {
       archiveBlockData.value = res.data as ArchiveBlockVO
       showArchiveBlockDialog.value = true
     } else {
-      showToast((res as { message?: string })?.message ?? '归档失败')
+      showToast((res as { message?: string })?.message ?? '申请失败')
     }
     return false
   } catch (err: unknown) {
@@ -1702,7 +1855,7 @@ async function doArchive(): Promise<boolean> {
       archiveBlockData.value = structured.data as ArchiveBlockVO
       showArchiveBlockDialog.value = true
     } else {
-      showToast(getFriendlyErrorMessage(err, '归档失败'))
+      showToast(getFriendlyErrorMessage(err, '申请失败'))
     }
     return false
   }
@@ -1710,11 +1863,128 @@ async function doArchive(): Promise<boolean> {
 
 /** 申请归档按钮点击：不可归档时拦截并 Toast 提示，可归档时执行 handleArchive */
 function onArchiveClick() {
-  if (!stageProgress.value?.canArchive || project.value?.status === 'archived') {
+  if (!canArchiveForApply.value || project.value?.status === 'archived') {
     showToast('请先补全关键证据再申请归档')
     return
   }
   handleArchive()
+}
+
+/** 审批通过 */
+async function onApproveClick() {
+  if (!projectId.value) return
+  try {
+    await showConfirmDialog({ title: '确认通过', message: '确认通过该项目的归档申请？' })
+  } catch {
+    return
+  }
+  try {
+    const res = await archiveApprove(projectId.value)
+    if (res?.code === 0) {
+      showSuccessToast('已通过')
+      loadProject()
+      loadStageProgress()
+    } else {
+      showToast((res as { message?: string })?.message ?? '操作失败')
+    }
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '操作失败'))
+  }
+}
+
+/** 退回弹窗确认：必填退回原因后调用 archiveReject */
+async function onRejectConfirm(action: string): Promise<boolean> {
+  if (action !== 'confirm') {
+    showRejectDialog.value = false
+    rejectCommentText.value = ''
+    return true
+  }
+  const comment = rejectCommentText.value?.trim()
+  if (!comment) {
+    showToast('请填写退回原因')
+    return false
+  }
+  const evidenceComments = Object.entries(localRejectMap.value)
+    .filter(([, c]) => c != null && String(c).trim() !== '')
+    .map(([id, c]) => ({ evidenceId: Number(id), comment: String(c).trim() }))
+  try {
+    const res = await archiveReject(projectId.value, {
+      comment,
+      ...(evidenceComments.length > 0 ? { evidenceComments } : {})
+    })
+    if (res?.code === 0) {
+      showRejectDialog.value = false
+      rejectCommentText.value = ''
+      localRejectMap.value = {}
+      showSuccessToast('已退回')
+      loadProject()
+      loadStageProgress()
+      return true
+    }
+    showToast((res as { message?: string })?.message ?? '操作失败')
+    resetRejectDialogState()
+    return false
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '操作失败'))
+    resetRejectDialogState()
+    return false
+  }
+}
+
+/** 关闭退回弹窗并清空输入与本地不符合项，避免接口报错后状态残留 */
+function resetRejectDialogState() {
+  showRejectDialog.value = false
+  rejectCommentText.value = ''
+  localRejectMap.value = {}
+}
+
+/** 当前证据卡片展示的退回原因：returned 时用接口返回；pending 时 PMO 用本地暂存 */
+function getDisplayRejectComment(ev: EvidenceListItem): string | null {
+  if (!project.value) return null
+  if (project.value.status === 'returned') return ev.rejectComment ?? null
+  if (project.value.status === 'pending_approval' && isPMOOrAdmin.value) {
+    const local = localRejectMap.value[String(ev.evidenceId)]
+    return (local != null && String(local).trim() !== '') ? String(local).trim() : (ev.rejectComment ?? null)
+  }
+  return ev.rejectComment ?? null
+}
+
+/** 打开「标记不符合」弹窗（isEdit 时预填当前原因） */
+function openMarkRejectDialog(ev: EvidenceListItem, isEdit: boolean) {
+  markRejectEvidenceId.value = ev.evidenceId
+  markRejectCommentText.value = isEdit ? (localRejectMap.value[String(ev.evidenceId)] ?? '') : ''
+  showMarkRejectDialog.value = true
+}
+
+/** 标记不符合弹窗确认：写入 localRejectMap */
+function onMarkRejectConfirm(action: string): boolean {
+  if (action !== 'confirm') {
+    showMarkRejectDialog.value = false
+    markRejectEvidenceId.value = null
+    markRejectCommentText.value = ''
+    return true
+  }
+  const id = markRejectEvidenceId.value
+  const text = markRejectCommentText.value?.trim()
+  if (id == null) return true
+  if (!text) {
+    showToast('请填写不符合原因')
+    return false
+  }
+  localRejectMap.value = { ...localRejectMap.value, [String(id)]: text }
+  showMarkRejectDialog.value = false
+  markRejectEvidenceId.value = null
+  markRejectCommentText.value = ''
+  showSuccessToast('已标记')
+  return true
+}
+
+/** 取消某条证据的「已标记」 */
+function clearMarkReject(ev: EvidenceListItem) {
+  const next = { ...localRejectMap.value }
+  delete next[String(ev.evidenceId)]
+  localRejectMap.value = next
+  showSuccessToast('已取消标记')
 }
 
 /** 申请归档：若有草稿则先弹窗列出草稿并确认，确认后再归档；无草稿则直接归档 */
@@ -1900,6 +2170,17 @@ onMounted(() => {
   background: #ebedf0;
   color: var(--app-text-secondary);
 }
+.detail-header-badge.badge--pending {
+  background: #fff7e8;
+  color: #ed6a0c;
+}
+.detail-header-badge.badge--returned {
+  background: #fff1f0;
+  color: #ee0a24;
+}
+.detail-notice-bar {
+  margin-bottom: 12px;
+}
 .detail-header-responsible {
   font-size: 13px;
   color: var(--app-text-secondary);
@@ -1994,6 +2275,14 @@ onMounted(() => {
 .info-badge.badge--archived {
   background: #ebedf0;
   color: var(--app-text-secondary);
+}
+.info-badge.badge--pending {
+  background: #fff7e8;
+  color: #ed6a0c;
+}
+.info-badge.badge--returned {
+  background: #fff1f0;
+  color: #ee0a24;
 }
 
 .members-section {
@@ -2401,8 +2690,74 @@ onMounted(() => {
   padding: 4px 6px;
   background: linear-gradient(transparent, rgba(0,0,0,0.5));
   display: flex;
-  justify-content: flex-start;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 4px 8px;
+}
+.reject-tag-inline {
+  margin-left: 4px;
+}
+.reject-reason-inline {
+  font-size: 10px;
+  color: #fff;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grid-reject-btn {
+  font-size: 10px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.9);
+  color: var(--van-red);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.grid-reject-btn--mark {
+  margin-left: auto;
+  background: var(--van-red);
+  color: #fff;
+}
+.grid-thumb--has-reject-comment,
+.grid-file--has-reject-comment {
+  box-shadow: 0 0 0 2px var(--van-red);
+}
+.grid-file-reject-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 6px;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 10px;
+  color: #fff;
+}
+.grid-file-reject-bar .reject-reason-inline {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grid-file-mark-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  background: var(--van-red);
+  color: #fff;
+  cursor: pointer;
+  z-index: 1;
 }
 .grid-thumb--rejected::after {
   content: '';
@@ -2596,5 +2951,34 @@ onMounted(() => {
 .draft-confirm-ask {
   margin-top: 12px;
   color: var(--van-gray-8);
+}
+
+/* 审批操作区：固定底部 */
+.approval-bar-wrap {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: var(--bg-card);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+}
+.approval-bar {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.approval-bar .approval-btn {
+  flex: 1;
+  max-width: 160px;
+}
+/* 底部有审批栏时给内容区留白，避免被遮挡 */
+.project-detail.approval-bar-visible .content {
+  padding-bottom: 80px;
+}
+.reject-reason-field {
+  padding: 8px 0;
 }
 </style>

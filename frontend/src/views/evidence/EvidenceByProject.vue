@@ -16,7 +16,7 @@
           >
             <div class="project-card-body">
               <div class="project-card-header">
-                <h3 class="project-card-title">{{ project.name }}</h3>
+                <h3 class="project-card-title" :title="project.name">{{ project.name }}</h3>
                 <span
                   class="project-card-badge"
                   :class="project.status === 'active' ? 'badge--active' : 'badge--archived'"
@@ -26,14 +26,17 @@
               </div>
               <div v-if="project.description" class="project-desc">{{ project.description }}</div>
               <div v-else-if="project.code" class="project-desc">{{ project.code }}</div>
-              <div class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
-                项目经理：{{ project.currentPmDisplayName || '未分配' }}
+              <div class="project-meta-row">
+                <span class="project-pm" :class="project.currentPmDisplayName ? 'project-pm-assigned' : 'project-pm-unassigned'">
+                  项目经理：{{ project.currentPmDisplayName || '未分配' }}
+                </span>
+                <span v-if="project.createdByDisplayName" class="project-creator">创建人：{{ project.createdByDisplayName }}</span>
               </div>
             </div>
             <div class="project-card-actions">
               <button
                 type="button"
-                class="card-action-view"
+                class="card-action-view card-action-view--small"
                 @click.stop="goToProjectEvidences(project.id)"
               >
                 查看证据
@@ -105,17 +108,23 @@ onMounted(() => {
   background: var(--app-bg);
 }
 .content {
-  padding: 16px;
+  padding: 12px 16px 16px;
 }
 
-/* 与项目列表一致的卡片样式（图 1 标准 UI） */
+/* 列表底部「没有更多了」紧凑 */
+.evidence-by-project :deep(.van-list__finished-text) {
+  font-size: 12px;
+  color: #969799;
+  padding: 6px 0 8px;
+}
+
+/* 与项目列表一致的紧凑卡片样式 */
 .project-card {
   background: var(--app-card);
   border-radius: var(--app-card-radius);
   box-shadow: var(--app-card-shadow);
-  padding: 16px;
-  margin-bottom: 12px;
-  min-height: var(--app-tap-min-height);
+  padding: 10px 12px;
+  margin-bottom: 8px;
   cursor: pointer;
 }
 .project-card:active {
@@ -123,23 +132,28 @@ onMounted(() => {
 }
 .project-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  min-height: 0;
 }
 .project-card-title {
   flex: 1;
-  font-size: 17px;
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
   color: #323233;
   margin: 0;
-  line-height: 1.35;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .project-card-badge {
   flex-shrink: 0;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
   font-weight: 500;
 }
 .badge--active {
@@ -151,37 +165,48 @@ onMounted(() => {
   color: #969799;
 }
 .project-desc {
-  margin-top: 8px;
-  margin-bottom: 4px;
-  font-size: 14px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  font-size: 13px;
   color: var(--app-text-secondary, #8E8E93);
-  line-height: 1.4;
+  line-height: 1.35;
 }
-.project-pm {
-  font-size: 12px;
+.project-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  margin-top: 2px;
+}
+.project-pm,
+.project-creator {
+  font-size: 11px;
   color: var(--app-text-secondary, #8E8E93);
 }
 .project-card-actions {
-  border-top: 1px solid #f0f0f0;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 6px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  border-top: 1px solid #f5f5f5;
 }
 .card-action-view {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 34px;
-  padding: 0 14px;
-  font-size: 14px;
+  min-width: 0;
+  padding: 0 10px;
+  font-size: 13px;
   color: var(--primary-color);
   background: transparent;
   border: 1px solid var(--primary-color);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+.card-action-view--small {
+  height: 28px;
 }
 .card-action-view:active {
   opacity: 0.8;

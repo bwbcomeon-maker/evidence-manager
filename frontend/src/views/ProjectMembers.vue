@@ -10,8 +10,9 @@
     />
     <van-loading v-if="loading" class="loading" vertical>加载中...</van-loading>
     <template v-else>
-      <div class="current-pm" v-if="currentPmDisplayName">
-        当前项目经理：{{ currentPmDisplayName }}
+      <div class="project-info-row">
+        <span v-if="currentPmDisplayName" class="current-pm">当前项目经理：{{ currentPmDisplayName }}</span>
+        <span v-if="createdByDisplayName" class="project-creator">项目创建人：{{ createdByDisplayName }}</span>
       </div>
       <div class="toolbar">
         <van-button
@@ -157,6 +158,7 @@ function onBack() {
 
 const projectName = ref('')
 const canManageMembers = ref(false)
+const createdByDisplayName = ref('')
 const members = ref<ProjectMemberVO[]>([])
 const loading = ref(true)
 const showAddDialog = ref(false)
@@ -223,10 +225,12 @@ async function loadProject() {
     if (res.code === 0 && res.data) {
       projectName.value = res.data.name || '项目'
       canManageMembers.value = res.data.canManageMembers === true
+      createdByDisplayName.value = res.data.createdByDisplayName || ''
     }
   } catch {
     projectName.value = '项目'
     canManageMembers.value = false
+    createdByDisplayName.value = ''
   }
 }
 
@@ -435,6 +439,17 @@ onMounted(() => {
 }
 .loading {
   padding: 48px 0;
+}
+.project-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--app-text-secondary, #8E8E93);
+}
+.project-info-row .project-creator {
+  color: inherit;
 }
 .toolbar {
   padding: 12px 16px;

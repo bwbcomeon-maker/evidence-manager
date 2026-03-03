@@ -14,8 +14,13 @@ export interface ProjectVO {
   code: string
   name: string
   description: string
+  /** 项目状态：active | pending_approval | returned | archived */
   status: string
   createdAt?: string
+  /** 项目创建人 sys_user.id */
+  createdByUserId?: number
+  /** 项目创建人展示名 */
+  createdByDisplayName?: string
   /** V1 统一权限位 */
   permissions?: PermissionBits
   canInvalidate?: boolean
@@ -199,6 +204,20 @@ export const completeStage = (projectId: number, stageCode: string) =>
 /** 项目归档（门禁失败时 code=400，data 为 ArchiveBlockVO） */
 export const archiveProject = (projectId: number) =>
   http.post<ApiResult<ArchiveBlockVO | null>>(`/projects/${projectId}/archive`)
+
+/** 申请归档（审批流）：创建 PENDING_APPROVAL 申请，项目状态变为 pending_approval */
+export const archiveApply = (projectId: number) =>
+  http.post<ApiResult<{ id: number }>>(`/projects/${projectId}/archive-apply`)
+
+/** 审批通过（仅 PMO/SYSTEM_ADMIN）：通过后执行归档 */
+export const archiveApprove = (projectId: number) =>
+  http.post<ApiResult<null>>(`/projects/${projectId}/archive-approve`)
+
+/** 退回归档申请（仅 PMO/SYSTEM_ADMIN），body 必填 comment，可选 evidenceComments 附件级不符合项 */
+export const archiveReject = (
+  projectId: number,
+  data: { comment: string; evidenceComments?: { evidenceId: number; comment: string }[] }
+) => http.post<ApiResult<null>>(`/projects/${projectId}/archive-reject`, data)
 
 /** 从接口响应或 axios 错误中取出 400 结构化 data（供弹窗/页面展示） */
 export function getStructuredErrorData(

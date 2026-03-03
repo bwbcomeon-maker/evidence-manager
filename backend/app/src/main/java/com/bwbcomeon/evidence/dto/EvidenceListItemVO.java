@@ -101,4 +101,6 @@ public class EvidenceListItemVO {
     private String invalidByDisplayName;
     /** 作废时间（INVALID 时有值） */
     private OffsetDateTime invalidAt;
+    /** 归档退回时 PMO 标注的不符合原因（项目状态为 returned 且该证据在最新 REJECTED 申请的不符项中时有值） */
+    private String rejectComment;
 }

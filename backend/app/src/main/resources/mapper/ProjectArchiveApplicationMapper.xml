@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bwbcomeon.evidence.mapper.ProjectArchiveApplicationMapper">
+
+    <resultMap id="BaseResultMap" type="com.bwbcomeon.evidence.entity.ProjectArchiveApplication">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="project_id" property="projectId" jdbcType="BIGINT"/>
+        <result column="applicant_user_id" property="applicantUserId" jdbcType="BIGINT"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="submit_time" property="submitTime" jdbcType="TIMESTAMP"/>
+        <result column="approver_user_id" property="approverUserId" jdbcType="BIGINT"/>
+        <result column="approve_time" property="approveTime" jdbcType="TIMESTAMP"/>
+        <result column="reject_time" property="rejectTime" jdbcType="TIMESTAMP"/>
+        <result column="reject_comment" property="rejectComment" jdbcType="VARCHAR"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, project_id, applicant_user_id, status, submit_time, approver_user_id, approve_time,
+        reject_time, reject_comment, created_at, updated_at
+    </sql>
+
+    <insert id="insert" parameterType="com.bwbcomeon.evidence.entity.ProjectArchiveApplication"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_archive_application (
+            project_id, applicant_user_id, status, submit_time, approver_user_id, approve_time,
+            reject_time, reject_comment, created_at, updated_at
+        )
+        VALUES (
+            #{projectId},
+            #{applicantUserId},
+            COALESCE(#{status}, 'PENDING_APPROVAL'),
+            COALESCE(#{submitTime}, CURRENT_TIMESTAMP),
+            #{approverUserId},
+            #{approveTime},
+            #{rejectTime},
+            #{rejectComment},
+            COALESCE(#{createdAt}, CURRENT_TIMESTAMP),
+            COALESCE(#{updatedAt}, CURRENT_TIMESTAMP)
+        )
+    </insert>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM project_archive_application
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectPendingByProjectId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM project_archive_application
+        WHERE project_id = #{projectId} AND status = 'PENDING_APPROVAL'
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestRejectedByProjectId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM project_archive_application
+        WHERE project_id = #{projectId} AND status = 'REJECTED'
+        ORDER BY COALESCE(reject_time, updated_at) DESC NULLS LAST
+        LIMIT 1
+    </select>
+
+    <update id="update" parameterType="com.bwbcomeon.evidence.entity.ProjectArchiveApplication">
+        UPDATE project_archive_application
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="approverUserId != null">approver_user_id = #{approverUserId},</if>
+            <if test="approveTime != null">approve_time = #{approveTime},</if>
+            <if test="rejectTime != null">reject_time = #{rejectTime},</if>
+            <if test="rejectComment != null">reject_comment = #{rejectComment},</if>
+            updated_at = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatusAndAudit">
+        UPDATE project_archive_application
+        SET status = #{status},
+            approver_user_id = #{approverUserId},
+            approve_time = #{approveTime},
+            reject_time = #{rejectTime},
+            reject_comment = #{rejectComment},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+</mapper>

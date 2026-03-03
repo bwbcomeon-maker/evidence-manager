@@ -51,6 +51,8 @@ export interface EvidenceListItem {
   stageName?: string
   evidenceTypeCode?: string
   evidenceTypeDisplayName?: string
+  /** 归档退回时 PMO 标注的不符合原因（项目 returned 时后端返回） */
+  rejectComment?: string
   latestVersion: {
     versionId: number
     versionNo: number

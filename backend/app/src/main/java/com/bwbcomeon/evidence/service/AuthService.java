@@ -76,7 +76,8 @@ public class AuthService {
     @Transactional(rollbackFor = Exception.class)
     public void logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        Long userId = session != null ? (Long) session.getAttribute(SESSION_LOGIN_USER_ID) : null;
+        Object raw = session != null ? session.getAttribute(SESSION_LOGIN_USER_ID) : null;
+        Long userId = (raw instanceof Number) ? ((Number) raw).longValue() : null;
         String ip = WebUtils.getClientIp(request);
         String userAgent = WebUtils.getUserAgent(request);
 

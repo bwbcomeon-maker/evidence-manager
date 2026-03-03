@@ -11,6 +11,8 @@ import com.bwbcomeon.evidence.enums.EvidenceStatus;
 import com.bwbcomeon.evidence.entity.DeliveryStage;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
 import com.bwbcomeon.evidence.entity.EvidenceVersion;
+import com.bwbcomeon.evidence.entity.ProjectArchiveApplication;
+import com.bwbcomeon.evidence.entity.ArchiveRejectEvidence;
 import com.bwbcomeon.evidence.entity.StageEvidenceTemplate;
 import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
@@ -20,6 +22,8 @@ import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
 import com.bwbcomeon.evidence.mapper.DeliveryStageMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.EvidenceVersionMapper;
+import com.bwbcomeon.evidence.mapper.ArchiveRejectEvidenceMapper;
+import com.bwbcomeon.evidence.mapper.ProjectArchiveApplicationMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
 import com.bwbcomeon.evidence.mapper.StageEvidenceTemplateMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
@@ -41,6 +45,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,6 +78,12 @@ public class EvidenceService {
 
     @Autowired
     private StageEvidenceTemplateMapper stageEvidenceTemplateMapper;
+
+    @Autowired
+    private ProjectArchiveApplicationMapper projectArchiveApplicationMapper;
+
+    @Autowired
+    private ArchiveRejectEvidenceMapper archiveRejectEvidenceMapper;
 
     @Autowired
     private PermissionUtil permissionUtil;
@@ -315,9 +326,37 @@ public class EvidenceService {
 
             result.add(vo);
         }
-
+        Map<Long, String> rejectMap = getRejectCommentMapForProject(projectId);
+        for (EvidenceListItemVO vo : result) {
+            if (vo.getEvidenceId() != null && rejectMap.containsKey(vo.getEvidenceId())) {
+                vo.setRejectComment(rejectMap.get(vo.getEvidenceId()));
+            }
+        }
         logger.info("List evidences: projectId={}, count={}", projectId, result.size());
         return result;
+    }
+
+    /**
+     * 当项目状态为 returned 时，返回该项目最新 REJECTED 申请单下各证据的不符合原因映射 evidenceId -> rejectComment。
+     * 否则返回空 Map。
+     */
+    private Map<Long, String> getRejectCommentMapForProject(Long projectId) {
+        Map<Long, String> map = new HashMap<>();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null || !"returned".equals(project.getStatus())) {
+            return map;
+        }
+        ProjectArchiveApplication rejected = projectArchiveApplicationMapper.selectLatestRejectedByProjectId(projectId);
+        if (rejected == null) {
+            return map;
+        }
+        List<ArchiveRejectEvidence> list = archiveRejectEvidenceMapper.selectByApplicationId(rejected.getId());
+        for (ArchiveRejectEvidence e : list) {
+            if (e.getEvidenceId() != null && e.getRejectComment() != null) {
+                map.put(e.getEvidenceId(), e.getRejectComment());
+            }
+        }
+        return map;
     }
 
     /**
@@ -411,6 +450,16 @@ public class EvidenceService {
             vo.setPermissions(bits);
             vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
             records.add(vo);
+        }
+        Map<Long, Map<Long, String>> rejectMapCache = new HashMap<>();
+        for (EvidenceListItemVO vo : records) {
+            Long pid = vo.getProjectId();
+            if (pid == null || vo.getEvidenceId() == null) continue;
+            rejectMapCache.computeIfAbsent(pid, this::getRejectCommentMapForProject);
+            Map<Long, String> m = rejectMapCache.get(pid);
+            if (m.containsKey(vo.getEvidenceId())) {
+                vo.setRejectComment(m.get(vo.getEvidenceId()));
+            }
         }
         return new PageResult<>(total, records, page, pageSize);
     }
@@ -532,6 +581,10 @@ public class EvidenceService {
             lv.setCreatedAt(latest.getCreatedAt());
             vo.setLatestVersion(lv);
         }
+        Map<Long, String> rejectMap = getRejectCommentMapForProject(item.getProjectId());
+        if (item.getId() != null && rejectMap.containsKey(item.getId())) {
+            vo.setRejectComment(rejectMap.get(item.getId()));
+        }
         return vo;
     }
 
@@ -587,6 +640,12 @@ public class EvidenceService {
             vo.setPermissions(bits);
             vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
             result.add(vo);
+        }
+        Map<Long, String> rejectMap = getRejectCommentMapForProject(projectId);
+        for (EvidenceListItemVO vo : result) {
+            if (vo.getEvidenceId() != null && rejectMap.containsKey(vo.getEvidenceId())) {
+                vo.setRejectComment(rejectMap.get(vo.getEvidenceId()));
+            }
         }
         return result;
     }

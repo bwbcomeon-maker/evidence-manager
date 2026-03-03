@@ -41,7 +41,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         HttpSession session = request.getSession(false);
-        Long userId = session == null ? null : (Long) session.getAttribute(AuthService.SESSION_LOGIN_USER_ID);
+        Object rawUserId = session == null ? null : session.getAttribute(AuthService.SESSION_LOGIN_USER_ID);
+        Long userId = null;
+        if (rawUserId instanceof Number) {
+            userId = ((Number) rawUserId).longValue();
+        }
 
         if (userId == null) {
             authService.recordAudit(request, "AUTH_UNAUTHORIZED", false, null,

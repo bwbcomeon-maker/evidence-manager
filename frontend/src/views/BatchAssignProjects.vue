@@ -38,7 +38,7 @@
             :key="p.id"
             clickable
             :title="p.name"
-            :label="p.code"
+            :label="p.createdByDisplayName ? `${p.code} · 创建人：${p.createdByDisplayName}` : p.code"
             @click="toggleProject(p.id)"
           >
             <template #right-icon>

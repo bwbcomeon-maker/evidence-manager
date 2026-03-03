@@ -160,4 +160,13 @@
           AND (is_deleted = false OR is_deleted IS NULL)
     </select>
 
+    <select id="selectIdsByRoleCodeIn" resultType="long">
+        SELECT id FROM sys_user
+        WHERE (is_deleted = false OR is_deleted IS NULL)
+          AND role_code IN
+        <foreach collection="roleCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+    </select>
+
 </mapper>
