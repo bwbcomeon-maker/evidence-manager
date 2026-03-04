@@ -20,8 +20,15 @@
               >
                 <template #title>
                   <span class="todo-title">
+                    <van-icon
+                      :name="item.type === 'ARCHIVE_RETURNED' ? 'warning-o' : 'records'"
+                      :color="item.type === 'ARCHIVE_RETURNED' ? '#ee0a24' : '#1989fa'"
+                      class="todo-type-icon"
+                    />
                     <van-badge v-if="!item.readAt" dot class="todo-unread-dot" />
-                    {{ item.title || '待办' }}
+                    <span class="todo-title-text">
+                      {{ item.title || '待办' }}
+                    </span>
                   </span>
                 </template>
                 <template #label>
@@ -55,8 +62,15 @@
               >
                 <template #title>
                   <span class="todo-title">
+                    <van-icon
+                      :name="item.type === 'ARCHIVE_RETURNED' ? 'warning-o' : 'records'"
+                      :color="item.type === 'ARCHIVE_RETURNED' ? '#ee0a24' : '#1989fa'"
+                      class="todo-type-icon"
+                    />
                     <van-badge dot class="todo-unread-dot" />
-                    {{ item.title || '待办' }}
+                    <span class="todo-title-text">
+                      {{ item.title || '待办' }}
+                    </span>
                   </span>
                 </template>
                 <template #label>
@@ -243,12 +257,11 @@ async function onTodoClick(item: TodoItemVO) {
     await markTodoRead(id)
     markReadOk = true
   } catch (e) {
+    // 显式提示标记已读失败的原因
+    showToast(getFriendlyErrorMessage(e, '标记已读失败'))
     if (path) {
       const toPath = path.startsWith('/') ? path : '/' + path
       router.push(toPath)
-      showToast('已跳转')
-    } else {
-      showToast(getFriendlyErrorMessage(e, '操作失败'))
     }
     return
   }
@@ -283,6 +296,19 @@ watch(activeTab, (name) => {
 
 .todo-unread-dot {
   flex-shrink: 0;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.todo-type-icon {
+  font-size: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.todo-title-text {
+  font-weight: 600;
+  vertical-align: middle;
 }
 
 .todo-label {

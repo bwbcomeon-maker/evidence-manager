@@ -21,12 +21,16 @@
       <van-cell
         title="我的待办"
         icon="todo-list-o"
-        is-link
         class="me-cell"
         @click="goToTodos"
       >
-        <template #value>
-          <van-badge v-if="unreadTodoCount > 0" :content="unreadTodoCount" max="99" />
+        <template #right-icon>
+          <van-badge
+            v-if="unreadTodoCount > 0"
+            :content="unreadTodoCount"
+            max="99"
+            class="me-todo-badge"
+          />
         </template>
       </van-cell>
       <van-cell
@@ -103,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { changePassword, verifyPassword } from '@/api/auth'
@@ -124,7 +128,8 @@ function goToTodos() {
   router.push('/todos')
 }
 
-onMounted(async () => {
+/** 拉取未读待办数量，供首次进入与返回页面时刷新角标 */
+async function fetchUnreadCount() {
   try {
     const res = await getTodos({ unreadOnly: true })
     if (res?.code === 0 && Array.isArray(res.data)) {
@@ -133,6 +138,15 @@ onMounted(async () => {
   } catch {
     // 静默失败，不阻塞页面
   }
+}
+
+onMounted(() => {
+  fetchUnreadCount()
+})
+
+/** 从待办中心/其他页返回「我的」时再次刷新未读数，避免角标不更新（含 Tab 缓存场景） */
+onActivated(() => {
+  fetchUnreadCount()
 })
 const showChangePwd = ref(false)
 const showOldPwd = ref(false)
@@ -303,6 +317,10 @@ async function onLogout() {
 }
 .me-card--list :deep(.van-cell__right-icon) {
   color: #c8c9cc;
+}
+
+.me-todo-badge {
+  margin-left: 4px;
 }
 
 .pwd-toggle-icon {

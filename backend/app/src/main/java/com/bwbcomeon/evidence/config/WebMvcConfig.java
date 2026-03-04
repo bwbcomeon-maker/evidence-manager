@@ -42,7 +42,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "http://192.168.*.*:3000", "http://192.168.*.*:3001",
                         "http://10.*.*.*:3000", "http://10.*.*.*:3001"
                 )
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);
