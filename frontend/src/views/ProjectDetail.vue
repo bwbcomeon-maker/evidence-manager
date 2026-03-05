@@ -308,7 +308,7 @@
                 <!-- 模板项平铺卡片 -->
                 <div class="stage-items-flat">
                   <div
-                    v-for="(item, idx) in (s.items || [])"
+                    v-for="(item, idx) in uniqueStageItems(s)"
                     :key="item.evidenceTypeCode + '-' + idx"
                     :id="'evidence-card-' + s.stageCode + '-' + item.evidenceTypeCode"
                     class="evidence-card"
@@ -956,7 +956,8 @@ const keyMissingDetails = computed(() => {
   const seenGroups = new Set<string>()
 
   for (const stage of progress.stages) {
-    const items = stage.items || []
+    // 与界面展示保持一致：按展示名称去重后的模板项作为「关键缺失」计算基础
+    const items = uniqueStageItems(stage)
     for (const item of items) {
       const required = item.required === true || item.isRequired === true
       const inGroup = !!item.ruleGroup && !!item.groupDisplayName
@@ -1168,10 +1169,12 @@ const canArchiveForApply = computed(() => {
   return !!stageProgress.value?.canArchive
 })
 
-/** 上传+删除可见：有上传权限且在待审批时非 PM（PM 只读） */
+/** 上传+删除可见：有上传权限；待审批时 PM 只读；已归档时仅 PMO/系统管理员可编辑 */
 const canUploadAndEdit = computed(() => {
   const can = project.value?.permissions?.canUpload === true || project.value?.canUpload === true
   if (!can) return false
+  // 项目已归档：仅 PMO / SYSTEM_ADMIN 可编辑，其它角色只读
+  if (project.value?.status === 'archived' && !isPMOOrAdmin.value) return false
   if (project.value?.status === 'pending_approval' && isPM.value) return false
   return true
 })
@@ -1216,7 +1219,7 @@ function evidenceListStatusTagType(evidence: EvidenceListItem) {
   return evidenceStatusTagType(getEffectiveEvidenceStatus(evidence))
 }
 
-/** 证据状态 → 现场展示三类：待提交 / 已提交 / 不合格 */
+/** 证据状态 → 现场展示三类：待提交 / 已提交(含归档) / 不合格 */
 function evidenceBadgeType(evidence: EvidenceListItem): 'pending' | 'submitted' | 'rejected' {
   const status = getEffectiveEvidenceStatus(evidence)
   if (status === 'INVALID') return 'rejected'
@@ -1226,8 +1229,33 @@ function evidenceBadgeType(evidence: EvidenceListItem): 'pending' | 'submitted' 
 function evidenceBadgeText(evidence: EvidenceListItem): string {
   const status = getEffectiveEvidenceStatus(evidence)
   if (status === 'INVALID') return '不合格'
-  if (status === 'SUBMITTED' || status === 'ARCHIVED') return '已提交'
+  if (status === 'ARCHIVED') return '已归档'
+  if (status === 'SUBMITTED') return '已提交'
   return '待提交'
+}
+
+/**
+ * 去重后的阶段模板项列表：
+ * 后端 StageProgressService 按 stage_evidence_template 行构造 items，
+ * 若存在重复配置（同一阶段内 evidenceTypeCode 重复），这里以 evidenceTypeCode 为 key 去重，
+ * 仅保留遇到的第一项，避免上传页出现两个一模一样的证据类别。
+ */
+function uniqueStageItems(stage: StageVO): StageItemVO[] {
+  if (!stage?.items?.length) return []
+  const seen = new Set<string>()
+  const result: StageItemVO[] = []
+  for (const item of stage.items) {
+    // 以「展示给用户看的名称」优先去重：同一阶段内若显示名称相同，视为同一证据类别
+    const key = (item.groupDisplayName || item.displayName || item.evidenceTypeCode || '').trim()
+    if (!key) {
+      result.push(item)
+      continue
+    }
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(item)
+  }
+  return result
 }
 
 /** 当前项还差几张（用于上传入口文案） */

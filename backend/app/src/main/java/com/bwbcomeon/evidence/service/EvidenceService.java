@@ -95,6 +95,24 @@ public class EvidenceService {
     private FileStorageUtil fileStorageUtil;
 
     /**
+     * 项目已归档时，仅 PMO / SYSTEM_ADMIN 允许修改证据；其他角色只读。
+     */
+    private void checkProjectNotArchivedOrIsPMO(Long projectId, String roleCode) {
+        if (projectId == null) {
+            return;
+        }
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(404, "项目不存在");
+        }
+        if ("archived".equals(project.getStatus())) {
+            if (roleCode == null || (!"PMO".equals(roleCode) && !"SYSTEM_ADMIN".equals(roleCode))) {
+                throw new BusinessException(403, "项目已归档，仅 PMO 或系统管理员可修改证据");
+            }
+        }
+    }
+
+    /**
      * 上传证据
      *
      * @param projectId 项目ID
@@ -123,7 +141,8 @@ public class EvidenceService {
             throw new BusinessException(400, "evidenceTypeCode is required");
         }
 
-        // 2. 权限校验：editor/owner 或 SYSTEM_ADMIN 可上传，viewer 不可
+        // 2. 权限校验：editor/owner 或 SYSTEM_ADMIN 可上传，viewer 不可；已归档项目仅 PMO/系统管理员可修改
+        checkProjectNotArchivedOrIsPMO(projectId, roleCode);
         permissionUtil.checkCanUpload(projectId, userId, roleCode);
 
         // 3. 保存文件到本地磁盘
@@ -676,6 +695,8 @@ public class EvidenceService {
         if (!EvidenceStatus.DRAFT.getCode().equals(item.getEvidenceStatus())) {
             throw new BusinessException(400, "仅草稿状态的证据可物理删除，已提交的证据只能作废");
         }
+        // 项目已归档时，仅 PMO/系统管理员可修改
+        checkProjectNotArchivedOrIsPMO(item.getProjectId(), roleCode);
         permissionUtil.checkCanSubmit(item.getProjectId(), userId, roleCode);
         List<EvidenceVersion> versions = evidenceVersionMapper.selectByEvidenceId(id);
         Path basePathNormalized = Paths.get(basePath).normalize();
@@ -745,6 +766,8 @@ public class EvidenceService {
         }
         EvidenceItem item = evidenceItemMapper.selectById(id);
         if (item == null) throw new BusinessException(404, "证据不存在");
+        // 项目已归档时，仅 PMO/系统管理员可修改
+        checkProjectNotArchivedOrIsPMO(item.getProjectId(), roleCode);
         permissionUtil.checkCanInvalidate(item.getProjectId(), userId, roleCode);
         String current = item.getEvidenceStatus() != null ? item.getEvidenceStatus() : "SUBMITTED";
         EvidenceStatus.fromCode(current).validateTransition(EvidenceStatus.INVALID);
