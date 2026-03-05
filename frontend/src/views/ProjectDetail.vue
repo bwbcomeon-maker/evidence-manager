@@ -13,15 +13,29 @@
         >
           项目归档正在审核中，不可修改材料
         </van-notice-bar>
-        <!-- 已退回时展示退回原因（或通用提示） -->
+        <!-- 已退回且仍有未处理的不符合项：红色警告横幅 + 「去处理(n)」 -->
+        <div v-else-if="project.status === 'returned' && !isAllResolved" class="returned-banner">
+          <div class="returned-banner__content">
+            <van-icon name="warning-o" class="returned-banner__icon" />
+            <span class="returned-banner__text">{{ project.rejectComment || '项目归档申请已被退回，请根据意见修改后重新申请。' }}</span>
+            <button
+              type="button"
+              class="returned-banner__action"
+              @click="showRejectedPopup = true"
+            >
+              去处理({{ rejectedEvidencesList.length }}) &gt;
+            </button>
+          </div>
+        </div>
+        <!-- 已退回且所有不符合项已处理：成功/引导横幅，引导重新申请归档，不展示「去处理」 -->
         <van-notice-bar
-          v-else-if="project.status === 'returned'"
-          left-icon="warning-o"
-          color="#ee0a24"
-          background="#fff1f0"
-          class="detail-notice-bar"
+          v-else-if="project.status === 'returned' && isAllResolved"
+          left-icon="passed"
+          color="#07c160"
+          background="#e8f8f0"
+          class="detail-notice-bar returned-banner--resolved"
         >
-          {{ project.rejectComment || '项目归档申请已被退回，请根据意见修改后重新申请。' }}
+          所有不符合项已处理完毕，可重新申请归档。
         </van-notice-bar>
         <h1 class="detail-header-title">{{ project.name }}</h1>
         <div class="detail-header-meta">
@@ -30,6 +44,14 @@
           </span>
           <span v-if="project.currentPmDisplayName" class="detail-header-responsible">负责人：{{ project.currentPmDisplayName }}</span>
         </div>
+        <button
+          type="button"
+          class="detail-header-history-btn"
+          @click="openArchiveHistoryPopup"
+        >
+          <van-icon name="clock-o" />
+          历次审批记录
+        </button>
       </div>
 
       <!-- 分段控制器：详情 / 证据 -->
@@ -155,7 +177,8 @@
                 <van-button
                   v-if="!(project.status === 'pending_approval' && isPM)"
                   type="primary"
-                  :class="{ 'archive-btn--disabled': !canArchiveForApply || project?.status === 'archived' }"
+                  :class="{ 'archive-btn--disabled': !canArchiveForApply }"
+                  :title="!canArchiveForApply ? getArchiveDisabledMessage() : undefined"
                   @click="onArchiveClick"
                 >
                   {{ project?.status === 'returned' ? '重新申请归档' : '申请归档' }}
@@ -256,7 +279,8 @@
                 <van-button
                   v-if="!(project.status === 'pending_approval' && isPM)"
                   type="primary"
-                  :class="{ 'archive-btn--disabled': !canArchiveForApply || project?.status === 'archived' }"
+                  :class="{ 'archive-btn--disabled': !canArchiveForApply }"
+                  :title="!canArchiveForApply ? getArchiveDisabledMessage() : undefined"
                   @click="onArchiveClick"
                 >
                   {{ project?.status === 'returned' ? '重新申请归档' : '申请归档' }}
@@ -278,6 +302,7 @@
                     <span class="stage-count">{{ (s.displayCompletedCount ?? s.completedCount) }}/{{ (s.displayItemCount ?? s.itemCount) }}</span>
                     <van-tag :type="healthTagType(s.healthStatus)">{{ healthStatusText(s.healthStatus) }}</van-tag>
                     <van-tag v-if="s.stageCompleted" type="success">已完成</van-tag>
+                    <van-tag v-if="project?.status === 'returned' && stageHasRejected(s)" type="danger" size="medium" class="stage-rejected-badge">包含待修改项</van-tag>
                   </div>
                 </template>
                 <!-- 模板项平铺卡片 -->
@@ -312,41 +337,55 @@
                         <div
                           v-for="ev in getItemEvidences(s.stageCode, item.evidenceTypeCode)"
                           :key="ev.evidenceId"
+                          :id="'evidence-item-' + ev.evidenceId"
                           class="grid-item"
+                          :class="{ 'grid-item--voided': getEffectiveEvidenceStatus(ev) === 'INVALID' }"
+                          :title="getDisplayRejectComment(ev) ? '不符合原因：' + getDisplayRejectComment(ev) : undefined"
                           @click="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                         >
-                          <!-- 图片缩略图：圆角、cover，左下角状态标签；不合格时半透明遮罩 -->
+                          <!-- 图片缩略图：圆角、cover，左下角状态标签；已作废卡片弱化显示且不展示替换/删除 -->
                           <div
                             v-if="isImageType(ev.contentType) && ev.latestVersion"
                             class="grid-thumb"
-                            :class="{ 'grid-thumb--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID', 'grid-thumb--has-reject-comment': getDisplayRejectComment(ev) }"
+                            :class="{ 'grid-thumb--rejected': getEffectiveEvidenceStatus(ev) !== 'INVALID' && getDisplayRejectComment(ev), 'grid-thumb--has-reject-comment': getEffectiveEvidenceStatus(ev) !== 'INVALID' && getDisplayRejectComment(ev) }"
+                            :title="getDisplayRejectComment(ev) ? '不符合原因：' + getDisplayRejectComment(ev) : undefined"
                             @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                           >
                             <img :src="`/api/evidence/versions/${ev.latestVersion.versionId}/download`" :alt="ev.title" />
                             <div class="grid-thumb-overlay">
+                              <!-- 已作废：仅显示灰色「已作废」标签，不显示不符合/替换/删除 -->
                               <span class="evidence-badge" :class="'evidence-badge--' + evidenceBadgeType(ev)">
                                 {{ evidenceBadgeText(ev) }}
                               </span>
-                              <template v-if="getDisplayRejectComment(ev)">
+                              <template v-if="getEffectiveEvidenceStatus(ev) === 'INVALID'">
+                                <van-tag type="default" size="mini" class="reject-tag-inline voided-tag">已作废</van-tag>
+                              </template>
+                              <template v-else-if="getDisplayRejectComment(ev)">
                                 <van-tag type="danger" size="mini" class="reject-tag-inline">不符合</van-tag>
                                 <span class="reject-reason-inline">{{ getDisplayRejectComment(ev) }}</span>
                                 <template v-if="project?.status === 'pending_approval' && isPMOOrAdmin">
                                   <button type="button" class="grid-reject-btn" @click.stop="openMarkRejectDialog(ev, true)">修改</button>
                                   <button type="button" class="grid-reject-btn" @click.stop="clearMarkReject(ev)">取消</button>
                                 </template>
+                                <template v-else-if="project?.status === 'returned' && canUploadAndEdit && route.query.from !== 'evidence-by-project'">
+                                  <button type="button" class="grid-reject-btn grid-reject-btn--replace" :disabled="replaceLoadingEvidenceId === ev.evidenceId" @click.stop="triggerReplaceFileInput(ev, s, item)">
+                                    {{ replaceLoadingEvidenceId === ev.evidenceId ? '替换中...' : '替换' }}
+                                  </button>
+                                </template>
                               </template>
                               <template v-else-if="project?.status === 'pending_approval' && isPMOOrAdmin">
                                 <button type="button" class="grid-reject-btn grid-reject-btn--mark" @click.stop="openMarkRejectDialog(ev, false)">标记不符合</button>
                               </template>
                             </div>
-                            <button v-if="canUploadAndEdit && route.query.from !== 'evidence-by-project'" type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
+                            <button v-if="canUploadAndEdit && getEffectiveEvidenceStatus(ev) !== 'INVALID' && route.query.from !== 'evidence-by-project'" type="button" class="grid-thumb-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
-                          <!-- 非图片：文档类列表式展示，左下角状态标签 -->
+                          <!-- 非图片：文档类列表式展示；已作废仅显示灰色「已作废」标签，不展示替换/删除 -->
                           <div
                             v-else
                             class="grid-file"
-                            :class="{ 'grid-file--rejected': getEffectiveEvidenceStatus(ev) === 'INVALID', 'grid-file--has-reject-comment': getDisplayRejectComment(ev) }"
+                            :class="{ 'grid-file--voided': getEffectiveEvidenceStatus(ev) === 'INVALID', 'grid-file--rejected': getEffectiveEvidenceStatus(ev) !== 'INVALID' && getDisplayRejectComment(ev), 'grid-file--has-reject-comment': getEffectiveEvidenceStatus(ev) !== 'INVALID' && getDisplayRejectComment(ev) }"
                             :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).bg }"
+                            :title="getDisplayRejectComment(ev) ? '不符合原因：' + getDisplayRejectComment(ev) : undefined"
                             @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                           >
                             <span class="grid-file-type-badge" :style="{ background: getFileIconConfig(getEvidenceFileName(ev)).color }">
@@ -361,16 +400,24 @@
                             <span class="evidence-badge evidence-badge--file" :class="'evidence-badge--' + evidenceBadgeType(ev)">
                               {{ evidenceBadgeText(ev) }}
                             </span>
-                            <div v-if="getDisplayRejectComment(ev)" class="grid-file-reject-bar">
+                            <div v-if="getEffectiveEvidenceStatus(ev) === 'INVALID'" class="grid-file-reject-bar">
+                              <van-tag type="default" size="mini" class="voided-tag">已作废</van-tag>
+                            </div>
+                            <div v-else-if="getDisplayRejectComment(ev)" class="grid-file-reject-bar">
                               <van-tag type="danger" size="mini">不符合</van-tag>
                               <span class="reject-reason-inline">{{ getDisplayRejectComment(ev) }}</span>
                               <template v-if="project?.status === 'pending_approval' && isPMOOrAdmin">
                                 <button type="button" class="grid-reject-btn" @click.stop="openMarkRejectDialog(ev, true)">修改</button>
                                 <button type="button" class="grid-reject-btn" @click.stop="clearMarkReject(ev)">取消</button>
                               </template>
+                              <template v-else-if="project?.status === 'returned' && canUploadAndEdit && route.query.from !== 'evidence-by-project'">
+                                <button type="button" class="grid-reject-btn grid-reject-btn--replace" :disabled="replaceLoadingEvidenceId === ev.evidenceId" @click.stop="triggerReplaceFileInput(ev, s, item)">
+                                  {{ replaceLoadingEvidenceId === ev.evidenceId ? '替换中...' : '替换' }}
+                                </button>
+                              </template>
                             </div>
                             <button v-else-if="project?.status === 'pending_approval' && isPMOOrAdmin" type="button" class="grid-reject-btn grid-reject-btn--mark grid-file-mark-btn" @click.stop="openMarkRejectDialog(ev, false)">标记不符合</button>
-                            <button v-if="canUploadAndEdit && route.query.from !== 'evidence-by-project'" type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
+                            <button v-if="canUploadAndEdit && getEffectiveEvidenceStatus(ev) !== 'INVALID' && route.query.from !== 'evidence-by-project'" type="button" class="grid-file-delete" aria-label="删除" @click.stop="onDeleteEvidence(ev, s, item)"><van-icon name="delete-o" /></button>
                           </div>
                         </div>
                         <!-- 上传入口：自定义大加号 + 动态文案（未达标：继续上传 + 还差 X 张；已达标：上传更多） -->
@@ -449,6 +496,95 @@
         class="reject-reason-field"
       />
     </van-dialog>
+
+    <!-- 一键替换不符合项：隐藏的 file 选择框 -->
+    <input
+      ref="replaceFileInputRef"
+      type="file"
+      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+      class="replace-file-input-hidden"
+      @change="onReplaceFileSelect"
+    />
+
+    <!-- 退回状态下：不符合项列表弹窗，点击项平滑滚动定位到对应证据 -->
+    <van-popup
+      v-model:show="showRejectedPopup"
+      position="bottom"
+      round
+      :style="{ maxHeight: '60vh' }"
+      class="rejected-list-popup"
+    >
+      <div class="rejected-list-popup-header">不符合项（点击定位）</div>
+      <div class="rejected-list-popup-body">
+        <div
+          v-for="entry in rejectedEvidencesList"
+          :key="entry.evidenceId"
+          class="rejected-list-item"
+          @click="scrollToRejectedEvidence(entry)"
+        >
+          <span class="rejected-list-item-name">{{ entry.displayName }}</span>
+          <span class="rejected-list-item-reason">{{ entry.rejectComment }}</span>
+        </div>
+      </div>
+    </van-popup>
+
+    <!-- 审批历史：右侧弹出层，时间轴展示历次申请/通过/退回 -->
+    <van-popup
+      v-model:show="showHistoryPopup"
+      position="right"
+      :style="{ width: '85%', height: '100%' }"
+      class="archive-history-popup"
+    >
+      <div class="archive-history-header">
+        <span class="archive-history-title">审批历史</span>
+        <van-icon name="cross" class="archive-history-close" @click="showHistoryPopup = false" />
+      </div>
+      <div class="archive-history-body">
+        <van-loading v-if="historyLoading" class="archive-history-loading" vertical size="24">
+          加载中...
+        </van-loading>
+        <van-empty
+          v-else-if="!historyList.length"
+          description="暂无审批记录"
+          :image-size="80"
+          class="archive-history-empty"
+        />
+        <div v-else class="archive-history-timeline">
+          <div
+            v-for="(item, index) in historyList"
+            :key="item.applicationId"
+            class="timeline-item"
+            :class="'timeline-item--' + item.status"
+          >
+            <div class="timeline-node">
+              <span class="timeline-node__icon" :class="'timeline-node__icon--' + item.status">
+                <van-icon :name="historyStepIcon(item.status)" />
+              </span>
+              <div class="timeline-node__content">
+                <div class="timeline-node__title">{{ historyStepTitle(item.status) }}</div>
+                <div class="timeline-node__meta">
+                  <span class="timeline-node__time">{{ historyStepTime(item) }}</span>
+                  <span class="timeline-node__user">{{ historyStepOperator(item) }}</span>
+                </div>
+                <div v-if="item.rejectComment" class="timeline-reject-comment">
+                  {{ item.rejectComment }}
+                </div>
+                <ul v-if="item.rejectEvidences && item.rejectEvidences.length > 0" class="timeline-reject-evidences">
+                  <li
+                    v-for="ev in item.rejectEvidences"
+                    :key="ev.evidenceId"
+                    class="timeline-reject-evidence-item"
+                  >
+                    • [{{ ev.stageName || '—' }}] {{ ev.evidenceName || '证据' }}：{{ ev.rejectComment }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div v-if="index < historyList.length - 1" class="timeline-line" />
+          </div>
+        </div>
+      </div>
+    </van-popup>
 
     <!-- 上传弹窗：两阶段（表单 -> 结果与操作） -->
     <van-dialog
@@ -683,13 +819,15 @@ import {
   archiveApply,
   archiveApprove,
   archiveReject,
+  getArchiveHistory,
   updateProject,
   getStructuredErrorData,
   type ProjectMemberVO,
   type StageProgressVO,
   type StageVO,
   type StageItemVO,
-  type ArchiveBlockVO
+  type ArchiveBlockVO,
+  type ProjectArchiveHistoryVO
 } from '@/api/projects'
 import { getEvidencesByStageType } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
@@ -698,6 +836,7 @@ import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceS
 import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
 import { compressImageIfNeeded } from '@/utils/imageCompress'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
+import { formatDateTimeFull } from '@/utils/format'
 
 interface Project {
   id: number
@@ -753,6 +892,19 @@ const localRejectMap = ref<Record<string, string>>({})
 const showMarkRejectDialog = ref(false)
 const markRejectEvidenceId = ref<number | null>(null)
 const markRejectCommentText = ref('')
+/** 退回状态下「查看不符合项」列表弹窗 */
+const showRejectedPopup = ref(false)
+/** 一键替换不符合项：当前正在请求的证据 ID，用于禁用重复点击 */
+const replaceLoadingEvidenceId = ref<number | null>(null)
+/** 替换用隐藏 file input 的 context，在 input change 时使用 */
+const replaceContextRef = ref<{ ev: EvidenceListItem; stage: StageVO; item: StageItemVO } | null>(null)
+/** 替换用隐藏 file input 的 DOM 引用 */
+const replaceFileInputRef = ref<HTMLInputElement | null>(null)
+
+/** 审批历史弹窗 */
+const showHistoryPopup = ref(false)
+const historyList = ref<ProjectArchiveHistoryVO[]>([])
+const historyLoading = ref(false)
 
 /** 上传上下文：从某阶段某模板项点击「上传」时带入，用于提交时带 stageId + evidenceTypeCode */
 const uploadContext = ref<{ stageId: number; evidenceTypeCode: string; displayName: string } | null>(null)
@@ -1008,9 +1160,12 @@ const statusBadgeText = computed(() => {
   return s || '—'
 })
 
-/** 是否允许点击「申请归档」：门禁通过且非已归档；待审批时 PM 不显示按钮（由上面 v-if 控制） */
+/** 是否允许点击「申请归档」：门禁通过、非已归档且非待审批；returned 时须先处理完所有不符合项 */
 const canArchiveForApply = computed(() => {
-  return !!stageProgress.value?.canArchive && project.value?.status !== 'archived'
+  const status = project.value?.status
+  if (status === 'archived' || status === 'pending_approval') return false
+  if (status === 'returned' && !isAllResolved.value) return false
+  return !!stageProgress.value?.canArchive
 })
 
 /** 上传+删除可见：有上传权限且在待审批时非 PM（PM 只读） */
@@ -1762,6 +1917,75 @@ function refreshCurrentItemEvidences() {
   }
 }
 
+/**
+ * 一键替换不符合项：先上传新文件得到新 evidence，再作废旧 evidence（已提交不可物理删除），最后刷新列表
+ */
+async function handleReplaceRejectedEvidence(
+  ev: EvidenceListItem,
+  stage: StageVO,
+  item: StageItemVO,
+  file: File
+) {
+  if (!projectId.value || stage.stageId == null || !item.evidenceTypeCode) {
+    showToast('无法获取阶段或类型信息')
+    return
+  }
+  replaceLoadingEvidenceId.value = ev.evidenceId
+  try {
+    if (isImageFile(file)) {
+      showLoadingToast({ message: '图片处理中...', forbidClick: true, duration: 0 })
+      file = await compressImageIfNeeded(file)
+      closeToast()
+    }
+    showLoadingToast({ message: '正在上传...', forbidClick: true, duration: 0 })
+    const formData = new FormData()
+    formData.append('name', file.name || '替换上传')
+    formData.append('stageId', String(stage.stageId))
+    formData.append('evidenceTypeCode', item.evidenceTypeCode)
+    formData.append('file', file)
+    const uploadRes = (await uploadEvidence(projectId.value, formData)) as {
+      code: number
+      message?: string
+      data?: { id: number }
+    }
+    closeToast()
+    if (uploadRes?.code !== 0 || !uploadRes?.data?.id) {
+      showToast(uploadRes?.message || '上传失败')
+      return
+    }
+    const invalidateRes = (await invalidateEvidence(ev.evidenceId, '替换为新材料')) as { code: number; message?: string }
+    if (invalidateRes?.code !== 0) {
+      showToast(invalidateRes?.message || '作废旧项失败')
+      return
+    }
+    await loadEvidenceForItem(stage.stageCode, item.evidenceTypeCode)
+    loadStageProgress()
+    showSuccessToast('已替换')
+  } catch (e: unknown) {
+    closeToast()
+    showToast(getFriendlyErrorMessage(e, '替换失败'))
+  } finally {
+    replaceLoadingEvidenceId.value = null
+  }
+}
+
+/** 替换用 file input 的 change：从 context 取 ev/stage/item，选文件后执行替换并清空 input */
+async function onReplaceFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  const ctx = replaceContextRef.value
+  input.value = ''
+  replaceContextRef.value = null
+  if (!file || !ctx) return
+  await handleReplaceRejectedEvidence(ctx.ev, ctx.stage, ctx.item, file)
+}
+
+function triggerReplaceFileInput(ev: EvidenceListItem, stage: StageVO, item: StageItemVO) {
+  if (replaceLoadingEvidenceId.value != null) return
+  replaceContextRef.value = { ev, stage, item }
+  nextTick(() => replaceFileInputRef.value?.click())
+}
+
 function getItemEvidences(stageCode: string, evidenceTypeCode: string): EvidenceListItem[] {
   return evidenceByItemMap.value[`${stageCode}:${evidenceTypeCode}`] || []
 }
@@ -1861,10 +2085,33 @@ async function doArchive(): Promise<boolean> {
   }
 }
 
-/** 申请归档按钮点击：不可归档时拦截并 Toast 提示，可归档时执行 handleArchive */
-function onArchiveClick() {
+/** 不可归档时的提示文案（与当前业务状态一致）；returned 时区分「未处理完不符合项」与「完成度未达 100%」 */
+function getArchiveDisabledMessage(): string {
+  const status = project.value?.status
+  if (status === 'archived') return '项目已归档'
+  if (status === 'pending_approval') return '归档申请审批中，请等待审批结果'
+  if (status === 'returned') {
+    if (!isAllResolved.value) return '请先处理所有不符合项后再重新申请归档'
+    if (!stageProgress.value?.canArchive || stageProgress.value?.overallCompletionPercent !== 100) {
+      return '证据完成度未达 100%，请补全后再重新申请归档'
+    }
+  }
+  return '请先补全关键证据再申请归档'
+}
+
+/** 申请归档按钮点击：先确认再执行；不可归档时按状态提示 */
+async function onArchiveClick() {
   if (!canArchiveForApply.value || project.value?.status === 'archived') {
-    showToast('请先补全关键证据再申请归档')
+    showToast(getArchiveDisabledMessage())
+    return
+  }
+  try {
+    const message =
+      project.value?.status === 'returned'
+        ? '确定要重新提交归档申请吗？提交后将再次进入审批流程。'
+        : '确定要提交归档申请吗？提交后将进入审批流程。'
+    await showConfirmDialog({ title: '确认申请归档', message })
+  } catch {
     return
   }
   handleArchive()
@@ -1985,6 +2232,133 @@ function clearMarkReject(ev: EvidenceListItem) {
   delete next[String(ev.evidenceId)]
   localRejectMap.value = next
   showSuccessToast('已取消标记')
+}
+
+/** 不符合项条目（用于顶部「查看不符合项」列表与锚点定位） */
+interface RejectedEvidenceEntry {
+  evidenceId: number
+  stageCode: string
+  evidenceTypeCode: string
+  displayName: string
+  rejectComment: string
+}
+
+/** 当前项目下所有被标记为「不符合」且未作废的证据项（仅 returned 时有值；作废项不参与门禁与红条计数） */
+const rejectedEvidencesList = computed(() => {
+  if (project.value?.status !== 'returned' || !stageProgress.value?.stages?.length) return []
+  const list: RejectedEvidenceEntry[] = []
+  for (const stage of stageProgress.value.stages) {
+    const stageCode = stage.stageCode
+    for (const item of stage.items || []) {
+      const evidenceTypeCode = item.evidenceTypeCode
+      const evidences = evidenceByItemMap.value[`${stageCode}:${evidenceTypeCode}`] || []
+      const displayName = item.groupDisplayName || item.displayName || evidenceTypeCode || ''
+      for (const ev of evidences) {
+        const status = getEffectiveEvidenceStatus(ev)
+        if (status === 'INVALID') continue
+        const comment = getDisplayRejectComment(ev)
+        if (comment) {
+          list.push({
+            evidenceId: ev.evidenceId,
+            stageCode,
+            evidenceTypeCode,
+            displayName,
+            rejectComment: comment
+          })
+        }
+      }
+    }
+  }
+  return list
+})
+
+/** 是否所有不符合项已处理（已删除或已重新上传等，当前列表无红标即视为已处理） */
+const isAllResolved = computed(() => {
+  if (project.value?.status !== 'returned') return true
+  return rejectedEvidencesList.value.length === 0
+})
+
+/** 某阶段是否包含未作废的不符合项（用于折叠标题右侧红标；已作废项不计入） */
+function stageHasRejected(stage: { stageCode: string; items?: Array<{ evidenceTypeCode: string }> }): boolean {
+  if (!stage?.items?.length) return false
+  for (const item of stage.items) {
+    const evs = evidenceByItemMap.value[`${stage.stageCode}:${item.evidenceTypeCode}`] || []
+    if (evs.some(ev => getEffectiveEvidenceStatus(ev) !== 'INVALID' && getDisplayRejectComment(ev))) return true
+  }
+  return false
+}
+
+/**
+ * 滚动定位到某条不符合项：切到证据 Tab → 展开所在阶段 → 平滑滚动到该证据 DOM
+ */
+async function scrollToRejectedEvidence(entry: RejectedEvidenceEntry) {
+  showRejectedPopup.value = false
+  if (activeTab.value !== EVIDENCE_TAB_INDEX) {
+    activeTab.value = EVIDENCE_TAB_INDEX
+    await nextTick()
+  }
+  await nextTick()
+  if (!expandedStages.value.includes(entry.stageCode)) {
+    expandedStages.value = [...expandedStages.value, entry.stageCode]
+  }
+  await nextTick()
+  const el = document.getElementById(`evidence-item-${entry.evidenceId}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('highlight-flash')
+    setTimeout(() => el.classList.remove('highlight-flash'), HIGHLIGHT_FLASH_DURATION)
+  }
+}
+
+/** 打开审批历史弹窗并拉取数据 */
+function openArchiveHistoryPopup() {
+  showHistoryPopup.value = true
+  fetchArchiveHistory()
+}
+
+/** 获取项目归档审批历史 */
+async function fetchArchiveHistory() {
+  if (!projectId.value) return
+  historyLoading.value = true
+  try {
+    const res = await getArchiveHistory(projectId.value)
+    if (res?.code === 0 && Array.isArray(res.data)) {
+      historyList.value = res.data
+    } else {
+      historyList.value = []
+    }
+  } catch {
+    historyList.value = []
+    showToast('加载审批历史失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+/** 审批历史时间轴：状态对应图标 */
+function historyStepIcon(status: string): string {
+  if (status === 'REJECTED') return 'cross'
+  if (status === 'APPROVED') return 'passed'
+  return 'clock-o'
+}
+
+/** 审批历史时间轴：节点标题 */
+function historyStepTitle(status: string): string {
+  if (status === 'REJECTED') return '被退回'
+  if (status === 'APPROVED') return '审批通过'
+  return '提交归档'
+}
+
+/** 审批历史时间轴：展示时间（提交或操作时间），格式 YYYY-MM-DD HH:mm:ss */
+function historyStepTime(item: ProjectArchiveHistoryVO): string {
+  if (item.status === 'PENDING_APPROVAL') return formatDateTimeFull(item.submitTime)
+  return formatDateTimeFull(item.operationTime)
+}
+
+/** 审批历史时间轴：操作人（申请人或审批人） */
+function historyStepOperator(item: ProjectArchiveHistoryVO): string {
+  if (item.status === 'PENDING_APPROVAL') return item.applicantDisplayName ? `申请人：${item.applicantDisplayName}` : ''
+  return item.approverDisplayName ? `操作人：${item.approverDisplayName}` : ''
 }
 
 /** 申请归档：若有草稿则先弹窗列出草稿并确认，确认后再归档；无草稿则直接归档 */
@@ -2556,6 +2930,231 @@ onMounted(() => {
   30% { background-color: rgba(255, 193, 7, 0.35); }
   100% { background-color: transparent; }
 }
+/* 不符合项锚点定位时，网格项也使用同一高亮动画 */
+.grid-item.highlight-flash {
+  animation: highlight-flash 1.5s ease-out;
+  border-radius: 8px;
+}
+
+/* 退回状态：红色横幅（文案 + 右侧「去处理(n)」文字按钮一体） */
+.returned-banner {
+  background: #fff1f0;
+  color: #ee0a24;
+  padding: 10px 16px;
+  margin: 0;
+}
+.returned-banner__content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.returned-banner__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+}
+.returned-banner__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.returned-banner__action {
+  flex-shrink: 0;
+  padding: 0 4px;
+  font-size: 14px;
+  color: #1989fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.returned-banner__action:active {
+  opacity: 0.8;
+}
+
+/* 顶部入口：历次审批记录 */
+.detail-header-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #1989fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.detail-header-history-btn .van-icon {
+  font-size: 14px;
+}
+.detail-header-history-btn:active {
+  opacity: 0.8;
+}
+
+/* 审批历史弹窗（右侧 85%） */
+.archive-history-popup.van-popup {
+  display: flex;
+  flex-direction: column;
+}
+.archive-history-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--van-gray-2);
+  background: var(--van-background);
+}
+.archive-history-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.archive-history-close {
+  font-size: 20px;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--van-gray-7);
+}
+.archive-history-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.archive-history-loading {
+  padding: 40px 0;
+}
+.archive-history-empty {
+  padding: 40px 0;
+}
+
+/* 时间轴 */
+.archive-history-timeline {
+  padding-bottom: 24px;
+}
+.timeline-item {
+  position: relative;
+}
+.timeline-line {
+  position: absolute;
+  left: 11px;
+  top: 36px;
+  bottom: -12px;
+  width: 2px;
+  background: var(--van-gray-3);
+}
+.timeline-node {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+.timeline-node__icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+}
+.timeline-node__icon--REJECTED {
+  background: var(--van-danger-color);
+}
+.timeline-node__icon--APPROVED {
+  background: var(--van-success-color);
+}
+.timeline-node__icon--PENDING_APPROVAL {
+  background: var(--van-primary-color);
+}
+.timeline-node__content {
+  flex: 1;
+  min-width: 0;
+}
+.timeline-node__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.timeline-item--REJECTED .timeline-node__title { color: var(--van-danger-color); }
+.timeline-item--APPROVED .timeline-node__title { color: var(--van-success-color); }
+.timeline-item--PENDING_APPROVAL .timeline-node__title { color: var(--van-primary-color); }
+.timeline-node__meta {
+  font-size: 12px;
+  color: var(--van-gray-6);
+  margin-bottom: 6px;
+}
+.timeline-node__time {
+  margin-right: 8px;
+}
+.timeline-reject-comment {
+  margin-top: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--van-gray-1);
+  border-radius: 8px;
+  color: var(--van-gray-8);
+}
+.timeline-reject-evidences {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--van-gray-7);
+  line-height: 1.6;
+}
+.timeline-reject-evidence-item {
+  margin-bottom: 4px;
+}
+.timeline-reject-evidence-item:last-child {
+  margin-bottom: 0;
+}
+
+.returned-banner__action:active {
+  opacity: 0.8;
+}
+
+/* 不符合项列表弹窗 */
+.rejected-list-popup-header {
+  padding: 14px 16px;
+  font-weight: 600;
+  font-size: 15px;
+  border-bottom: 1px solid #ebedf0;
+}
+.rejected-list-popup-body {
+  padding: 8px 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.rejected-list-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f7f8fa;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rejected-list-item:active {
+  background: #f7f8fa;
+}
+.rejected-list-item-name {
+  font-weight: 500;
+  color: #323233;
+}
+.rejected-list-item-reason {
+  font-size: 12px;
+  color: #ee0a24;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage-rejected-badge {
+  flex-shrink: 0;
+}
+
 .archive-row {
   margin-top: 10px;
 }
@@ -2667,6 +3266,13 @@ onMounted(() => {
   border: 1px solid var(--van-gray-2);
   flex-shrink: 0;
 }
+/* 已作废证据卡片整体弱化，突出旁边有效证据 */
+.grid-item--voided {
+  opacity: 0.6;
+}
+.voided-tag {
+  color: var(--van-gray-6);
+}
 .grid-thumb {
   width: 100%;
   height: 100%;
@@ -2720,6 +3326,22 @@ onMounted(() => {
   margin-left: auto;
   background: var(--van-red);
   color: #fff;
+}
+.grid-reject-btn--replace {
+  margin-left: auto;
+  background: #1989fa;
+  color: #fff;
+}
+.grid-reject-btn--replace:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.replace-file-input-hidden {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 .grid-thumb--has-reject-comment,
 .grid-file--has-reject-comment {

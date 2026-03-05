@@ -219,6 +219,30 @@ export const archiveReject = (
   data: { comment: string; evidenceComments?: { evidenceId: number; comment: string }[] }
 ) => http.post<ApiResult<null>>(`/projects/${projectId}/archive-reject`, data)
 
+/** 归档审批历史：证据级退回明细 */
+export interface RejectEvidenceDetailVO {
+  evidenceId: number
+  evidenceName: string
+  stageName: string
+  rejectComment: string
+}
+
+/** 归档审批历史：单条申请记录 */
+export interface ProjectArchiveHistoryVO {
+  applicationId: number
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
+  applicantDisplayName: string
+  approverDisplayName: string
+  submitTime: string
+  operationTime: string | null
+  rejectComment: string | null
+  rejectEvidences: RejectEvidenceDetailVO[]
+}
+
+/** 获取项目归档审批历史（历次申请/通过/退回及证据级不符合项） */
+export const getArchiveHistory = (projectId: number) =>
+  http.get<ApiResult<ProjectArchiveHistoryVO[]>>(`/projects/${projectId}/archive-history`)
+
 /** 从接口响应或 axios 错误中取出 400 结构化 data（供弹窗/页面展示） */
 export function getStructuredErrorData(
   resOrErr: { code?: number; data?: unknown } | { response?: { data?: { code?: number; data?: unknown; message?: string } } }

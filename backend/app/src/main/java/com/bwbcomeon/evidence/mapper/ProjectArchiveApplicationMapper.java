@@ -1,8 +1,11 @@
 package com.bwbcomeon.evidence.mapper;
 
 import com.bwbcomeon.evidence.entity.ProjectArchiveApplication;
+import com.bwbcomeon.evidence.dto.ProjectArchiveHistoryVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
 
 /**
  * 归档申请单 Mapper
@@ -19,6 +22,9 @@ public interface ProjectArchiveApplicationMapper {
 
     /** 按项目ID查询最新一条 REJECTED 申请（按 reject_time 倒序，用于返回退回原因） */
     ProjectArchiveApplication selectLatestRejectedByProjectId(@Param("projectId") Long projectId);
+
+    /** 按项目ID查询归档审批历史（按 submit_time 倒序，含证据级不符合项） */
+    List<ProjectArchiveHistoryVO> selectArchiveHistoryByProjectId(@Param("projectId") Long projectId);
 
     int update(ProjectArchiveApplication entity);
 

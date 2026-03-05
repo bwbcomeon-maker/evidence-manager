@@ -3,6 +3,7 @@ package com.bwbcomeon.evidence.service.impl;
 import com.bwbcomeon.evidence.dto.ArchiveApplicationVO;
 import com.bwbcomeon.evidence.dto.ArchiveRejectRequest;
 import com.bwbcomeon.evidence.dto.ArchiveResult;
+import com.bwbcomeon.evidence.dto.ProjectArchiveHistoryVO;
 import com.bwbcomeon.evidence.entity.ArchiveRejectEvidence;
 import com.bwbcomeon.evidence.entity.Notification;
 import com.bwbcomeon.evidence.entity.Project;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -74,7 +76,8 @@ public class ProjectArchiveServiceImpl implements ProjectArchiveService {
         if (project == null) {
             throw new BusinessException(404, "项目不存在");
         }
-        if (!STATUS_ACTIVE.equals(project.getStatus())) {
+        String projectStatus = project.getStatus();
+        if (!STATUS_ACTIVE.equals(projectStatus) && !STATUS_RETURNED.equals(projectStatus)) {
             throw new BusinessException(400, "当前项目状态不允许申请归档");
         }
         ProjectArchiveApplication pending = applicationMapper.selectPendingByProjectId(projectId);
@@ -208,6 +211,16 @@ public class ProjectArchiveServiceImpl implements ProjectArchiveService {
         if (u == null) return "";
         if (u.getRealName() != null && !u.getRealName().isBlank()) return u.getRealName().trim();
         return u.getUsername() != null ? u.getUsername() : "";
+    }
+
+    @Override
+    public List<ProjectArchiveHistoryVO> getArchiveHistory(Long projectId, Long currentUserId, String roleCode) {
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
+        if (!visibleIds.contains(projectId)) {
+            throw new BusinessException(403, "无权限访问该项目");
+        }
+        List<ProjectArchiveHistoryVO> list = applicationMapper.selectArchiveHistoryByProjectId(projectId);
+        return list != null ? list : new ArrayList<>();
     }
 
     private ArchiveApplicationVO toApplicationVO(ProjectArchiveApplication app, Project project, String approverDisplayName) {

@@ -85,4 +85,45 @@
             updated_at = CURRENT_TIMESTAMP
         WHERE id = #{id}
     </update>
+
+    <!-- 归档审批历史：申请单 + 申请人/审批人姓名 + 证据级不符合项，按 submit_time 倒序 -->
+    <resultMap id="ArchiveHistoryResultMap" type="com.bwbcomeon.evidence.dto.ProjectArchiveHistoryVO">
+        <id column="application_id" property="applicationId" jdbcType="BIGINT"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="applicant_display_name" property="applicantDisplayName" jdbcType="VARCHAR"/>
+        <result column="approver_display_name" property="approverDisplayName" jdbcType="VARCHAR"/>
+        <result column="submit_time" property="submitTime" jdbcType="TIMESTAMP"/>
+        <result column="operation_time" property="operationTime" jdbcType="TIMESTAMP"/>
+        <result column="reject_comment" property="rejectComment" jdbcType="VARCHAR"/>
+        <collection property="rejectEvidences" ofType="com.bwbcomeon.evidence.dto.RejectEvidenceDetailVO"
+                    columnPrefix="rej_">
+            <id column="evidence_id" property="evidenceId" jdbcType="BIGINT"/>
+            <result column="evidence_name" property="evidenceName" jdbcType="VARCHAR"/>
+            <result column="stage_name" property="stageName" jdbcType="VARCHAR"/>
+            <result column="reject_comment" property="rejectComment" jdbcType="VARCHAR"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectArchiveHistoryByProjectId" resultMap="ArchiveHistoryResultMap">
+        SELECT
+            app.id AS application_id,
+            app.status,
+            COALESCE(TRIM(applicant.real_name), applicant.username) AS applicant_display_name,
+            COALESCE(TRIM(approver.real_name), approver.username) AS approver_display_name,
+            app.submit_time,
+            COALESCE(app.approve_time, app.reject_time) AS operation_time,
+            app.reject_comment,
+            re.evidence_id AS rej_evidence_id,
+            ei.title AS rej_evidence_name,
+            ds.name AS rej_stage_name,
+            re.reject_comment AS rej_reject_comment
+        FROM project_archive_application app
+        LEFT JOIN sys_user applicant ON app.applicant_user_id = applicant.id
+        LEFT JOIN sys_user approver ON app.approver_user_id = approver.id
+        LEFT JOIN archive_reject_evidence re ON re.application_id = app.id
+        LEFT JOIN evidence_item ei ON ei.id = re.evidence_id
+        LEFT JOIN delivery_stage ds ON ds.id = ei.stage_id
+        WHERE app.project_id = #{projectId}
+        ORDER BY app.submit_time DESC, re.id ASC NULLS LAST
+    </select>
 </mapper>

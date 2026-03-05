@@ -3,16 +3,20 @@ package com.bwbcomeon.evidence.web;
 import com.bwbcomeon.evidence.dto.ArchiveApplicationVO;
 import com.bwbcomeon.evidence.dto.ArchiveRejectRequest;
 import com.bwbcomeon.evidence.dto.AuthUserVO;
+import com.bwbcomeon.evidence.dto.ProjectArchiveHistoryVO;
 import com.bwbcomeon.evidence.dto.Result;
 import com.bwbcomeon.evidence.service.ProjectArchiveService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 归档审批流接口：申请、通过、退回
@@ -54,5 +58,20 @@ public class ProjectArchiveController {
         }
         projectArchiveService.reject(projectId, body, user.getId(), user.getRoleCode());
         return Result.success();
+    }
+
+    /**
+     * 获取项目归档审批历史（历次申请/通过/退回及证据级不符合项）
+     */
+    @GetMapping("/{projectId}/archive-history")
+    public Result<List<ProjectArchiveHistoryVO>> getArchiveHistory(HttpServletRequest request,
+                                                                   @PathVariable Long projectId) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        List<ProjectArchiveHistoryVO> list = projectArchiveService.getArchiveHistory(
+                projectId, user.getId(), user.getRoleCode());
+        return Result.success(list);
     }
 }
