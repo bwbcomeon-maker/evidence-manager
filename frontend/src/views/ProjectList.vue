@@ -16,6 +16,36 @@
       </van-dropdown-menu>
     </div>
 
+    <!-- 待办看板：项目列表顶部工作台 -->
+    <div
+      v-if="todoSummary && (todoSummary.returnedCount > 0 || todoSummary.pendingApprovalCount > 0)"
+      class="todo-board"
+    >
+      <!-- 被退回待整改 -->
+      <button
+        v-if="todoSummary.returnedCount > 0"
+        type="button"
+        class="todo-card todo-card--danger"
+        :class="{ 'todo-card--active': activeTodoFilter === 'returned' }"
+        @click="handleTodoCardClick('returned')"
+      >
+        <span class="todo-card-title">被退回待整改</span>
+        <span class="todo-card-count">{{ todoSummary.returnedCount }}</span>
+      </button>
+
+      <!-- 待我审批 -->
+      <button
+        v-if="todoSummary.pendingApprovalCount > 0"
+        type="button"
+        class="todo-card todo-card--primary"
+        :class="{ 'todo-card--active': activeTodoFilter === 'pending_approval' }"
+        @click="handleTodoCardClick('pending_approval')"
+      >
+        <span class="todo-card-title">{{ pendingApprovalCardTitle }}</span>
+        <span class="todo-card-count">{{ todoSummary.pendingApprovalCount }}</span>
+      </button>
+    </div>
+
     <!-- 操作栏 -->
     <div class="action-bar">
       <div class="action-bar-scroll">
@@ -178,7 +208,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Badge, Button, Cell, List, Popup, Field, Form, CellGroup, PullRefresh, Tag, Switch, Search, DropdownMenu, DropdownItem } from 'vant'
-import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, type ProjectVO, type ProjectImportResult } from '@/api/projects'
+import { createProject, getProjects, importProjects, getProjectImportTemplateUrl, getProjectTodoSummary, type ProjectVO, type ProjectImportResult, type ProjectTodoSummaryVO } from '@/api/projects'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
@@ -214,6 +244,11 @@ const isPMOOrAdmin = computed(() => {
   return code === 'PMO' || code === 'SYSTEM_ADMIN'
 })
 
+/** 顶部待办看板中「待审批」卡片标题：PMO/管理员显示“待我审批”，项目经理等其它角色显示“审批中” */
+const pendingApprovalCardTitle = computed(() => {
+  return isPMOOrAdmin.value ? '待我审批' : '审批中'
+})
+
 /** 项目状态展示文案（与详情页一致） */
 function projectStatusText(status: string): string {
   if (status === 'active') return '进行中'
@@ -242,6 +277,11 @@ const listLoading = ref(false)
 const finished = ref(false)
 const projects = ref<Project[]>([])
 const listError = ref('')
+
+// 待办看板：汇总数据与激活状态
+const todoSummary = ref<ProjectTodoSummaryVO | null>(null)
+const todoLoading = ref(false)
+const activeTodoFilter = ref<'returned' | 'pending_approval' | null>(null)
 
 // 搜索与筛选（统一由 fetchProjectList 请求）
 const searchKeyword = ref('')
@@ -272,6 +312,11 @@ function onSearchInput() {
 async function fetchProjectList() {
   const keyword = searchKeyword.value.trim()
   const status = projectStatus.value === '' ? '' : String(projectStatus.value)
+  // 用户手动通过下拉修改状态、与当前激活的待办过滤不一致时，清空卡片高亮
+  if (activeTodoFilter.value && status !== activeTodoFilter.value) {
+    activeTodoFilter.value = null
+  }
+
   // Mock：代表发送给后端的参数
   console.log('[fetchProjectList] params:', { searchKeyword: keyword, projectStatus: status })
 
@@ -349,12 +394,13 @@ async function onImportSubmit() {
 
 const loadProjects = () => {
   finished.value = false
-  fetchProjectList()
+  // 列表与待办看板一起刷新
+  Promise.all([fetchProjectList(), fetchTodoSummary()]).catch(() => {})
 }
 
 const onRefresh = () => {
   finished.value = false
-  fetchProjectList()
+  Promise.all([fetchProjectList(), fetchTodoSummary()]).catch(() => {})
 }
 
 const onLoad = () => {
@@ -422,6 +468,37 @@ const onCreateSubmit = async () => {
 onMounted(() => {
   loadProjects()
 })
+
+/** 拉取待办汇总 */
+async function fetchTodoSummary() {
+  todoLoading.value = true
+  try {
+    const res = await getProjectTodoSummary()
+    if (res.code === 0 && res.data) {
+      todoSummary.value = res.data
+    } else {
+      todoSummary.value = { returnedCount: 0, pendingApprovalCount: 0 }
+    }
+  } catch (e) {
+    console.warn('fetchTodoSummary failed', e)
+    todoSummary.value = { returnedCount: 0, pendingApprovalCount: 0 }
+  } finally {
+    todoLoading.value = false
+  }
+}
+
+/** 点击待办卡片：切换过滤 */
+function handleTodoCardClick(status: 'returned' | 'pending_approval') {
+  if (activeTodoFilter.value === status) {
+    // 再次点击：取消过滤，回到全部状态
+    activeTodoFilter.value = null
+    projectStatus.value = ''
+  } else {
+    activeTodoFilter.value = status
+    projectStatus.value = status
+  }
+  fetchProjectList()
+}
 </script>
 
 <style scoped>
@@ -501,6 +578,66 @@ onMounted(() => {
 }
 .flex-filter :deep(.van-dropdown-menu__title--active) {
   color: var(--van-primary-color);
+}
+
+/* 待办看板：项目列表顶部工作台 */
+.todo-board {
+  margin: 8px 0;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.todo-board::-webkit-scrollbar {
+  display: none;
+}
+
+.todo-card {
+  flex-shrink: 0;
+  min-width: 150px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  opacity: 0.9;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.todo-card--danger {
+  background: #ee0a24;
+}
+
+.todo-card--primary {
+  background: #1989fa;
+}
+
+.todo-card--active {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75),
+              0 3px 8px rgba(0, 0, 0, 0.2);
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.todo-card:active {
+  opacity: 0.85;
+  transform: translateY(0);
+}
+
+.todo-card-title {
+  font-weight: 500;
+}
+
+.todo-card-count {
+  font-size: 18px;
+  font-weight: 700;
 }
 
 /* 暴力消除 Vant 底层幽灵留白 */

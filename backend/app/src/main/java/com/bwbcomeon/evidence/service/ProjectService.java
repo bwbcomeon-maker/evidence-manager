@@ -10,6 +10,7 @@ import com.bwbcomeon.evidence.dto.ArchiveResult;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
 import com.bwbcomeon.evidence.dto.ProjectVO;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
+import com.bwbcomeon.evidence.dto.ProjectTodoSummaryVO;
 import com.bwbcomeon.evidence.dto.StageProgressVO;
 import com.bwbcomeon.evidence.entity.AuthProjectAcl;
 import com.bwbcomeon.evidence.entity.Project;
@@ -403,6 +404,31 @@ public class ProjectService {
         // 项目归档时，将该项目下所有草稿证据自动转为已归档（与项目一并归档）
         evidenceService.batchConvertDraftToArchivedOnProjectArchive(projectId);
         return ArchiveResult.ok();
+    }
+
+    /**
+     * 项目待办汇总（列表页顶部工作台）。
+     * 统计当前用户可见范围内：
+     * - returnedCount：状态为 returned 的项目数量
+     * - pendingApprovalCount：状态为 pending_approval 的项目数量
+     */
+    @Transactional(readOnly = true)
+    public ProjectTodoSummaryVO getTodoSummary(Long currentUserId, String roleCode) {
+        ProjectTodoSummaryVO vo = new ProjectTodoSummaryVO();
+        // 未登录或缺少用户信息时，直接返回 0
+        if (currentUserId == null) {
+            return vo;
+        }
+        // 统一复用可见项目 ID 逻辑，收口权限
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
+        if (visibleIds == null || visibleIds.isEmpty()) {
+            return vo;
+        }
+        long returnedCount = projectMapper.countByStatusAndIds(STATUS_RETURNED, visibleIds);
+        long pendingApprovalCount = projectMapper.countByStatusAndIds("pending_approval", visibleIds);
+        vo.setReturnedCount(returnedCount);
+        vo.setPendingApprovalCount(pendingApprovalCount);
+        return vo;
     }
 
     /**

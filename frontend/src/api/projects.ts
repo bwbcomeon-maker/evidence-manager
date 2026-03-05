@@ -219,6 +219,15 @@ export const archiveReject = (
   data: { comment: string; evidenceComments?: { evidenceId: number; comment: string }[] }
 ) => http.post<ApiResult<null>>(`/projects/${projectId}/archive-reject`, data)
 
+/** 项目待办汇总（项目列表页顶部工作台） */
+export interface ProjectTodoSummaryVO {
+  returnedCount: number
+  pendingApprovalCount: number
+}
+
+export const getProjectTodoSummary = () =>
+  http.get<ApiResult<ProjectTodoSummaryVO>>('/projects/todo-summary')
+
 /** 归档审批历史：证据级退回明细 */
 export interface RejectEvidenceDetailVO {
   evidenceId: number

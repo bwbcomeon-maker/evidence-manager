@@ -54,4 +54,12 @@ public interface ProjectMapper {
      * 根据ID删除项目
      */
     int deleteById(@Param("id") Long id);
+
+    /**
+     * 在给定 ID 集合内，按状态统计项目数量。
+     *
+     * @param status 项目状态，如 'pending_approval' / 'returned'
+     * @param ids    可见项目ID列表（非空时才会参与统计）
+     */
+    long countByStatusAndIds(@Param("status") String status, @Param("ids") List<Long> ids);
 }

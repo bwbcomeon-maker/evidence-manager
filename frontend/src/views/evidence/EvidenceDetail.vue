@@ -90,6 +90,23 @@
             <van-button v-if="canSubmit" class="btn-primary action-btn" icon="success" @click="handleSubmit">提交</van-button>
             <van-button v-if="canDelete" class="btn-danger action-btn" icon="delete-o" plain @click="handleDelete">删除</van-button>
             <van-button v-if="canVoid" class="btn-danger action-btn" icon="warning-o" plain @click="handleVoid">作废</van-button>
+            <van-button
+              v-if="canMarkReject"
+              class="btn-danger action-btn"
+              icon="warning-o"
+              plain
+              @click="openMarkRejectDialogFromDetail"
+            >
+              {{ hasLocalReject ? '修改标记' : '标记不符合' }}
+            </van-button>
+            <van-button
+              v-if="canMarkReject && hasLocalReject"
+              class="btn-secondary action-btn"
+              plain
+              @click="clearMarkRejectFromDetail"
+            >
+              取消标记
+            </van-button>
           </div>
         </div>
       </div>
@@ -151,6 +168,22 @@
           show-word-limit
         />
       </van-dialog>
+      <!-- 详情页内「标记不符合」弹窗：与项目详情页共享草稿，PMO/Admin 在审批时可直接在详情页记录不符合原因 -->
+      <van-dialog
+        v-model:show="showMarkRejectDialog"
+        title="标记不符合"
+        show-cancel-button
+        :before-close="onMarkRejectConfirmFromDetail"
+      >
+        <van-field
+          v-model="markRejectCommentText"
+          type="textarea"
+          rows="3"
+          placeholder="请填写不符合原因（仅作为本次退回草稿保存）"
+          maxlength="500"
+          show-word-limit
+        />
+      </van-dialog>
     </template>
     <van-loading v-else-if="detailLoading" class="detail-loading" vertical size="24">加载中...</van-loading>
     <van-empty v-else description="无法加载详情，证据可能不存在或已删除" />
@@ -176,10 +209,12 @@ import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 import { formatDateTime } from '@/utils/format'
 import { getEffectiveEvidenceStatus, mapStatusToText } from '@/utils/evidenceStatus'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
+import { useArchiveRejectDraftStore } from '@/stores/archiveRejectDraft'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const archiveRejectDraftStore = useArchiveRejectDraftStore()
 
 const evidence = ref<EvidenceListItem | null>(null)
 const evidenceId = computed(() => Number(route.params.id))
@@ -261,6 +296,56 @@ function invalidatorDisplayName(): string {
 
 /** 当前状态（evidenceStatus 优先，与列表/弹窗一致） */
 const effectiveStatus = computed(() => getEffectiveEvidenceStatus(evidence.value))
+
+/** 当前用户是否为 PMO 或系统管理员（可在审批时标记不符合） */
+const isPMOOrAdmin = computed(() => {
+  const code = auth.currentUser?.roleCode
+  return code === 'PMO' || code === 'SYSTEM_ADMIN'
+})
+
+/** 来自哪个项目详情页（仅当路由显式带上 fromProject，才允许在详情页标记不符合） */
+const fromProjectId = computed<number | null>(() => {
+  const qp = Number(route.query.fromProject)
+  if (!Number.isNaN(qp) && qp > 0) return qp
+  return null
+})
+
+/** 与项目详情页共用的「标记不符合」草稿存储（key = projectId，下挂 evidenceId -> comment） */
+const localRejectMap = computed<Record<string, string>>({
+  get() {
+    const pid = fromProjectId.value
+    if (!pid) return {}
+    return archiveRejectDraftStore.getProjectDraft(pid)
+  },
+  set(val) {
+    const pid = fromProjectId.value
+    if (!pid) return
+    archiveRejectDraftStore.setProjectDraft(pid, val)
+  }
+})
+
+/** 当前证据在本次审批中的本地标记内容 */
+const currentLocalRejectComment = computed(() => {
+  const e = evidence.value
+  if (!e) return ''
+  const local = localRejectMap.value[String(e.evidenceId)]
+  return typeof local === 'string' ? local : ''
+})
+
+const hasLocalReject = computed(() => currentLocalRejectComment.value.trim().length > 0)
+
+/** 仅在从项目详情进入、且当前用户为 PMO/Admin 且证据为已提交时，才展示「标记不符合」操作 */
+const canMarkReject = computed(() => {
+  return (
+    !!fromProjectId.value &&
+    isPMOOrAdmin.value &&
+    effectiveStatus.value === 'SUBMITTED'
+  )
+})
+
+/** 详情页内「标记不符合」弹窗状态 */
+const showMarkRejectDialog = ref(false)
+const markRejectCommentText = ref('')
 
 /** 头部文件类型图标配置（按 contentType / 文件名） */
 const evidenceFileIcon = computed(() => {
@@ -347,11 +432,16 @@ const isReadOnlyFromEvidenceModule = computed(() =>
   route.query.from === 'evidence-by-project' || route.query.from === 'evidence'
 )
 
+/** 若从项目详情进入，路由中会带上项目状态（用于审批中时限制项目经理作废） */
+const projectStatusFromRoute = computed(() => String(route.query.projectStatus || '').trim())
+
 /** 草稿可提交、可物理删除；已提交可作废；归档仅由项目申请归档执行，无单条归档 */
 const canSubmit = computed(() => !isReadOnlyFromEvidenceModule.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
 const canDelete = computed(() => !isReadOnlyFromEvidenceModule.value && effectiveStatus.value === 'DRAFT' && (evidence.value?.permissions?.canSubmit !== false))
 const canVoid = computed(() => {
   if (isReadOnlyFromEvidenceModule.value) return false
+  // 项目处于待审批状态时，项目经理在详情页不能作废，仅 PMO/系统管理员可操作
+  if (projectStatusFromRoute.value === 'pending_approval' && !isPMOOrAdmin.value) return false
   return effectiveStatus.value === 'SUBMITTED' && (evidence.value?.permissions?.canInvalidate === true || evidence.value?.canInvalidate === true)
 })
 
@@ -567,6 +657,50 @@ async function onInvalidateReasonConfirm(action: string): Promise<boolean> {
   } finally {
     closeToast()
   }
+}
+
+/** 详情页点击「标记不符合」：打开弹窗，预填当前草稿 */
+function openMarkRejectDialogFromDetail() {
+  if (!canMarkReject.value || !evidence.value) return
+  markRejectCommentText.value = currentLocalRejectComment.value || ''
+  showMarkRejectDialog.value = true
+}
+
+/** 详情页「标记不符合」弹窗确认：将原因写入项目级草稿 map（与项目详情页共用） */
+function onMarkRejectConfirmFromDetail(action: string): boolean {
+  if (action !== 'confirm') {
+    showMarkRejectDialog.value = false
+    markRejectCommentText.value = ''
+    return true
+  }
+  const e = evidence.value
+  if (!e || !fromProjectId.value) {
+    showToast('当前页面缺少项目上下文，无法标记不符合')
+    return false
+  }
+  const text = markRejectCommentText.value?.trim()
+  if (!text) {
+    showToast('请填写不符合原因')
+    return false
+  }
+  localRejectMap.value = {
+    ...localRejectMap.value,
+    [String(e.evidenceId)]: text
+  }
+  showMarkRejectDialog.value = false
+  markRejectCommentText.value = ''
+  showSuccessToast('已标记')
+  return true
+}
+
+/** 详情页取消当前证据的本地「不符合」标记 */
+function clearMarkRejectFromDetail() {
+  const e = evidence.value
+  if (!e || !fromProjectId.value) return
+  const next = { ...localRejectMap.value }
+  delete next[String(e.evidenceId)]
+  localRejectMap.value = next
+  showSuccessToast('已取消标记')
 }
 
 onMounted(() => {
@@ -815,8 +949,9 @@ onMounted(() => {
 }
 .evidence-detail__actions .btn-danger {
   background: transparent;
-  color: var(--van-button-danger-color, #ee4d2d);
-  border: 1px solid currentColor;
+  /* 使用固定红色，避免主题将 danger 文字颜色改为白色导致看不见 */
+  color: #ee4d2d;
+  border: 1px solid #ee4d2d;
 }
 .evidence-detail__actions .btn-danger:active {
   background: rgba(238, 77, 45, 0.08);

@@ -831,6 +831,7 @@ import {
 } from '@/api/projects'
 import { getEvidencesByStageType } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
+import { useArchiveRejectDraftStore } from '@/stores/archiveRejectDraft'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
 import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
@@ -886,8 +887,20 @@ const draftListForArchive = ref<EvidenceListItem[]>([])
 // 退回整改弹窗
 const showRejectDialog = ref(false)
 const rejectCommentText = ref('')
-// PMO 附件级不符合：本地暂存，提交退回时一并发送（key = evidenceId）
-const localRejectMap = ref<Record<string, string>>({})
+// PMO 附件级不符合：通过 Pinia 仓库在项目详情页与证据详情间持久化草稿（key = evidenceId）
+const archiveRejectDraftStore = useArchiveRejectDraftStore()
+const localRejectMap = computed<Record<string, string>>({
+  get() {
+    const id = projectId.value
+    if (!id) return {}
+    return archiveRejectDraftStore.getProjectDraft(id)
+  },
+  set(val) {
+    const id = projectId.value
+    if (!id) return
+    archiveRejectDraftStore.setProjectDraft(id, val)
+  }
+})
 // 标记不符合弹窗（evidenceId 当前正在编辑的）
 const showMarkRejectDialog = ref(false)
 const markRejectEvidenceId = ref<number | null>(null)
@@ -1297,9 +1310,12 @@ function closeUploadDialog() {
   resetUploadForm()
 }
 
-// 跳转证据详情（带上当前阶段 code，返回时用于恢复展开）
+// 跳转证据详情（带上当前阶段 code 与项目状态，返回时用于恢复展开，并在详情页判断是否可作废等）
 function goToEvidenceDetail(id: number, stageCode?: string) {
-  const query: Record<string, string> = { fromProject: String(projectId.value) }
+  const query: Record<string, string> = {
+    fromProject: String(projectId.value),
+    projectStatus: project.value?.status || ''
+  }
   if (route.query.from === 'evidence-by-project') query.from = 'evidence-by-project'
   else if (route.query.from === 'evidence') query.from = 'evidence'
   if (route.query.returnKeyword) query.returnKeyword = String(route.query.returnKeyword)
@@ -2191,6 +2207,7 @@ async function onRejectConfirm(action: string): Promise<boolean> {
       showRejectDialog.value = false
       rejectCommentText.value = ''
       localRejectMap.value = {}
+      archiveRejectDraftStore.clearProjectDraft(projectId.value)
       showSuccessToast('已退回')
       loadProject()
       loadStageProgress()
@@ -2211,6 +2228,7 @@ function resetRejectDialogState() {
   showRejectDialog.value = false
   rejectCommentText.value = ''
   localRejectMap.value = {}
+  archiveRejectDraftStore.clearProjectDraft(projectId.value)
 }
 
 /** 当前证据卡片展示的退回原因：returned 时用接口返回；pending 时 PMO 用本地暂存 */

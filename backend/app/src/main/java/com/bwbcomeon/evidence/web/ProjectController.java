@@ -12,6 +12,7 @@ import com.bwbcomeon.evidence.dto.UpdateProjectRequest;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.ProjectMemberVO;
 import com.bwbcomeon.evidence.dto.ProjectImportResult;
+import com.bwbcomeon.evidence.dto.ProjectTodoSummaryVO;
 import com.bwbcomeon.evidence.dto.ProjectVO;
 import com.bwbcomeon.evidence.dto.Result;
 import com.bwbcomeon.evidence.dto.StageCompleteResult;
@@ -79,6 +80,20 @@ public class ProjectController {
         }
         List<ProjectVO> list = projectService.listVisibleProjects(user.getId(), user.getRoleCode());
         return Result.success(list);
+    }
+
+    /**
+     * 项目待办汇总（项目列表页顶部工作台）
+     * GET /api/projects/todo-summary
+     */
+    @GetMapping("/todo-summary")
+    public Result<ProjectTodoSummaryVO> getTodoSummary(HttpServletRequest request) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        ProjectTodoSummaryVO vo = projectService.getTodoSummary(user.getId(), user.getRoleCode());
+        return Result.success(vo);
     }
 
     /**
