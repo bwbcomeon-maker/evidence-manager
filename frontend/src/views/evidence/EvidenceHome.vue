@@ -19,27 +19,27 @@
         <span class="search-guide__text">试试直接搜索：</span>
       </div>
       <div class="search-guide__tags">
-        <van-tag type="primary" plain round @click="onSearchExampleClick('XX医院信息化升级项目')">
+        <van-tag type="primary" plain round>
           <span class="tag-prefix">项目 | </span>
           <span class="tag-keyword">XX医院信息化升级项目</span>
         </van-tag>
-        <van-tag type="success" plain round @click="onSearchExampleClick('采购与设备到货阶段')">
+        <van-tag type="success" plain round>
           <span class="tag-prefix">阶段 | </span>
           <span class="tag-keyword">采购与设备到货阶段</span>
         </van-tag>
-        <van-tag type="warning" plain round @click="onSearchExampleClick('到货验收单用户签字')">
+        <van-tag type="warning" plain round>
           <span class="tag-prefix">类型 | </span>
           <span class="tag-keyword">到货验收单用户签字</span>
         </van-tag>
-        <van-tag type="warning" plain round @click="onSearchExampleClick('设备到货现场照片')">
+        <van-tag type="warning" plain round>
           <span class="tag-prefix">类型 | </span>
           <span class="tag-keyword">设备到货现场照片</span>
         </van-tag>
-        <van-tag type="danger" plain round @click="onSearchExampleClick('张三')">
+        <van-tag type="danger" plain round>
           <span class="tag-prefix">人员 | </span>
           <span class="tag-keyword">张三</span>
         </van-tag>
-        <van-tag type="primary" plain round @click="onSearchExampleClick('质保期说明')">
+        <van-tag type="primary" plain round>
           <span class="tag-prefix">备注 | </span>
           <span class="tag-keyword">质保期说明</span>
         </van-tag>
