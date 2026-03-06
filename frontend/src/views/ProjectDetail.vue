@@ -13,20 +13,19 @@
         >
           项目归档正在审核中，不可修改材料
         </van-notice-bar>
-        <!-- 已退回且仍有未处理的不符合项：红色警告横幅 + 「去处理(n)」 -->
-        <div v-else-if="project.status === 'returned' && !isAllResolved" class="returned-banner">
-          <div class="returned-banner__content">
-            <van-icon name="warning-o" class="returned-banner__icon" />
-            <span class="returned-banner__text">{{ project.rejectComment || '项目归档申请已被退回，请根据意见修改后重新申请。' }}</span>
-            <button
-              type="button"
-              class="returned-banner__action"
-              @click="showRejectedPopup = true"
-            >
-              去处理({{ rejectedEvidencesList.length }}) &gt;
-            </button>
-          </div>
-        </div>
+        <!-- 已退回且仍有未处理的不符合项：更柔和的浅色背景 -->
+        <van-notice-bar
+          v-else-if="project.status === 'returned' && !isAllResolved"
+          left-icon="warning-o"
+          color="#a83d3d"
+          background="#FDF2F2"
+          class="returned-notice-bar"
+        >
+          <span class="returned-notice-text">{{ project.rejectComment || '项目归档申请已被退回，请根据意见修改后重新申请。' }}</span>
+          <template #right-icon>
+            <button type="button" class="returned-notice-action" @click.stop="showRejectedPopup = true">去处理({{ rejectedEvidencesList.length }}) &gt;</button>
+          </template>
+        </van-notice-bar>
         <!-- 已退回且所有不符合项已处理：成功/引导横幅，引导重新申请归档，不展示「去处理」 -->
         <van-notice-bar
           v-else-if="project.status === 'returned' && isAllResolved"
@@ -42,16 +41,22 @@
           <span class="detail-header-badge" :class="statusBadgeClass">
             {{ statusBadgeText }}
           </span>
-          <span v-if="project.currentPmDisplayName" class="detail-header-responsible">负责人：{{ project.currentPmDisplayName }}</span>
+          <span v-if="project.currentPmDisplayName" class="detail-header-responsible">
+            <van-icon name="user-o" class="detail-header-avatar" />
+            负责人：{{ project.currentPmDisplayName }}
+          </span>
         </div>
-        <button
-          type="button"
-          class="detail-header-history-btn"
-          @click="openArchiveHistoryPopup"
-        >
-          <van-icon name="clock-o" />
-          历次审批记录
-        </button>
+        <div class="detail-header-history-row">
+          <button
+            type="button"
+            class="detail-header-history-btn"
+            @click="openArchiveHistoryPopup"
+          >
+            <van-icon name="clock-o" />
+            历次审批记录
+            <van-icon name="arrow" class="detail-header-history-arrow" />
+          </button>
+        </div>
       </div>
 
       <!-- 分段控制器：详情 / 证据 -->
@@ -71,33 +76,17 @@
                 <span class="info-label">项目令号</span>
                 <span class="info-value">{{ project.code }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">项目名称</span>
-                <span class="info-value">{{ project.name }}</span>
-              </div>
               <div class="info-row" v-if="project.description">
                 <span class="info-label">项目描述</span>
                 <span class="info-value">{{ project.description }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">项目状态</span>
-                <span class="info-value">
-                  <span class="info-badge" :class="statusBadgeClass">
-                    {{ statusBadgeText }}
-                  </span>
-                </span>
+                <span class="info-value info-value--plain">{{ statusBadgeText }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">是否含采购</span>
-                <span class="info-value">
-                  <van-switch
-                    v-if="project.canManageMembers && project.status !== 'archived'"
-                    :model-value="project.hasProcurement"
-                    size="20"
-                    @update:model-value="onHasProcurementChange"
-                  />
-                  <span v-else>{{ project.hasProcurement ? '是' : '否' }}</span>
-                </span>
+                <span class="info-value">{{ project.hasProcurement ? '是' : '否' }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">项目创建人</span>
@@ -108,12 +97,22 @@
                 <span class="info-value">{{ project.createdAt }}</span>
               </div>
             </div>
-            <!-- 证据完成度（详情页也展示） -->
-            <div v-if="stageProgress" class="stage-progress-header detail-tab-progress">
-              <div class="completion-row">
-                <span class="completion-label">证据完成度</span>
-                <van-progress :percentage="stageProgress.overallCompletionPercent" stroke-width="8" />
-                <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
+            <!-- 证据完成度（详情页独立卡片 + 底部留白） -->
+            <div v-if="stageProgress" class="completion-card-standalone detail-tab-progress">
+              <div class="stage-progress-header completion-card-inner">
+              <div class="completion-block">
+                <div class="completion-header">
+                  <span class="completion-label">证据完成度</span>
+                  <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
+                </div>
+                <div class="completion-bar-row">
+                  <van-progress
+                    :percentage="stageProgress.overallCompletionPercent"
+                    stroke-width="4"
+                    :color="stageProgress.overallCompletionPercent === 100 ? '#07c160' : '#1989fa'"
+                    :class="['completion-progress', { 'completion-progress--full': stageProgress.overallCompletionPercent === 100 }]"
+                  />
+                </div>
               </div>
               <div v-if="hasKeyMissing" class="key-missing-card">
                 <div class="key-missing-card-inner">
@@ -184,13 +183,14 @@
                   {{ project?.status === 'returned' ? '重新申请归档' : '申请归档' }}
                 </van-button>
               </div>
+              </div>
             </div>
             <van-loading v-else-if="stageProgressLoading" class="stage-progress-loading" vertical>加载阶段进度...</van-loading>
-            <!-- 项目成员列表 -->
-          <div class="members-section">
+            <!-- 项目成员列表（卡片化、去线） -->
+          <div class="members-card">
             <div class="members-section-title">项目成员</div>
             <van-loading v-if="membersLoading" class="members-loading" size="20" vertical>加载中...</van-loading>
-            <van-cell-group v-else-if="members.length">
+            <van-cell-group v-else-if="members.length" inset :border="false">
               <van-cell
                 v-for="m in sortedMembers"
                 :key="m.userId"
@@ -210,12 +210,22 @@
         <!-- 证据 Tab（阶段驱动：完整度 + 阶段折叠 + 模板项证据列表） -->
         <van-tab title="证据">
           <div class="evidence-section">
-            <!-- 阶段进度顶部：完整度、关键缺失、申请归档 -->
-            <div v-if="stageProgress" class="stage-progress-header">
-              <div class="completion-row">
-                <span class="completion-label">证据完成度</span>
-                <van-progress :percentage="stageProgress.overallCompletionPercent" stroke-width="8" />
-                <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
+            <!-- 阶段进度：独立卡片 + 底部留白 -->
+            <div v-if="stageProgress" class="completion-card-standalone">
+              <div class="stage-progress-header completion-card-inner">
+              <div class="completion-block">
+                <div class="completion-header">
+                  <span class="completion-label">证据完成度</span>
+                  <span class="completion-value">{{ stageProgress.overallCompletionPercent }}%</span>
+                </div>
+                <div class="completion-bar-row">
+                  <van-progress
+                    :percentage="stageProgress.overallCompletionPercent"
+                    stroke-width="4"
+                    :color="stageProgress.overallCompletionPercent === 100 ? '#07c160' : '#1989fa'"
+                    :class="['completion-progress', { 'completion-progress--full': stageProgress.overallCompletionPercent === 100 }]"
+                  />
+                </div>
               </div>
               <div v-if="hasKeyMissing" class="key-missing-card">
                 <div class="key-missing-card-inner">
@@ -285,6 +295,7 @@
                 >
                   {{ project?.status === 'returned' ? '重新申请归档' : '申请归档' }}
                 </van-button>
+              </div>
               </div>
             </div>
             <van-loading v-else-if="stageProgressLoading" class="stage-progress-loading" vertical>加载阶段进度...</van-loading>
@@ -352,23 +363,30 @@
                             @click.stop="goToEvidenceDetail(ev.evidenceId, s.stageCode)"
                           >
                             <img :src="`/api/evidence/versions/${ev.latestVersion.versionId}/download`" :alt="ev.title" />
-                            <div class="grid-thumb-overlay">
-                              <!-- 已作废：仅显示灰色「已作废」标签，不显示不符合/替换/删除 -->
-                              <span class="evidence-badge" :class="'evidence-badge--' + evidenceBadgeType(ev)">
+                            <!-- 左上角：生命周期状态（草稿/已提交/已归档/已作废）始终可见 -->
+                            <div class="grid-thumb-status-tl">
+                              <van-tag round size="mini" :type="evidenceStatusTagTypeForBadge(ev)" class="evidence-lifecycle-tag">
                                 {{ evidenceBadgeText(ev) }}
-                              </span>
+                              </van-tag>
+                            </div>
+                            <div class="grid-thumb-overlay">
                               <template v-if="getEffectiveEvidenceStatus(ev) === 'INVALID'">
-                                <van-tag type="default" size="mini" class="reject-tag-inline voided-tag">已作废</van-tag>
+                                <van-tag type="default" size="mini" round class="reject-tag-inline voided-tag">已作废</van-tag>
                               </template>
                               <template v-else-if="getDisplayRejectComment(ev)">
-                                <van-tag type="danger" size="mini" class="reject-tag-inline">不符合</van-tag>
+                                <van-tag type="danger" size="mini" round class="reject-tag-inline">不符合</van-tag>
                                 <span class="reject-reason-inline">{{ getDisplayRejectComment(ev) }}</span>
                                 <template v-if="project?.status === 'pending_approval' && isPMOOrAdmin">
                                   <button type="button" class="grid-reject-btn" @click.stop="openMarkRejectDialog(ev, true)">修改</button>
                                   <button type="button" class="grid-reject-btn" @click.stop="clearMarkReject(ev)">取消</button>
                                 </template>
                                 <template v-else-if="project?.status === 'returned' && canUploadAndEdit && route.query.from !== 'evidence-by-project'">
-                                  <button type="button" class="grid-reject-btn grid-reject-btn--replace" :disabled="replaceLoadingEvidenceId === ev.evidenceId" @click.stop="triggerReplaceFileInput(ev, s, item)">
+                                  <button
+                                    type="button"
+                                    class="grid-reject-btn grid-reject-btn--replace"
+                                    :disabled="replaceLoadingEvidenceId === ev.evidenceId"
+                                    @click.stop="triggerReplaceFileInput(ev, s, item)"
+                                  >
                                     {{ replaceLoadingEvidenceId === ev.evidenceId ? '替换中...' : '替换' }}
                                   </button>
                                 </template>
@@ -598,53 +616,62 @@
     >
       <!-- 阶段1：表单 -->
       <template v-if="uploadPhase === 'form'">
-        <van-cell-group inset>
-          <van-cell v-if="uploadContext" :title="'上传至'" :value="uploadContext.displayName" class="upload-context-cell" />
-          <van-cell v-else title="提示" class="upload-hint-cell">
-            <template #value>
-              <span class="upload-hint-text">请先在下方向某证据类型（如「启动现场照片」）点击展开，再点击该类型下的「上传」按钮</span>
-            </template>
-          </van-cell>
-          <van-field
-            v-model="uploadForm.name"
-            name="name"
-            label="证据标题"
-            placeholder="请输入证据标题"
-            :rules="[{ required: true, message: '请输入证据标题' }]"
-          />
-          <van-field
-            v-if="!uploadContext"
-            :model-value="bizTypeMap[uploadForm.type] || '其他'"
-            name="type"
-            label="业务类型"
-            placeholder="请选择业务类型"
-            is-link
-            readonly
-            @click="showBizTypePicker = true"
-          />
-          <van-field
-            v-model="uploadForm.remark"
-            name="remark"
-            label="备注"
-            type="textarea"
-            placeholder="请输入备注（可选）"
-            rows="3"
-          />
+        <div class="upload-dialog-form">
+          <van-cell-group inset class="upload-dialog-cells">
+            <van-cell v-if="uploadContext" :title="'上传至'" :value="uploadContext.displayName" class="upload-context-cell" />
+            <van-cell v-else title="提示" class="upload-hint-cell">
+              <template #value>
+                <span class="upload-hint-text">请先在下方向某证据类型（如「启动现场照片」）点击展开，再点击该类型下的「上传」按钮</span>
+              </template>
+            </van-cell>
+            <van-field
+              v-model="uploadForm.name"
+              name="name"
+              label="证据标题"
+              placeholder="请输入证据标题"
+              :rules="[{ required: true, message: '请输入证据标题' }]"
+              class="upload-dialog-field"
+            />
+            <van-field
+              v-if="!uploadContext"
+              :model-value="bizTypeMap[uploadForm.type] || '其他'"
+              name="type"
+              label="业务类型"
+              placeholder="请选择业务类型"
+              is-link
+              readonly
+              class="upload-dialog-field"
+              @click="showBizTypePicker = true"
+            />
+            <van-field
+              v-model="uploadForm.remark"
+              name="remark"
+              label="备注"
+              type="textarea"
+              placeholder="请输入备注（可选）"
+              rows="3"
+              class="upload-dialog-field"
+            />
+          </van-cell-group>
           <div class="upload-file-section">
             <van-uploader
               v-model="uploadFileList"
               :max-count="1"
               accept="*/*"
               :before-read="onUploaderBeforeRead"
+              class="upload-dropzone-wrap"
             >
-              <van-button icon="plus" type="primary">选择文件</van-button>
+              <div class="upload-dropzone">
+                <van-icon name="upload-o" class="upload-dropzone-icon" />
+                <span class="upload-dropzone-text">{{ uploadFileList.length ? (uploadFileList[0]?.file?.name || '已选文件') : '点击或拖拽选择文件' }}</span>
+              </div>
             </van-uploader>
           </div>
-        </van-cell-group>
-        <div class="upload-dialog-footer-inner">
-          <van-button type="primary" block :loading="uploading" @click="handleUpload">
-            确认上传
-          </van-button>
+          <div class="upload-dialog-footer-inner">
+            <van-button type="primary" block :loading="uploading" class="upload-confirm-btn" @click="handleUpload">
+              确认上传
+            </van-button>
+          </div>
         </div>
       </template>
 
@@ -1239,12 +1266,22 @@ function evidenceBadgeType(evidence: EvidenceListItem): 'pending' | 'submitted' 
   if (status === 'SUBMITTED' || status === 'ARCHIVED') return 'submitted'
   return 'pending'
 }
+
+/** 左上角生命周期 Tag 的 van-tag type（草稿=灰、已提交=蓝、已归档=绿、已作废=灰） */
+function evidenceStatusTagTypeForBadge(evidence: EvidenceListItem): 'default' | 'primary' | 'success' {
+  const status = getEffectiveEvidenceStatus(evidence)
+  if (status === 'INVALID') return 'default'
+  if (status === 'ARCHIVED') return 'success'
+  if (status === 'SUBMITTED') return 'primary'
+  return 'default'
+}
+
 function evidenceBadgeText(evidence: EvidenceListItem): string {
   const status = getEffectiveEvidenceStatus(evidence)
-  if (status === 'INVALID') return '不合格'
+  if (status === 'INVALID') return '已作废'
   if (status === 'ARCHIVED') return '已归档'
   if (status === 'SUBMITTED') return '已提交'
-  return '待提交'
+  return '草稿'
 }
 
 /**
@@ -1403,6 +1440,7 @@ const loadProject = async () => {
         canUpload: p.canUpload ?? p.permissions?.canUpload ?? false,
         currentPmUserId: p.currentPmUserId,
         currentPmDisplayName: p.currentPmDisplayName,
+        createdByDisplayName: p.createdByDisplayName,
         rejectComment: (p as { rejectComment?: string }).rejectComment
       }
       loadMembers()
@@ -2549,19 +2587,23 @@ onMounted(() => {
 .project-detail {
   min-height: 100vh;
   background: var(--bg-body);
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 .content {
   padding: 0 16px 24px;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0));
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* ---------- 顶部摘要卡片 ---------- */
 .detail-header-card {
   background: var(--bg-card);
-  border-radius: var(--app-card-radius);
-  box-shadow: var(--app-card-shadow);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   padding: 20px 16px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 .detail-header-title {
   font-size: 22px;
@@ -2583,7 +2625,7 @@ onMounted(() => {
   font-weight: 500;
 }
 .detail-header-badge.badge--active {
-  background: rgba(0, 122, 255, 0.12);
+  background: rgba(0, 122, 255, 0.1);
   color: var(--primary-color);
 }
 .detail-header-badge.badge--archived {
@@ -2591,29 +2633,92 @@ onMounted(() => {
   color: var(--app-text-secondary);
 }
 .detail-header-badge.badge--pending {
-  background: #fff7e8;
+  background: rgba(237, 106, 12, 0.1);
   color: #ed6a0c;
 }
 .detail-header-badge.badge--returned {
-  background: #fff1f0;
-  color: #ee0a24;
+  background: rgba(238, 10, 36, 0.1);
+  color: #c23a3a;
 }
 .detail-notice-bar {
   margin-bottom: 12px;
 }
-.detail-header-responsible {
+.returned-notice-bar {
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.returned-notice-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.returned-notice-action {
+  flex-shrink: 0;
+  padding: 0 6px;
   font-size: 13px;
-  color: var(--app-text-secondary);
+  color: #1989fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.returned-notice-action:active {
+  opacity: 0.8;
+}
+.detail-header-responsible {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #646566;
+}
+.detail-header-avatar {
+  font-size: 14px;
+  color: #969799;
+}
+.detail-header-history-row {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+.detail-header-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #1989fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+.detail-header-history-btn:hover {
+  text-decoration: underline;
+}
+.detail-header-history-btn .van-icon {
+  font-size: 14px;
+}
+.detail-header-history-arrow {
+  font-size: 12px !important;
+  color: inherit;
+  margin-left: 2px;
+}
+.detail-header-history-btn:active {
+  opacity: 0.8;
 }
 
 /* ---------- 分段控制器 ---------- */
 .segmented-control {
   display: flex;
   background: var(--bg-card);
-  border-radius: var(--app-card-radius);
+  border-radius: 12px;
   padding: 4px;
-  margin-bottom: 12px;
-  box-shadow: var(--app-card-shadow);
+  margin-bottom: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 .segmented-item {
   flex: 1;
@@ -2651,36 +2756,45 @@ onMounted(() => {
   margin-top: 0;
 }
 
-/* ---------- 信息列表区（左右布局、分割线） ---------- */
+/* ---------- 信息列表区（卡片化、去线、标签弱化） ---------- */
 .info-card {
   background: var(--bg-card);
-  border-radius: var(--app-card-radius);
-  box-shadow: var(--app-card-shadow);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   overflow: hidden;
   margin-bottom: 16px;
+  padding: 4px 0;
 }
 .info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 48px;
-  padding: 0 16px;
-  border-bottom: 1px solid #ebedf0;
+  min-height: 44px;
+  padding: 12px 16px 14px;
+  gap: 12px;
 }
-.info-row:last-child {
-  border-bottom: none;
+.info-row .info-value {
+  display: flex;
+  align-items: center;
 }
 .info-label {
-  font-size: 14px;
-  color: var(--app-text-secondary);
+  font-size: 13px;
+  color: #969799;
   flex-shrink: 0;
-  margin-right: 12px;
+  width: 95px;
 }
 .info-value {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
-  color: var(--text-main);
-  text-align: right;
+  font-weight: 600;
+  color: #323233;
+  text-align: left;
   word-break: break-all;
+}
+.info-value--plain {
+  font-weight: 500;
+  color: #323233;
 }
 .info-badge {
   padding: 2px 10px;
@@ -2689,7 +2803,7 @@ onMounted(() => {
   font-weight: 500;
 }
 .info-badge.badge--active {
-  background: rgba(0, 122, 255, 0.12);
+  background: rgba(0, 122, 255, 0.1);
   color: var(--primary-color);
 }
 .info-badge.badge--archived {
@@ -2697,25 +2811,32 @@ onMounted(() => {
   color: var(--app-text-secondary);
 }
 .info-badge.badge--pending {
-  background: #fff7e8;
+  background: rgba(237, 106, 12, 0.1);
   color: #ed6a0c;
 }
 .info-badge.badge--returned {
-  background: #fff1f0;
-  color: #ee0a24;
+  background: rgba(238, 10, 36, 0.1);
+  color: #c23a3a;
 }
 
-.members-section {
-  margin-top: 16px;
-  padding: 0 16px 16px;
-  text-align: center;
+/* 成员列表卡片 */
+.members-card {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+.members-card .members-section-title {
+  margin-bottom: 12px;
 }
 .members-section-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--van-text-color);
   margin-bottom: 8px;
-  text-align: center;
+  text-align: left;
 }
 .members-loading {
   padding: 16px 0;
@@ -2730,12 +2851,108 @@ onMounted(() => {
 .evidence-section {
   padding: 0;
 }
+/* 证据 Tab 下阶段折叠区卡片化 */
+.evidence-section .stage-collapse {
+  background: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  margin: 0 0 16px;
+  overflow: hidden;
+}
+/* 折叠面板：卡片风格，阶段间 16px 间距，箭头过渡 */
+.evidence-section .stage-collapse {
+  margin-bottom: 0;
+}
+.evidence-section .stage-collapse :deep(.van-collapse-item) {
+  border-radius: 12px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+.evidence-section .stage-collapse :deep(.van-collapse-item:last-child) {
+  margin-bottom: 0;
+}
+.evidence-section .stage-collapse :deep(.van-collapse-item__title) {
+  padding: 14px 16px;
+}
+.evidence-section .stage-collapse :deep(.van-collapse-item__arrow) {
+  transition: transform 0.25s ease;
+}
+.evidence-section .stage-collapse :deep(.van-collapse-item--expanded .van-collapse-item__arrow) {
+  transform: rotate(90deg);
+}
+/* 阶段内 Tag 统一 light 模式（浅色背景） */
+.evidence-section .stage-title-row .van-tag {
+  border: none;
+}
+.evidence-section .stage-title-row .van-tag--success { background: rgba(7, 193, 96, 0.12); color: #07c160; }
+.evidence-section .stage-title-row .van-tag--danger { background: rgba(238, 10, 36, 0.1); color: #ee0a24; }
+.evidence-section .stage-title-row .van-tag--primary { background: rgba(25, 137, 250, 0.12); color: #1989fa; }
+.evidence-section .stage-title-row .van-tag--warning { background: rgba(237, 106, 12, 0.12); color: #ed6a0c; }
+.evidence-section .stage-title-row .van-tag--default { background: rgba(0, 0, 0, 0.06); color: #646566; }
+
+/* 上传弹窗：圆角输入框 #f5f7fa */
+.upload-dialog-form :deep(.upload-dialog-field .van-cell) {
+  background: #f5f7fa;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.upload-dialog-form :deep(.upload-dialog-field .van-field__control) {
+  background: transparent;
+}
+.upload-dialog-form :deep(.upload-dialog-cells .van-cell::after) {
+  display: none;
+}
 
 .upload-file-section {
-  padding: 16px;
+  padding: 0;
   margin: 16px 0;
+}
+.upload-dropzone-wrap :deep(.van-uploader__upload) {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+.upload-dropzone {
+  min-height: 100px;
+  padding: 20px 16px;
   background: #f7f8fa;
-  border-radius: 8px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.upload-dropzone:hover {
+  border-color: var(--van-primary-color);
+  background: rgba(25, 137, 250, 0.04);
+}
+.upload-dropzone-icon {
+  font-size: 32px;
+  color: var(--van-gray-5);
+}
+.upload-dropzone-text {
+  font-size: 13px;
+  color: var(--van-gray-6);
+}
+.upload-confirm-btn {
+  background: linear-gradient(135deg, #1989fa 0%, #0d6efd 100%) !important;
+  border: none !important;
+  font-weight: 600 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+.upload-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.35) !important;
+}
+.upload-confirm-btn:active {
+  transform: translateY(0);
 }
 
 /* 证据列表 cell：自定义整行布局，右侧操作区紧贴右边缘无留白 */
@@ -2833,9 +3050,9 @@ onMounted(() => {
   justify-content: center;
 }
 
-/* 成员管理入口：底部居中按钮 */
+/* 成员管理入口：底部居中按钮 + 安全区留白 */
 .member-entry-wrap {
-  padding: 24px 16px 32px;
+  padding: 24px 16px calc(32px + env(safe-area-inset-bottom, 0));
   display: flex;
   justify-content: center;
 }
@@ -2848,35 +3065,60 @@ onMounted(() => {
   touch-action: pan-y;
 }
 
-/* 阶段进度顶部（证据 Tab + 详情 Tab 共用） */
-.stage-progress-header {
-  padding: 12px 16px;
-  background: var(--bg-card);
-  border-radius: var(--app-card-radius);
-  box-shadow: var(--app-card-shadow);
-  margin: 0 0 12px 0;
+/* 证据完成度独立卡片：卡片化容器，柔和弥散阴影 */
+.completion-card-standalone {
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
-.detail-tab-progress {
+.detail-tab-progress.completion-card-standalone {
   margin-top: 16px;
 }
-.completion-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.completion-card-inner {
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+}
+/* 阶段进度内容区（证据 Tab + 详情 Tab 共用）：padding + 卡片感 */
+.stage-progress-header {
+  padding: 18px 20px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  margin: 0;
+}
+.completion-card-standalone .stage-progress-header.completion-card-inner {
+  margin: 0;
+}
+.completion-block {
   margin-bottom: 8px;
 }
-.completion-label {
-  font-size: 14px;
-  color: var(--van-gray-7);
-  min-width: 72px;
+.completion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
-.completion-row .van-progress {
-  flex: 1;
+.completion-label {
+  font-size: 13px;
+  color: #969799;
 }
 .completion-value {
   font-size: 14px;
-  font-weight: 500;
-  min-width: 36px;
+  font-weight: 600;
+  color: #323233;
+}
+.completion-bar-row {
+  width: 100%;
+}
+.completion-bar-row .van-progress,
+.completion-bar-row .completion-progress {
+  width: 100%;
+}
+.completion-bar-row :deep(.van-progress__portion) {
+  background: linear-gradient(90deg, #7b9acc 0%, #9ab8e0 100%);
+}
+.completion-bar-row .completion-progress--full :deep(.van-progress__portion) {
+  background: #07c160 !important;
 }
 /* 关键缺失：浅色警示卡片 + 分类标签 */
 .key-missing-card {
@@ -2982,62 +3224,9 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-/* 退回状态：红色横幅（文案 + 右侧「去处理(n)」文字按钮一体） */
-.returned-banner {
-  background: #fff1f0;
-  color: #ee0a24;
-  padding: 10px 16px;
-  margin: 0;
-}
-.returned-banner__content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 24px;
-}
-.returned-banner__icon {
-  flex-shrink: 0;
-  font-size: 18px;
-}
-.returned-banner__text {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  line-height: 1.4;
-}
-.returned-banner__action {
-  flex-shrink: 0;
-  padding: 0 4px;
-  font-size: 14px;
-  color: #1989fa;
-  background: none;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.returned-banner__action:active {
-  opacity: 0.8;
-}
+/* 退回状态已改为 van-notice-bar，样式见 .returned-notice-bar 等 */
 
-/* 顶部入口：历次审批记录 */
-.detail-header-history-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 4px 0;
-  font-size: 13px;
-  color: #1989fa;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-.detail-header-history-btn .van-icon {
-  font-size: 14px;
-}
-.detail-header-history-btn:active {
-  opacity: 0.8;
-}
+/* 历次审批记录样式已合并至 .detail-header-history-row 与 .detail-header-history-btn */
 
 /* 审批历史弹窗（右侧 85%） */
 .archive-history-popup.van-popup {
@@ -3157,10 +3346,6 @@ onMounted(() => {
 }
 .timeline-reject-evidence-item:last-child {
   margin-bottom: 0;
-}
-
-.returned-banner__action:active {
-  opacity: 0.8;
 }
 
 /* 不符合项列表弹窗 */
@@ -3302,7 +3487,7 @@ onMounted(() => {
   position: relative;
   width: 112px;
   height: 112px;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   display: flex;
@@ -3325,7 +3510,7 @@ onMounted(() => {
   position: relative;
 }
 .grid-thumb {
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
 }
 .grid-thumb img {
@@ -3333,6 +3518,31 @@ onMounted(() => {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+/* 左上角：生命周期状态（草稿/已提交/已归档/已作废） */
+.grid-thumb-status-tl {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+}
+.grid-thumb-status-tl .evidence-lifecycle-tag.van-tag {
+  border: none;
+  font-size: 10px;
+  padding: 2px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.grid-thumb-status-tl .evidence-lifecycle-tag.van-tag--default {
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+.grid-thumb-status-tl .evidence-lifecycle-tag.van-tag--primary {
+  background: rgba(25, 137, 250, 0.95);
+  color: #fff;
+}
+.grid-thumb-status-tl .evidence-lifecycle-tag.van-tag--success {
+  background: rgba(7, 193, 96, 0.95);
+  color: #fff;
 }
 .grid-thumb-overlay {
   position: absolute;
@@ -3345,6 +3555,11 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
+}
+/* overlay 内「不符合」「已作废」与操作按钮保持在底部条内，不单独定位 */
+.grid-thumb-overlay .reject-reason-inline,
+.grid-thumb-overlay .grid-reject-btn {
+  position: relative;
 }
 .reject-tag-inline {
   margin-left: 4px;
@@ -3427,12 +3642,11 @@ onMounted(() => {
   cursor: pointer;
   z-index: 1;
 }
+.grid-thumb--rejected {
+  box-shadow: 0 0 0 2px var(--van-danger-color);
+}
 .grid-thumb--rejected::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  pointer-events: none;
+  display: none;
 }
 .evidence-badge {
   font-size: 10px;
@@ -3495,7 +3709,7 @@ onMounted(() => {
   padding: 6px;
   width: 100%;
   height: 100%;
-  border-radius: 6px;
+  border-radius: 12px;
   transition: background 0.2s;
 }
 .grid-file-type-badge {
@@ -3541,12 +3755,18 @@ onMounted(() => {
 .grid-file-delete:active {
   background: rgba(0, 0, 0, 0.6);
 }
-/* 上传入口：自定义大加号 + 动态文案 */
+/* 上传入口：与缩略图严格同尺寸 112×112，圆角 12px */
 .grid-upload-btn {
-  border: 2px dashed var(--van-gray-4);
-  background: transparent;
+  width: 112px;
+  height: 112px;
+  min-width: 112px;
+  min-height: 112px;
+  border: 2px dashed #dcdfe6;
+  background: #f7f8fa;
+  border-radius: 12px;
   flex-direction: column;
   gap: 0;
+  flex-shrink: 0;
   transition: border-color 0.2s, background 0.2s;
 }
 .grid-upload-btn:active {
@@ -3621,7 +3841,7 @@ onMounted(() => {
   color: var(--van-gray-8);
 }
 
-/* 审批操作区：固定底部 */
+/* 审批操作区：固定底部，背景模糊 + 向上阴影，按钮 hover 反馈 */
 .approval-bar-wrap {
   position: fixed;
   bottom: 0;
@@ -3629,8 +3849,10 @@ onMounted(() => {
   right: 0;
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
-  background: var(--bg-card);
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
   z-index: 100;
 }
 .approval-bar {
@@ -3641,6 +3863,14 @@ onMounted(() => {
 .approval-bar .approval-btn {
   flex: 1;
   max-width: 160px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.approval-bar .approval-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+.approval-bar .approval-btn:active {
+  transform: scale(0.98);
 }
 /* 底部有审批栏时给内容区留白，避免被遮挡 */
 .project-detail.approval-bar-visible .content {

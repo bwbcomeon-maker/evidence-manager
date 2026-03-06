@@ -182,9 +182,22 @@ function onBack() {
   min-height: var(--app-tabbar-height, 60px) !important;
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
+/* 非激活项：图标与文字统一浅灰 #c8c9cc，突出当前选中蓝色 */
 .main-tabbar :deep(.van-tabbar-item) {
   min-height: 60px;
   padding: 8px 0;
+  color: #c8c9cc !important;
+}
+.main-tabbar :deep(.van-tabbar-item .van-icon),
+.main-tabbar :deep(.van-tabbar-item__text) {
+  color: #c8c9cc !important;
+}
+.main-tabbar :deep(.van-tabbar-item--active) {
+  color: var(--van-tabbar-item-active-color, #007AFF) !important;
+}
+.main-tabbar :deep(.van-tabbar-item--active .van-icon),
+.main-tabbar :deep(.van-tabbar-item--active .van-tabbar-item__text) {
+  color: var(--van-tabbar-item-active-color, #007AFF) !important;
 }
 /* 无返回时的 NavBar：消除底部空隙，便于项目列表等页搜索框上移 */
 .main-layout :deep(.van-nav-bar) {

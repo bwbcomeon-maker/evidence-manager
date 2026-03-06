@@ -1,115 +1,108 @@
 <template>
   <div class="evidence-detail">
     <template v-if="evidence">
-      <div class="evidence-detail__container">
-        <div class="evidence-detail__card" :class="{ 'has-media': evidence.latestVersion }">
-          <!-- 媒体预览区：图片/视频/PDF 内嵌，其余占位 -->
-          <div v-if="evidence.latestVersion" class="evidence-detail__media">
-            <!-- 图片：点击全屏 -->
-            <template v-if="previewType === 'image'">
-              <img
-                :src="mediaBoxUrl"
-                class="media-box__img"
-                alt="预览"
-                @click="openFullscreenPreview"
-                @error="onMediaBoxImageError"
-              />
-            </template>
-            <!-- 视频：HTML5 播放器 -->
-            <template v-else-if="previewType === 'video'">
-              <video
-                :src="mediaBoxUrl"
-                class="media-box__video"
-                controls
-                controlslist="nodownload"
-                preload="metadata"
-                playsinline
-              />
-            </template>
-            <!-- PDF：iframe 内嵌 -->
-            <template v-else-if="previewType === 'pdf'">
-              <iframe
-                :src="mediaBoxUrl"
-                class="media-box__iframe"
-                title="PDF 预览"
-              />
-            </template>
-            <!-- Office：占位 + 提示 -->
-            <template v-else-if="previewType === 'office'">
-              <div class="media-box__placehold media-box__placehold--office">
-                <van-icon name="description" size="48" color="#969799" />
-                <p class="media-box__placehold-text">由于格式限制，请下载后查看</p>
-                <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
-              </div>
-            </template>
-            <!-- 其他：文件图标 + 下载 -->
-            <template v-else>
-              <div class="media-box__placehold">
-                <van-icon :name="evidenceFileIcon.icon" size="56" :color="evidenceFileIcon.color" />
-                <p class="media-box__placehold-text">请下载后查看</p>
-                <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
-              </div>
-            </template>
-          </div>
+      <!-- 1. 沉浸式图片预览区：约 35% 高度，深色剧场模式 -->
+      <div v-if="evidence.latestVersion" class="evidence-detail__hero">
+        <div class="evidence-detail__media-wrap">
+          <template v-if="previewType === 'image'">
+            <img
+              :src="mediaBoxUrl"
+              class="evidence-detail__media-img"
+              alt="预览"
+              @click="openImagePreview"
+              @error="onMediaBoxImageError"
+            />
+            <div class="evidence-detail__watermark">系统自动提取时间/位置</div>
+          </template>
+          <template v-else-if="previewType === 'video'">
+            <video
+              :src="mediaBoxUrl"
+              class="evidence-detail__media-video"
+              controls
+              controlslist="nodownload"
+              preload="metadata"
+              playsinline
+            />
+          </template>
+          <template v-else-if="previewType === 'pdf'">
+            <iframe :src="mediaBoxUrl" class="evidence-detail__media-iframe" title="PDF 预览" />
+          </template>
+          <template v-else-if="previewType === 'office'">
+            <div class="evidence-detail__placehold evidence-detail__placehold--office">
+              <van-icon name="description" size="48" color="#969799" />
+              <p class="evidence-detail__placehold-text">由于格式限制，请下载后查看</p>
+              <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
+            </div>
+          </template>
+          <template v-else>
+            <div class="evidence-detail__placehold">
+              <van-icon :name="evidenceFileIcon.icon" size="56" :color="evidenceFileIcon.color" />
+              <p class="evidence-detail__placehold-text">请下载后查看</p>
+              <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
+            </div>
+          </template>
+        </div>
+      </div>
 
-          <!-- 头部：类型图标 + 主标题 + 状态胶囊 -->
+      <div class="evidence-detail__container" :class="{ 'has-hero': evidence.latestVersion }">
+        <!-- 2. 核心信息卡片：向上偏移覆盖图片底，圆角 12px -->
+        <div class="evidence-detail__core-card">
           <header class="evidence-detail__header">
-            <div
-              class="evidence-detail__type-icon"
-              :style="{ background: evidenceFileIcon.bg, color: evidenceFileIcon.color }"
-            >
+            <div class="evidence-detail__type-icon" :style="{ background: evidenceFileIcon.bg, color: evidenceFileIcon.color }">
               <van-icon :name="evidenceFileIcon.icon" size="28" />
             </div>
             <div class="evidence-detail__title-wrap">
               <h1 class="evidence-detail__title">{{ evidence.title || '—' }}</h1>
-              <span
-                class="evidence-detail__status-pill"
-                :class="`evidence-detail__status-pill--${(effectiveStatus || '').toLowerCase()}`"
-              >
-                {{ mapStatusToText(effectiveStatus) }}
-              </span>
+              <van-tag round plain :type="statusTagTypeForCard(effectiveStatus)" class="evidence-detail__status-tag">
+                {{ statusDisplayText }}
+              </van-tag>
             </div>
           </header>
-
-          <!-- 核心信息：Grid 网格，移动端 1 列、大屏 2 列 -->
+          <!-- 元数据：上传人、上传时间带图标 -->
+          <div class="evidence-detail__meta-row">
+            <span class="evidence-detail__meta-item">
+              <van-icon name="user-o" class="evidence-detail__meta-icon" />
+              {{ uploaderDisplayName() }}
+            </span>
+            <span class="evidence-detail__meta-item">
+              <van-icon name="clock-o" class="evidence-detail__meta-icon" />
+              {{ formatDateTime(evidence.createdAt) }}
+            </span>
+          </div>
           <section class="evidence-detail__meta">
-            <div
-              v-for="item in metaItems"
-              :key="item.label"
-              class="meta-item"
-            >
+            <div v-for="item in metaItems" :key="item.label" class="meta-item">
               <span class="meta-item__label">{{ item.label }}</span>
               <span class="meta-item__value">{{ item.value }}</span>
             </div>
           </section>
+        </div>
 
-          <!-- 动态操作区：图片/视频/PDF 不显示预览按钮，其余保留；下载/提交带图标与 hover 动效 -->
-          <div class="evidence-detail__actions">
-            <van-button v-if="!hasInPagePreview" class="btn-primary action-btn" icon="eye-o" @click="handlePreview">预览</van-button>
-            <van-button class="btn-secondary action-btn" icon="down" plain :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
-            <van-button v-if="canSubmit" class="btn-primary action-btn" icon="success" @click="handleSubmit">提交</van-button>
-            <van-button v-if="canDelete" class="btn-danger action-btn" icon="delete-o" plain @click="handleDelete">删除</van-button>
-            <van-button v-if="canVoid" class="btn-danger action-btn" icon="warning-o" plain @click="handleVoid">作废</van-button>
-            <van-button
-              v-if="canMarkReject"
-              class="btn-danger action-btn"
-              icon="warning-o"
-              plain
-              @click="openMarkRejectDialogFromDetail"
-            >
-              {{ hasLocalReject ? '修改标记' : '标记不符合' }}
-            </van-button>
-            <van-button
-              v-if="canMarkReject && hasLocalReject"
-              class="btn-secondary action-btn"
-              plain
-              @click="clearMarkRejectFromDetail"
-            >
-              取消标记
-            </van-button>
-          </div>
+        <!-- 3. 审核记录时间轴 -->
+        <div class="evidence-detail__audit-card">
+          <h3 class="evidence-detail__audit-title">审核记录</h3>
+          <van-steps direction="vertical" :active="auditStepsActive">
+            <van-step v-for="(step, idx) in auditSteps" :key="idx">
+              <h3 class="audit-step-title">{{ step.title }}</h3>
+              <div v-if="step.rejectReason" class="audit-reject-reason">驳回原因：{{ step.rejectReason }}</div>
+              <p v-else class="audit-step-desc">{{ step.desc }}</p>
+            </van-step>
+          </van-steps>
+        </div>
+
+        <!-- 操作区：预览、下载、提交、作废、标记不符合 -->
+        <div v-if="hasExtraActions" class="evidence-detail__actions">
+          <van-button v-if="!hasInPagePreview" class="btn-primary action-btn" icon="eye-o" @click="handlePreview">预览</van-button>
+          <van-button class="btn-secondary action-btn" icon="down" plain :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
+          <van-button v-if="canSubmit" class="btn-primary action-btn" icon="success" @click="handleSubmit">提交</van-button>
+          <van-button v-if="canVoid" class="btn-danger action-btn" icon="warning-o" plain @click="handleVoid">作废</van-button>
+          <van-button v-if="canMarkReject" class="btn-danger action-btn" icon="warning-o" plain @click="openMarkRejectDialogFromDetail">
+            {{ hasLocalReject ? '修改标记' : '标记不符合' }}
+          </van-button>
+          <van-button v-if="canMarkReject && hasLocalReject" class="btn-secondary action-btn" plain @click="clearMarkRejectFromDetail">取消标记</van-button>
         </div>
       </div>
+
+      <!-- 预览弹层 -->
 
       <!-- 预览弹层：页面内展示，避免手机端 window.open 被拦截 -->
       <van-popup
@@ -193,7 +186,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, showFailToast, closeToast, showConfirmDialog } from 'vant'
+import { Empty, Dialog, Field, showToast, showLoadingToast, showSuccessToast, showFailToast, closeToast, showConfirmDialog, showImagePreview } from 'vant'
 import 'vant/es/toast/style'
 import {
   downloadVersionFile,
@@ -207,7 +200,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { getUsers, type AuthUserSimpleVO } from '@/api/users'
 import { formatDateTime } from '@/utils/format'
-import { getEffectiveEvidenceStatus, mapStatusToText } from '@/utils/evidenceStatus'
+import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 import { useArchiveRejectDraftStore } from '@/stores/archiveRejectDraft'
 
@@ -394,11 +387,11 @@ const mediaBoxUrl = computed(() => {
 /** 是否已在页面内展示预览（图片/视频/PDF），可隐藏「预览」按钮 */
 const hasInPagePreview = computed(() => ['image', 'video', 'pdf'].includes(previewType.value))
 
-function openFullscreenPreview() {
-  if (!evidence.value?.latestVersion) return
-  previewContentType.value = evidence.value.contentType || ''
-  previewVersionId.value = evidence.value.latestVersion.versionId
-  showPreviewPopup.value = true
+/** 点击图片唤起 Vant ImagePreview 手势缩放 */
+function openImagePreview() {
+  const url = mediaBoxUrl.value
+  if (!url) return
+  showImagePreview({ images: [url], startPosition: 0 })
 }
 
 function onMediaBoxImageError() {
@@ -412,9 +405,7 @@ const metaItems = computed(() => {
   const items: { label: string; value: string }[] = [
     { label: '业务类型', value: bizTypeLabel(e.bizType) },
     { label: '备注', value: e.note || '—' },
-    { label: '文件类型', value: fileTypeDisplay(e) },
-    { label: '上传人', value: uploaderDisplayName() },
-    { label: '上传时间', value: formatDateTime(e.createdAt) }
+    { label: '文件类型', value: fileTypeDisplay(e) }
   ]
   if (e.latestVersion) {
     items.push({ label: '文件名', value: e.latestVersion.originalFilename })
@@ -426,6 +417,47 @@ const metaItems = computed(() => {
   }
   return items
 })
+
+/** 状态 Tag 类型（Light 模式：已驳回浅红、已通过浅绿等） */
+function statusTagTypeForCard(status: string | null | undefined): 'success' | 'danger' | 'default' | 'primary' {
+  if (evidence.value?.rejectComment) return 'danger'
+  return statusTagType(status)
+}
+
+/** 状态展示文案：有驳回原因时显示「已驳回」 */
+const statusDisplayText = computed(() => (evidence.value?.rejectComment ? '已驳回' : mapStatusToText(effectiveStatus.value)))
+
+/** 审核轨迹步骤（上传 → 提交 → 驳回(若有)） */
+const auditSteps = computed(() => {
+  const e = evidence.value
+  if (!e) return []
+  const steps: { title: string; desc: string; rejectReason?: string }[] = []
+  steps.push({
+    title: '上传成功',
+    desc: formatDateTime(e.createdAt)
+  })
+  if (e.evidenceStatus && e.evidenceStatus !== 'DRAFT') {
+    steps.push({
+      title: '已提交',
+      desc: e.updatedAt ? formatDateTime(e.updatedAt) : '—'
+    })
+  }
+  if (e.rejectComment) {
+    steps.push({
+      title: '已驳回',
+      desc: '',
+      rejectReason: e.rejectComment
+    })
+  }
+  return steps
+})
+
+const auditStepsActive = computed(() => Math.max(0, auditSteps.value.length - 1))
+
+/** 是否显示额外操作区（预览/下载/提交/作废/标记不符合） */
+const hasExtraActions = computed(() =>
+  !hasInPagePreview.value || canSubmit.value || canVoid.value || canMarkReject.value
+)
 
 /** 从证据管理任一入口进入（按项目查看/我上传的/最近/作废/按类型）时仅保留预览、下载，不显示提交/删除/作废 */
 const isReadOnlyFromEvidenceModule = computed(() =>
@@ -712,101 +744,78 @@ onMounted(() => {
 
 <style scoped>
 .evidence-detail {
-  padding: 20px 0 28px;
+  padding: 0 0 28px;
   min-height: 100%;
   background: var(--app-bg, #f5f7fa);
 }
 .detail-loading {
   padding: 48px 0;
 }
-.evidence-detail__container {
-  max-width: 56rem;
-  margin: 0 auto;
-  padding: 0 16px;
-}
-/* 卡片容器：白底、阴影、圆角；媒体区在顶部 */
-.evidence-detail__card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  padding: 0 0 24px;
-}
-/* 媒体预览区：深灰底、固定高度范围，移动端缩小 */
-.evidence-detail__media {
-  min-height: 300px;
-  max-height: 500px;
-  background: #1a1a1a;
+/* ---------- 1. 沉浸式图片预览区：约 35% 高度，深色剧场 ---------- */
+.evidence-detail__hero {
+  min-height: 35vh;
+  max-height: 40vh;
+  background: #1c1c1e;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 0 24px;
   overflow: hidden;
+  position: relative;
 }
-@media (max-width: 767px) {
-  .evidence-detail__media {
-    min-height: 240px;
-    max-height: 360px;
-  }
-}
-.media-box__img {
+.evidence-detail__media-wrap {
   width: 100%;
   height: 100%;
-  max-height: 500px;
+  min-height: 35vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.evidence-detail__media-img {
+  max-width: 100%;
+  max-height: 35vh;
+  width: auto;
+  height: auto;
   object-fit: contain;
   cursor: pointer;
   display: block;
 }
-@media (max-width: 767px) {
-  .media-box__img {
-    max-height: 360px;
-  }
-}
-.media-box__video {
-  width: 100%;
-  max-height: 500px;
+.evidence-detail__media-video {
+  max-width: 100%;
+  max-height: 35vh;
   display: block;
 }
-@media (max-width: 767px) {
-  .media-box__video {
-    max-height: 360px;
-  }
-}
-.media-box__iframe {
+.evidence-detail__media-iframe {
   width: 100%;
   height: 100%;
-  min-height: 400px;
-  max-height: 500px;
+  min-height: 35vh;
   border: none;
   display: block;
 }
-@media (max-width: 767px) {
-  .media-box__iframe {
-    min-height: 300px;
-    max-height: 360px;
-  }
+.evidence-detail__watermark {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
 }
-.media-box__placehold {
-  padding: 32px 24px;
+.evidence-detail__placehold,
+.evidence-detail__placehold--office {
+  padding: 24px 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #b0b0b0;
+  color: rgba(255, 255, 255, 0.7);
   width: 100%;
-  min-height: 300px;
+  min-height: 35vh;
 }
-@media (max-width: 767px) {
-  .media-box__placehold {
-    min-height: 240px;
-  }
+.evidence-detail__placehold--office {
+  color: rgba(255, 255, 255, 0.8);
 }
-.media-box__placehold--office {
-  background: #f7f8fa;
-  color: #646566;
-}
-.media-box__placehold-text {
+.evidence-detail__placehold-text {
   margin: 0;
   font-size: 14px;
   color: inherit;
@@ -814,20 +823,32 @@ onMounted(() => {
 .btn-download-inline {
   margin-top: 4px;
 }
-.evidence-detail__card:not(.has-media) .evidence-detail__header {
-  padding-top: 24px;
+
+/* ---------- 2. 核心信息卡片：向上偏移，圆角 12px ---------- */
+.evidence-detail__container {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+.evidence-detail__core-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  margin: 16px 16px 16px;
+  padding: 20px 20px 24px;
+}
+.evidence-detail__container.has-hero .evidence-detail__core-card {
+  margin: -16px 16px 16px;
 }
 .evidence-detail__header {
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 28px;
-  padding: 0 20px;
+  margin-bottom: 12px;
 }
-/* 文件类型图标：背景色块，类预览组件 */
 .evidence-detail__type-icon {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -841,50 +862,45 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 10px 12px;
 }
 .evidence-detail__title {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   color: #1a1a1a;
   line-height: 1.35;
   flex: 1 1 auto;
   min-width: 0;
 }
-/* 状态：精致胶囊，浅灰底+深灰字（草稿） */
-.evidence-detail__status-pill {
-  display: inline-block;
-  padding: 5px 14px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+.evidence-detail__status-tag {
   flex-shrink: 0;
 }
-.evidence-detail__status-pill--draft {
-  background: #f2f3f5;
-  color: #646566;
+/* 元数据行：上传人、上传时间带图标 */
+.evidence-detail__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: #969799;
 }
-.evidence-detail__status-pill--submitted {
-  background: #e8f4ff;
-  color: #1989fa;
+.evidence-detail__meta-icon {
+  margin-right: 4px;
+  vertical-align: middle;
 }
-.evidence-detail__status-pill--archived {
-  background: #eefbf3;
-  color: #07c160;
+.evidence-detail__meta-item {
+  display: inline-flex;
+  align-items: center;
 }
-.evidence-detail__status-pill--invalid {
-  background: #fff1f0;
-  color: #ee4d2d;
-}
-/* 元数据区：移动端单列，大屏双列；增加呼吸感 */
+/* 元数据 Grid */
 .evidence-detail__meta {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 20px 28px;
-  margin-bottom: 28px;
-  padding: 0 20px;
+  gap: 12px 28px;
+  padding: 0;
 }
 @media (min-width: 768px) {
   .evidence-detail__meta {
@@ -910,12 +926,50 @@ onMounted(() => {
   line-height: 1.45;
   word-break: break-all;
 }
+
+/* ---------- 3. 审核记录时间轴 ---------- */
+.evidence-detail__audit-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  margin: 0 16px 16px;
+  padding: 20px;
+}
+.evidence-detail__audit-title {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.audit-step-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #323233;
+}
+.audit-step-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #969799;
+  line-height: 1.4;
+}
+.audit-reject-reason {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #FDF2F2;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #ee0a24;
+  line-height: 1.4;
+}
+
+/* ---------- 额外操作区 ---------- */
 .evidence-detail__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-start;
-  padding: 0 20px;
+  padding: 0 0 24px;
 }
 @media (min-width: 768px) {
   .evidence-detail__actions {
@@ -949,7 +1003,6 @@ onMounted(() => {
 }
 .evidence-detail__actions .btn-danger {
   background: transparent;
-  /* 使用固定红色，避免主题将 danger 文字颜色改为白色导致看不见 */
   color: #ee4d2d;
   border: 1px solid #ee4d2d;
 }

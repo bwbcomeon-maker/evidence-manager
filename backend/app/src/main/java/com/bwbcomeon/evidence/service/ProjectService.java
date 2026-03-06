@@ -278,7 +278,12 @@ public class ProjectService {
         if (pmUserId != null) {
             vo.setCurrentPmUserId(pmUserId);
             SysUser pmUser = sysUserMapper.selectById(pmUserId);
-            vo.setCurrentPmDisplayName(pmUser != null ? resolveUserDisplayName(pmUser) : null);
+            String pmDisplayName = pmUser != null ? resolveUserDisplayName(pmUser) : null;
+            vo.setCurrentPmDisplayName(pmDisplayName);
+            // 历史数据可能无 created_by_user_id，用当前负责人作为创建人展示兜底
+            if (vo.getCreatedByDisplayName() == null || vo.getCreatedByDisplayName().isBlank()) {
+                vo.setCreatedByDisplayName(pmDisplayName);
+            }
         }
         if (STATUS_RETURNED.equals(project.getStatus())) {
             ProjectArchiveApplication rejected = projectArchiveApplicationMapper.selectLatestRejectedByProjectId(projectId);
