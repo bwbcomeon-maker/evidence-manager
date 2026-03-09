@@ -89,10 +89,11 @@
           </van-steps>
         </div>
 
-        <!-- 操作区：预览、下载、提交、作废、标记不符合 -->
+        <!-- 操作区：预览、下载、下载原图(仅图片+管理员/PMO)、提交、作废、标记不符合 -->
         <div v-if="hasExtraActions" class="evidence-detail__actions">
           <van-button v-if="!hasInPagePreview" class="btn-primary action-btn" icon="eye-o" @click="handlePreview">预览</van-button>
           <van-button class="btn-secondary action-btn" icon="down" plain :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
+          <van-button v-if="showDownloadOriginal" class="btn-secondary action-btn" icon="down" plain :loading="isDownloadingOriginal" :disabled="isDownloadingOriginal" @click="handleDownloadOriginal">下载原图</van-button>
           <van-button v-if="canSubmit" class="btn-primary action-btn" icon="success" @click="handleSubmit">提交</van-button>
           <van-button v-if="canVoid" class="btn-danger action-btn" icon="warning-o" plain @click="handleVoid">作废</van-button>
           <van-button v-if="canMarkReject" class="btn-danger action-btn" icon="warning-o" plain @click="openMarkRejectDialogFromDetail">
@@ -191,6 +192,7 @@ import 'vant/es/toast/style'
 import {
   downloadVersionFile,
   getEvidenceById,
+  getOriginalDownloadUrl,
   submitEvidence,
   deleteEvidence,
   invalidateEvidence,
@@ -219,6 +221,8 @@ const invalidateReasonText = ref('')
 const showPreviewPopup = ref(false)
 /** 下载中状态，用于按钮 loading 与防重复点击 */
 const isDownloading = ref(false)
+/** 下载原图中状态 */
+const isDownloadingOriginal = ref(false)
 const previewVersionId = ref<number | null>(null)
 const previewContentType = ref<string>('')
 const previewImageUrl = computed(() =>
@@ -454,6 +458,9 @@ const auditSteps = computed(() => {
 
 const auditStepsActive = computed(() => Math.max(0, auditSteps.value.length - 1))
 
+/** 是否显示「下载原图」：仅图片类型且当前用户为 SYSTEM_ADMIN 或 PMO（后端仍会鉴权） */
+const showDownloadOriginal = computed(() => previewType.value === 'image' && isPMOOrAdmin.value)
+
 /** 是否显示额外操作区（预览/下载/提交/作废/标记不符合） */
 const hasExtraActions = computed(() =>
   !hasInPagePreview.value || canSubmit.value || canVoid.value || canMarkReject.value
@@ -600,6 +607,49 @@ async function handleDownload() {
     }
   } finally {
     isDownloading.value = false
+  }
+}
+
+/** 下载原图（仅 SYSTEM_ADMIN/PMO 可见按钮；后端会校验配置与角色，403 时提示明确文案） */
+async function handleDownloadOriginal() {
+  if (!evidence.value?.latestVersion) {
+    showToast('暂无版本文件')
+    return
+  }
+  if (isDownloadingOriginal.value) return
+  isDownloadingOriginal.value = true
+  closeToast()
+  const versionId = evidence.value.latestVersion.versionId
+  const filename = evidence.value.latestVersion.originalFilename || 'download'
+  const downloadUrl = getOriginalDownloadUrl(versionId)
+  try {
+    const response = await fetch(downloadUrl, { method: 'GET', credentials: 'include' })
+    if (response.status === 403) {
+      const data = await response.json().catch(() => ({} as { message?: string }))
+      const msg = (data as { message?: string })?.message
+      showToast(msg || '仅系统管理员或PMO可访问原图')
+      return
+    }
+    if (!response.ok) {
+      showFailToast('下载原图失败')
+      return
+    }
+    const blob = await response.blob()
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+    showSuccessToast('已触发下载原图')
+  } catch (e: unknown) {
+    console.error('下载原图失败:', e)
+    showFailToast('下载原图失败，请重试')
+  } finally {
+    isDownloadingOriginal.value = false
   }
 }
 

@@ -334,9 +334,12 @@
                       <div class="evidence-card-status">
                         <span
                           class="card-status-text"
-                          :class="{ 'card-status-text--insufficient': (item.minCount ?? 1) > 0 && ((item.uploadCount ?? item.currentCount) < (item.minCount ?? 1)) }"
+                          :class="{
+                            'card-status-text--optional': !(item.isRequired || item.required),
+                            'card-status-text--insufficient': (item.isRequired || item.required) && (item.minCount ?? 1) > 0 && ((item.uploadCount ?? item.currentCount) < (item.minCount ?? 1))
+                          }"
                         >
-                          {{ (item.minCount ?? 1) === 0 ? `选填（已 ${item.uploadCount ?? item.currentCount} 份）` : `已 ${item.uploadCount ?? item.currentCount} / 需 ${item.minCount ?? 1} 份` }}
+                          {{ (item.minCount ?? 1) === 0 ? `选填（已 ${item.uploadCount ?? item.currentCount} 份）` : (item.isRequired || item.required) ? `已 ${item.uploadCount ?? item.currentCount} / 需 ${item.minCount ?? 1} 份` : `已 ${item.uploadCount ?? item.currentCount} / 需 ${item.minCount ?? 1} 份（选填）` }}
                         </span>
                         <van-icon name="arrow" class="card-arrow" />
                       </div>
@@ -3464,6 +3467,9 @@ onMounted(() => {
 .card-status-text {
   font-size: 13px;
   color: var(--app-text-secondary);
+}
+.card-status-text.card-status-text--optional {
+  color: #969799;
 }
 .card-status-text.card-status-text--insufficient {
   color: var(--van-red);

@@ -5,6 +5,7 @@ import com.bwbcomeon.evidence.dto.PageResult;
 import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.EvidenceSearchResultVO;
 import com.bwbcomeon.evidence.dto.Result;
+import com.bwbcomeon.evidence.dto.VersionDownloadResult;
 import com.bwbcomeon.evidence.exception.ForbiddenException;
 import com.bwbcomeon.evidence.exception.UnauthorizedException;
 import com.bwbcomeon.evidence.service.AuthService;
@@ -143,39 +144,50 @@ public class EvidenceVersionController {
     }
 
     /**
-     * 下载证据版本文件（预览/下载共用，按当前登录用户做项目权限校验）
+     * 证据版本文件访问（预览与下载共用同一接口，通过参数区分语义）
      * GET /api/evidence/versions/{versionId}/download
-     * @param preview 为 true 时返回 Content-Disposition: inline，便于浏览器在 iframe 内在线预览（如 Office）
+     *
+     * <p><b>预览与下载语义：</b></p>
+     * <ul>
+     *   <li><b>预览</b>：调用时传 {@code preview=true}，返回 Content-Disposition: inline，供页面内嵌展示；
+     *       图片类型默认返回水印图（无水印则回退原图），非图片返回原文件。</li>
+     *   <li><b>下载</b>：不传或 {@code preview=false}，返回 Content-Disposition: attachment，触发浏览器下载；
+     *       与预览使用相同文件内容（同上，图片默认水印优先）。</li>
+     *   <li><b>原图</b>：仅当配置 {@code evidence.image.original-access-enabled=true} 且当前用户角色为
+     *       SYSTEM_ADMIN 或 PMO 时，传 {@code variant=ORIGINAL} 可获取原图；否则返回 403。</li>
+     * </ul>
      *
      * @param versionId 版本ID
+     * @param preview true 表示预览（inline），false 或不传表示下载（attachment）
+     * @param variant WATERMARKED（默认）| ORIGINAL（需配置+角色权限）
      * @return 文件资源（附件或内联）
      */
     @GetMapping("/versions/{versionId}/download")
     public ResponseEntity<Resource> downloadVersionFile(
             HttpServletRequest request,
             @PathVariable Long versionId,
-            @RequestParam(required = false) Boolean preview) {
+            @RequestParam(required = false) Boolean preview,
+            @RequestParam(required = false) String variant) {
         AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
         if (user == null) {
             throw new UnauthorizedException("未登录");
         }
-        logger.info("Download version file request: versionId={}, userId={}, preview={}", versionId, user.getId(), preview);
-        Resource resource = evidenceService.downloadVersionFile(versionId, user.getId(), user.getRoleCode());
-        
-        // 获取原始文件名和Content-Type
-        String originalFilename = evidenceService.getVersionOriginalFilename(versionId);
-        String contentType = evidenceService.getVersionContentType(versionId);
+        logger.info("Download version file request: versionId={}, userId={}, preview={}, variant={}", versionId, user.getId(), preview, variant);
+        VersionDownloadResult result = evidenceService.downloadVersionFile(versionId, user.getId(), user.getRoleCode(), variant);
+        Resource resource = result.getResource();
+        String filename = result.getFilename();
+        String contentType = result.getContentType();
         
         // 处理文件名编码（支持中文文件名）
-        String encodedFilename = URLEncoder.encode(originalFilename, StandardCharsets.UTF_8)
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8)
                 .replace("+", "%20");
         
         // 构建响应头：预览时使用 inline 以便 iframe 内展示（Word/Excel/PPT 等）
         HttpHeaders headers = new HttpHeaders();
         boolean inline = Boolean.TRUE.equals(preview);
         String disposition = inline
-                ? "inline; filename=\"" + originalFilename + "\"; filename*=UTF-8''" + encodedFilename
-                : "attachment; filename=\"" + originalFilename + "\"; filename*=UTF-8''" + encodedFilename;
+                ? "inline; filename=\"" + filename + "\"; filename*=UTF-8''" + encodedFilename
+                : "attachment; filename=\"" + filename + "\"; filename*=UTF-8''" + encodedFilename;
         headers.add(HttpHeaders.CONTENT_DISPOSITION, disposition);
         
         // 设置Content-Type
@@ -185,8 +197,8 @@ public class EvidenceVersionController {
             headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
         }
         
-        logger.info("Download version file response: versionId={}, filename={}, contentType={}", 
-                   versionId, originalFilename, contentType);
+        logger.info("Download version file response: versionId={}, filename={}, contentType={}",
+                   versionId, filename, contentType);
         
         return ResponseEntity.ok()
                 .headers(headers)

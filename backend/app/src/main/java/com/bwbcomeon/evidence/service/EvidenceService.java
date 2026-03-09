@@ -7,6 +7,7 @@ import com.bwbcomeon.evidence.dto.PermissionBits;
 import com.bwbcomeon.evidence.dto.InvalidateAuditInfo;
 import com.bwbcomeon.evidence.dto.LatestVersionVO;
 import com.bwbcomeon.evidence.dto.PageResult;
+import com.bwbcomeon.evidence.dto.VersionDownloadResult;
 import com.bwbcomeon.evidence.enums.EvidenceStatus;
 import com.bwbcomeon.evidence.entity.DeliveryStage;
 import com.bwbcomeon.evidence.entity.EvidenceItem;
@@ -40,11 +41,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,8 +94,17 @@ public class EvidenceService {
     @Value("${file.upload.base-path:./data/uploads}")
     private String basePath;
 
+    @Value("${evidence.image.watermark.enabled:true}")
+    private boolean watermarkEnabled;
+
+    @Value("${evidence.image.original-access-enabled:false}")
+    private boolean originalAccessEnabled;
+
     @Autowired
     private FileStorageUtil fileStorageUtil;
+
+    @Autowired
+    private ImageWatermarkService imageWatermarkService;
 
     /**
      * 项目已归档时，仅 PMO / SYSTEM_ADMIN 允许修改证据；其他角色只读。
@@ -150,6 +162,7 @@ public class EvidenceService {
         String etag;
         Long evidenceId = null;
         Path savedFilePath = null;
+        Path savedWatermarkedPath = null;
         
         try {
             // 先创建evidence记录以获取ID
@@ -178,7 +191,7 @@ public class EvidenceService {
             evidenceId = evidenceItem.getId();
             logger.info("Created evidence record with id: {}", evidenceId);
 
-            // 保存文件
+            // 保存原图
             objectKey = fileStorageUtil.saveFile(projectId, evidenceId, file);
             savedFilePath = fileStorageUtil.getSavedFilePath(projectId, evidenceId, file);
             etag = fileStorageUtil.calculateETag(file);
@@ -198,13 +211,42 @@ public class EvidenceService {
                 originalFilename = "file_" + System.currentTimeMillis();
             }
 
-            // 创建版本记录
+            // 仅图片生成水印派生图（失败不阻断上传）
+            String watermarkedFilePath = null;
+            String watermarkedFilename = null;
+            if (watermarkEnabled && imageWatermarkService.isSupportedImage(file.getContentType(), originalFilename)) {
+                try {
+                    byte[] originalBytes = file.getBytes();
+                    Project project = projectMapper.selectById(projectId);
+                    SysUser uploader = userId != null ? sysUserMapper.selectById(userId) : null;
+                    String projectDisplay = buildProjectDisplay(project);
+                    String uploaderDisplay = buildUploaderDisplay(uploader, userId);
+                    ImageWatermarkService.WatermarkContext ctx = new ImageWatermarkService.WatermarkContext(
+                            projectDisplay, uploaderDisplay, OffsetDateTime.now()
+                    );
+                    ImageWatermarkService.WatermarkResult wm = imageWatermarkService.generateWatermarkedImage(
+                            originalBytes, file.getContentType(), originalFilename, ctx
+                    );
+                    watermarkedFilename = wm.filename();
+                    watermarkedFilePath = fileStorageUtil.saveDerivedFile(
+                            projectId, evidenceId, watermarkedFilename, new ByteArrayInputStream(wm.bytes())
+                    );
+                    savedWatermarkedPath = fileStorageUtil.resolveRelativePath(watermarkedFilePath);
+                } catch (Exception wmEx) {
+                    logger.warn("Watermark generation failed, fallback to original image. projectId={}, evidenceId={}, filename={}",
+                            projectId, evidenceId, originalFilename, wmEx);
+                }
+            }
+
+            // 创建版本记录（原图 + 可选水印图）
             EvidenceVersion evidenceVersion = new EvidenceVersion();
             evidenceVersion.setEvidenceId(evidenceId);
             evidenceVersion.setProjectId(projectId);
             evidenceVersion.setVersionNo(1); // 首次上传固定为1
             evidenceVersion.setOriginalFilename(originalFilename);
             evidenceVersion.setFilePath(objectKey); // 相对路径，与本地存储真实路径对应
+            evidenceVersion.setWatermarkedFilePath(watermarkedFilePath);
+            evidenceVersion.setWatermarkedFilename(watermarkedFilename);
             evidenceVersion.setFileSize(file.getSize());
             evidenceVersion.setContentType(file.getContentType());
             evidenceVersion.setUploaderUserId(userId);
@@ -215,6 +257,7 @@ public class EvidenceService {
             if (versionInsertResult <= 0) {
                 // 如果版本记录插入失败，需要清理已保存的文件
                 fileStorageUtil.deleteFile(savedFilePath);
+                fileStorageUtil.deleteFile(savedWatermarkedPath);
                 throw new BusinessException(500, "Failed to create evidence version record");
             }
 
@@ -243,11 +286,17 @@ public class EvidenceService {
             if (savedFilePath != null) {
                 fileStorageUtil.deleteFile(savedFilePath);
             }
+            if (savedWatermarkedPath != null) {
+                fileStorageUtil.deleteFile(savedWatermarkedPath);
+            }
             throw new BusinessException(500, "Failed to save file: " + e.getMessage());
         } catch (BusinessException e) {
             // 业务异常：如果文件已保存但DB操作失败，清理文件
             if (savedFilePath != null) {
                 fileStorageUtil.deleteFile(savedFilePath);
+            }
+            if (savedWatermarkedPath != null) {
+                fileStorageUtil.deleteFile(savedWatermarkedPath);
             }
             throw e;
         } catch (Exception e) {
@@ -255,6 +304,9 @@ public class EvidenceService {
             // 其他异常：如果文件已保存，清理文件
             if (savedFilePath != null) {
                 fileStorageUtil.deleteFile(savedFilePath);
+            }
+            if (savedWatermarkedPath != null) {
+                fileStorageUtil.deleteFile(savedWatermarkedPath);
             }
             throw new BusinessException(500, "Internal error: " + e.getMessage());
         }
@@ -330,14 +382,7 @@ public class EvidenceService {
             // 设置最新版本信息
             EvidenceVersion latestVersion = versionMap.get(item.getId());
             if (latestVersion != null) {
-                LatestVersionVO latestVersionVO = new LatestVersionVO();
-                latestVersionVO.setVersionId(latestVersion.getId());
-                latestVersionVO.setVersionNo(latestVersion.getVersionNo());
-                latestVersionVO.setOriginalFilename(latestVersion.getOriginalFilename());
-                latestVersionVO.setFilePath(latestVersion.getFilePath());
-                latestVersionVO.setFileSize(latestVersion.getFileSize());
-                latestVersionVO.setCreatedAt(latestVersion.getCreatedAt());
-                vo.setLatestVersion(latestVersionVO);
+                vo.setLatestVersion(toLatestVersionVO(latestVersion));
             }
             PermissionBits bits = permissionUtil.computeProjectPermissionBits(item.getProjectId(), userId, roleCode);
             vo.setPermissions(bits);
@@ -376,6 +421,39 @@ public class EvidenceService {
             }
         }
         return map;
+    }
+
+    private static String buildProjectDisplay(Project project) {
+        if (project == null) return "未知项目";
+        String code = project.getCode();
+        String name = project.getName();
+        if (name != null && !name.isBlank() && code != null && !code.isBlank()) {
+            return name + "(" + code + ")";
+        }
+        if (name != null && !name.isBlank()) return name;
+        if (code != null && !code.isBlank()) return code;
+        return "未知项目";
+    }
+
+    private static String buildUploaderDisplay(SysUser uploader, Long userId) {
+        if (uploader != null) {
+            if (uploader.getRealName() != null && !uploader.getRealName().isBlank()) return uploader.getRealName();
+            if (uploader.getUsername() != null && !uploader.getUsername().isBlank()) return uploader.getUsername();
+        }
+        return userId == null ? "未知用户" : ("用户" + userId);
+    }
+
+    private static LatestVersionVO toLatestVersionVO(EvidenceVersion latestVersion) {
+        LatestVersionVO latestVersionVO = new LatestVersionVO();
+        latestVersionVO.setVersionId(latestVersion.getId());
+        latestVersionVO.setVersionNo(latestVersion.getVersionNo());
+        latestVersionVO.setOriginalFilename(latestVersion.getOriginalFilename());
+        latestVersionVO.setFilePath(latestVersion.getFilePath());
+        latestVersionVO.setWatermarkedFilePath(latestVersion.getWatermarkedFilePath());
+        latestVersionVO.setWatermarkedFilename(latestVersion.getWatermarkedFilename());
+        latestVersionVO.setFileSize(latestVersion.getFileSize());
+        latestVersionVO.setCreatedAt(latestVersion.getCreatedAt());
+        return latestVersionVO;
     }
 
     /**
@@ -456,14 +534,7 @@ public class EvidenceService {
             vo.setInvalidAt(item.getInvalidAt());
             EvidenceVersion latest = versionMap.get(item.getId());
             if (latest != null) {
-                LatestVersionVO lv = new LatestVersionVO();
-                lv.setVersionId(latest.getId());
-                lv.setVersionNo(latest.getVersionNo());
-                lv.setOriginalFilename(latest.getOriginalFilename());
-                lv.setFilePath(latest.getFilePath());
-                lv.setFileSize(latest.getFileSize());
-                lv.setCreatedAt(latest.getCreatedAt());
-                vo.setLatestVersion(lv);
+                vo.setLatestVersion(toLatestVersionVO(latest));
             }
             PermissionBits bits = permissionUtil.computeProjectPermissionBits(item.getProjectId(), currentUserId, roleCode);
             vo.setPermissions(bits);
@@ -518,14 +589,7 @@ public class EvidenceService {
         for (EvidenceSearchResultVO vo : records) {
             EvidenceVersion latest = versionMap.get(vo.getEvidenceId());
             if (latest != null) {
-                LatestVersionVO lv = new LatestVersionVO();
-                lv.setVersionId(latest.getId());
-                lv.setVersionNo(latest.getVersionNo());
-                lv.setOriginalFilename(latest.getOriginalFilename());
-                lv.setFilePath(latest.getFilePath());
-                lv.setFileSize(latest.getFileSize());
-                lv.setCreatedAt(latest.getCreatedAt());
-                vo.setLatestVersion(lv);
+                vo.setLatestVersion(toLatestVersionVO(latest));
             }
         }
         return new PageResult<>(total, records, page, pageSize);
@@ -591,14 +655,7 @@ public class EvidenceService {
         vo.setCanInvalidate(Boolean.TRUE.equals(bits.getCanInvalidate()));
         EvidenceVersion latest = evidenceVersionMapper.selectLatestVersionByEvidenceId(item.getId());
         if (latest != null) {
-            LatestVersionVO lv = new LatestVersionVO();
-            lv.setVersionId(latest.getId());
-            lv.setVersionNo(latest.getVersionNo());
-            lv.setOriginalFilename(latest.getOriginalFilename());
-            lv.setFilePath(latest.getFilePath());
-            lv.setFileSize(latest.getFileSize());
-            lv.setCreatedAt(latest.getCreatedAt());
-            vo.setLatestVersion(lv);
+            vo.setLatestVersion(toLatestVersionVO(latest));
         }
         Map<Long, String> rejectMap = getRejectCommentMapForProject(item.getProjectId());
         if (item.getId() != null && rejectMap.containsKey(item.getId())) {
@@ -646,14 +703,7 @@ public class EvidenceService {
             vo.setInvalidAt(item.getInvalidAt());
             EvidenceVersion latest = evidenceVersionMapper.selectLatestVersionByEvidenceId(item.getId());
             if (latest != null) {
-                LatestVersionVO lv = new LatestVersionVO();
-                lv.setVersionId(latest.getId());
-                lv.setVersionNo(latest.getVersionNo());
-                lv.setOriginalFilename(latest.getOriginalFilename());
-                lv.setFilePath(latest.getFilePath());
-                lv.setFileSize(latest.getFileSize());
-                lv.setCreatedAt(latest.getCreatedAt());
-                vo.setLatestVersion(lv);
+                vo.setLatestVersion(toLatestVersionVO(latest));
             }
             PermissionBits bits = permissionUtil.computeProjectPermissionBits(projectId, userId, roleCode);
             vo.setPermissions(bits);
@@ -686,7 +736,8 @@ public class EvidenceService {
 
     /**
      * 草稿证据物理删除（仅 DRAFT 可删；已提交/已归档不可物理删除）。
-     * 删除 evidence_item、所有 evidence_version 及磁盘文件。
+     * 删除 evidence_item、所有 evidence_version 及磁盘文件（含原图与水印图）。
+     * 与作废（invalidate）区分：作废不删文件，保留原图/水印图用于审计追溯。
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteEvidence(Long id, Long userId, String roleCode) {
@@ -704,6 +755,13 @@ public class EvidenceService {
             String fp = v.getFilePath();
             if (fp != null && !fp.isBlank()) {
                 Path fullPath = Paths.get(basePath, fp).normalize();
+                if (fullPath.startsWith(basePathNormalized)) {
+                    fileStorageUtil.deleteFile(fullPath);
+                }
+            }
+            String wm = v.getWatermarkedFilePath();
+            if (wm != null && !wm.isBlank()) {
+                Path fullPath = Paths.get(basePath, wm).normalize();
                 if (fullPath.startsWith(basePathNormalized)) {
                     fileStorageUtil.deleteFile(fullPath);
                 }
@@ -755,7 +813,8 @@ public class EvidenceService {
     }
 
     /**
-     * 证据状态流转：作废（仅 SUBMITTED -> INVALID），仅项目责任人可操作，必填作废原因；草稿不可作废，只能删除或提交
+     * 证据状态流转：作废（仅 SUBMITTED -> INVALID），仅项目责任人可操作，必填作废原因；草稿不可作废，只能删除或提交。
+     * 作废后不删除磁盘文件（原图与水印图保留），便于审计与追溯。
      *
      * @return 审计用快照信息（projectId, beforeData, afterData）
      */
@@ -801,15 +860,20 @@ public class EvidenceService {
     }
 
     /**
-     * 下载证据版本文件
+     * 证据版本文件访问（预览与下载共用：同一文件内容，仅响应头区分 inline/attachment）
+     * <ul>
+     *   <li>默认预览/下载：图片返回水印图（无水印则回退原图），非图片返回原文件。</li>
+     *   <li>原图（variant=ORIGINAL）：需配置 evidence.image.original-access-enabled=true 且角色为 SYSTEM_ADMIN 或 PMO，否则 403。</li>
+     * </ul>
      *
      * @param versionId 版本ID
      * @param userId 当前用户ID
-     * @param roleCode 当前用户角色（SYSTEM_ADMIN/PMO 可见全部项目）
-     * @return 文件资源
+     * @param roleCode 当前用户角色（用于原图访问控制：仅 SYSTEM_ADMIN/PMO 在配置开启时可访问 ORIGINAL）
+     * @param variant WATERMARKED（默认）| ORIGINAL
+     * @return 文件资源与元数据
      * @throws BusinessException 如果版本不存在、文件不存在或权限不足
      */
-    public Resource downloadVersionFile(Long versionId, Long userId, String roleCode) {
+    public VersionDownloadResult downloadVersionFile(Long versionId, Long userId, String roleCode, String variant) {
         // 1. 查询版本记录
         EvidenceVersion version = evidenceVersionMapper.selectById(versionId);
         if (version == null) {
@@ -821,16 +885,15 @@ public class EvidenceService {
             permissionUtil.checkProjectAccess(version.getProjectId(), userId);
         }
 
-        // 3. 构建文件完整路径
-        String filePath = version.getFilePath();
+        // 3. 解析下载文件（图片默认优先水印图；历史无水印图自动回退原图；ORIGINAL 需配置+角色）
+        String resolvedVariant = normalizeVariant(variant);
+        String filePath = resolveDownloadFilePath(version, resolvedVariant, roleCode);
         if (filePath == null || filePath.trim().isEmpty()) {
             throw new BusinessException(500, "File path is empty in version record");
         }
 
-        // 文件路径格式：{projectId}/{evidenceId}/{originalFilename}
-        // 完整路径：./data/uploads/{filePath}
         Path fullPath = Paths.get(basePath, filePath).normalize();
-        
+
         // 安全检查：确保路径在 basePath 目录下，防止路径遍历攻击
         Path basePathNormalized = Paths.get(basePath).normalize();
         if (!fullPath.startsWith(basePathNormalized)) {
@@ -849,10 +912,15 @@ public class EvidenceService {
                 throw new BusinessException(500, "File is not readable");
             }
 
-            logger.info("Download version file: versionId={}, filePath={}, originalFilename={}", 
-                       versionId, filePath, version.getOriginalFilename());
-            
-            return resource;
+            String filename = isWatermarkResolved(version, resolvedVariant)
+                    ? (version.getWatermarkedFilename() == null || version.getWatermarkedFilename().isBlank()
+                    ? version.getOriginalFilename() : version.getWatermarkedFilename())
+                    : version.getOriginalFilename();
+
+            logger.info("Download version file: versionId={}, variant={}, resolvedPath={}, filename={}",
+                    versionId, resolvedVariant, filePath, filename);
+
+            return new VersionDownloadResult(resource, filename, version.getContentType());
         } catch (IOException e) {
             logger.error("Failed to create resource for file: {}", fullPath, e);
             throw new BusinessException(500, "Failed to read file: " + e.getMessage());
@@ -860,30 +928,54 @@ public class EvidenceService {
     }
 
     /**
-     * 获取版本文件的原始文件名
-     * 
-     * @param versionId 版本ID
-     * @return 原始文件名
+     * 原图访问：系统开关 + 角色双控制；无权限时明确 403，不静默降级。
      */
-    public String getVersionOriginalFilename(Long versionId) {
-        EvidenceVersion version = evidenceVersionMapper.selectById(versionId);
-        if (version == null) {
-            throw new BusinessException(404, "Version not found");
+    private String resolveDownloadFilePath(EvidenceVersion version, String variant, String roleCode) {
+        String original = version.getFilePath();
+        if (original == null || original.isBlank()) {
+            return original;
         }
-        return version.getOriginalFilename();
+        if (!isImageContentType(version.getContentType())) {
+            return original;
+        }
+
+        if ("ORIGINAL".equals(variant)) {
+            if (!originalAccessEnabled) {
+                throw new BusinessException(403, "当前环境未开放原图下载");
+            }
+            boolean roleAllowed = roleCode != null && ("SYSTEM_ADMIN".equals(roleCode) || "PMO".equals(roleCode));
+            if (!roleAllowed) {
+                throw new BusinessException(403, "仅系统管理员或PMO可访问原图");
+            }
+            return original;
+        }
+
+        // 默认 WATERMARKED：优先水印图，历史数据自动回退原图
+        String wm = version.getWatermarkedFilePath();
+        if (wm == null || wm.isBlank()) {
+            return original;
+        }
+        Path wmPath = Paths.get(basePath, wm).normalize();
+        return Files.exists(wmPath) ? wm : original;
     }
 
-    /**
-     * 获取版本文件的Content-Type
-     * 
-     * @param versionId 版本ID
-     * @return Content-Type
-     */
-    public String getVersionContentType(Long versionId) {
-        EvidenceVersion version = evidenceVersionMapper.selectById(versionId);
-        if (version == null) {
-            throw new BusinessException(404, "Version not found");
-        }
-        return version.getContentType();
+    private boolean isWatermarkResolved(EvidenceVersion version, String variant) {
+        if (!"WATERMARKED".equals(variant)) return false;
+        if (!isImageContentType(version.getContentType())) return false;
+        String wm = version.getWatermarkedFilePath();
+        if (wm == null || wm.isBlank()) return false;
+        Path wmPath = Paths.get(basePath, wm).normalize();
+        return Files.exists(wmPath);
+    }
+
+    private static String normalizeVariant(String variant) {
+        if (variant == null || variant.isBlank()) return "WATERMARKED";
+        String v = variant.trim().toUpperCase(Locale.ROOT);
+        return "ORIGINAL".equals(v) ? "ORIGINAL" : "WATERMARKED";
+    }
+
+    private static boolean isImageContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) return false;
+        return contentType.toLowerCase(Locale.ROOT).startsWith("image/");
     }
 }

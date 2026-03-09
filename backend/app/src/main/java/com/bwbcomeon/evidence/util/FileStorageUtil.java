@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -58,6 +59,24 @@ public class FileStorageUtil {
         // 返回相对路径（相对于basePath）
         // 格式：{projectId}/{evidenceId}/{originalFilename}
         return String.format("%d/%d/%s", projectId, evidenceId, originalFilename);
+    }
+
+    /**
+     * 保存派生文件（如水印图）到与原图相同目录
+     *
+     * @return 相对路径：{projectId}/{evidenceId}/{filename}
+     */
+    public String saveDerivedFile(Long projectId, Long evidenceId, String filename, InputStream inputStream) throws IOException {
+        Path projectDir = Paths.get(basePath, String.valueOf(projectId), String.valueOf(evidenceId));
+        Files.createDirectories(projectDir);
+        Path filePath = projectDir.resolve(filename);
+        Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+        logger.info("Derived file saved: {}", filePath.toAbsolutePath());
+        return String.format("%d/%d/%s", projectId, evidenceId, filename);
+    }
+
+    public Path resolveRelativePath(String relativePath) {
+        return Paths.get(basePath, relativePath).normalize();
     }
 
     /**

@@ -39,6 +39,16 @@ public class EvidenceVersion {
     private String filePath;
 
     /**
+     * 水印图存储相对路径（仅图片）
+     */
+    private String watermarkedFilePath;
+
+    /**
+     * 水印图文件名（仅图片）
+     */
+    private String watermarkedFilename;
+
+    /**
      * 文件大小（字节）
      */
     private Long fileSize;

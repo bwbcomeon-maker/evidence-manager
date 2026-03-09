@@ -58,6 +58,8 @@ export interface EvidenceListItem {
     versionNo: number
     originalFilename: string
     filePath: string
+    watermarkedFilePath?: string
+    watermarkedFilename?: string
     fileSize: number
     createdAt: string
   } | null
@@ -150,6 +152,8 @@ export interface EvidenceSearchResultItem {
     versionNo: number
     originalFilename: string
     filePath: string
+    watermarkedFilePath?: string
+    watermarkedFilename?: string
     fileSize: number
     createdAt: string
   } | null
@@ -195,9 +199,17 @@ export const uploadEvidence = (
   })
 }
 
-// 下载证据版本文件
+// 下载证据版本文件（默认水印图优先）
 export const downloadVersionFile = (versionId: number) => {
   return http.get(`/evidence/versions/${versionId}/download`, {
     responseType: 'blob'
   }) as Promise<Blob>
+}
+
+/** 下载原图（需后端配置 evidence.image.original-access-enabled=true 且角色为 SYSTEM_ADMIN/PMO） */
+export const getOriginalDownloadUrl = (versionId: number): string => {
+  const base = import.meta.env.VITE_API_BASE_URL ?? '/api'
+  const apiBase = base !== '/api' && !base.endsWith('/api') ? base.replace(/\/?$/, '') + '/api' : base
+  const path = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase
+  return `${path}/evidence/versions/${versionId}/download?variant=ORIGINAL`
 }
