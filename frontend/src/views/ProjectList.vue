@@ -654,7 +654,7 @@ function handleTodoCardClick(status: 'returned' | 'pending_approval') {
 
 /* 待办看板：轻盈内边距 */
 .todo-board {
-  margin: 4px 0 8px;
+  margin: 4px 0 16px;
   display: flex;
   gap: 8px;
   overflow-x: auto;
@@ -714,10 +714,8 @@ function handleTodoCardClick(status: 'returned' | 'pending_approval') {
 
 /* 列表容器：卡片左右 16px（由页面 padding 提供）、卡片间距上下 12px */
 .project-list-wrapper {
-  /* 强行把整个列表区域向上平移，抵消掉 Vant 自带的顽固留白 */
-  margin-top: -16px !important;
-  position: relative;
-  z-index: 1; /* 确保上移后不会被顶部的背景遮挡 */
+  /* 保持与顶部操作区之间的自然间距，避免首条项目被按钮“压住” */
+  margin-top: 0;
 }
 .project-list-container .project-card {
   margin: 0 0 12px; /* 上下间距 12px，左右由 .project-page-container padding 16px 控制 */

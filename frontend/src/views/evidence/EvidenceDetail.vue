@@ -13,7 +13,6 @@
               @click="openImagePreview"
               @error="onMediaBoxImageError"
             />
-            <div class="evidence-detail__watermark">系统自动提取时间/位置</div>
           </template>
           <template v-else-if="previewType === 'video'">
             <video
@@ -859,14 +858,6 @@ onMounted(() => {
   border: none;
   display: block;
 }
-.evidence-detail__watermark {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  font-size: 10px;
-  color: rgba(0, 0, 0, 0.35);
-  pointer-events: none;
-}
 .evidence-detail__placehold,
 .evidence-detail__placehold--office {
   padding: 24px 16px;
@@ -903,13 +894,15 @@ onMounted(() => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   margin: 16px 16px 16px;
   padding: 20px 20px 24px;
+  /* 防止内部长文本撑破卡片边界 */
+  overflow: hidden;
 }
 .evidence-detail__container.has-hero .evidence-detail__core-card {
   margin: -16px 16px 16px;
 }
 .evidence-detail__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
   margin-bottom: 12px;
 }
@@ -940,6 +933,11 @@ onMounted(() => {
   line-height: 1.35;
   flex: 1 1 auto;
   min-width: 0;
+  /* 证据标题：单行 + 省略，防止横向溢出 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: calc(100vw - 120px);
 }
 .evidence-detail__status-tag {
   flex-shrink: 0;
@@ -991,6 +989,9 @@ onMounted(() => {
   font-weight: 600;
   color: #323233;
   line-height: 1.45;
+  /* 超长文件名/URL 也强制换行，避免横向溢出屏幕 */
+  white-space: normal;
+  overflow-wrap: anywhere;
   word-break: break-all;
 }
 

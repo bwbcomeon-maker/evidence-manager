@@ -362,8 +362,20 @@
                   <div class="stage-title-row">
                     <span class="stage-name">{{ s.stageName || s.stageCode }}</span>
                     <span class="stage-count">{{ (s.displayCompletedCount ?? s.completedCount) }}/{{ (s.displayItemCount ?? s.itemCount) }}</span>
-                    <van-tag :type="healthTagType(s.healthStatus)">{{ healthStatusText(s.healthStatus) }}</van-tag>
-                    <van-tag v-if="s.stageCompleted" type="success">已完成</van-tag>
+                    <!-- 非已归档项目：展示健康状态（绿色标签 1） -->
+                    <van-tag
+                      v-if="project?.status !== 'archived'"
+                      :type="healthTagType(s.healthStatus)"
+                    >
+                      {{ healthStatusText(s.healthStatus) }}
+                    </van-tag>
+                    <!-- 已归档项目：展示阶段完成状态（绿色标签 2） -->
+                    <van-tag
+                      v-else-if="s.stageCompleted"
+                      type="success"
+                    >
+                      已完成
+                    </van-tag>
                     <van-tag v-if="project?.status === 'returned' && stageHasRejected(s)" type="danger" size="medium" class="stage-rejected-badge">包含待修改项</van-tag>
                   </div>
                 </template>
@@ -3163,9 +3175,23 @@ onMounted(() => {
   padding-bottom: calc(30px + env(safe-area-inset-bottom, 0));
 }
 
-/* 上传至：右侧值主题蓝 */
+/* 上传弹窗：标签统一 60px，给值区留出更多空间 */
+.upload-dialog-form .upload-dialog-cells :deep(.van-cell__title),
+.upload-dialog-form .upload-dialog-cells--target :deep(.van-cell__title),
+.upload-dialog-form .upload-dialog-cells :deep(.van-field__label) {
+  width: 60px;
+  min-width: 60px;
+  flex: 0 0 60px;
+}
+
+/* 上传至：值单行显示，过长则省略号截断 */
 .upload-dialog-form .upload-context-cell :deep(.van-cell__value) {
   color: var(--van-primary-color);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* 表单卡片：轻阴影 */
@@ -3210,13 +3236,12 @@ onMounted(() => {
 .upload-file-section {
   padding: 0;
   margin: 20px 0;
-}
-/* 预览缩略图 + 占位区域整体水平居中 */
-.upload-dropzone-wrap :deep(.van-uploader) {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+}
+.upload-dropzone-wrap {
+  width: 100%;
+  max-width: 320px;
 }
 .upload-dropzone-wrap :deep(.van-uploader__upload) {
   width: 100%;
@@ -3257,18 +3282,67 @@ onMounted(() => {
   color: #C8C9CC;
   margin-top: 4px;
 }
-/* 选择文件后：预览区圆角与删除按钮 */
+/* 选择文件后：预览区域与虚线框同宽，单文件大图预览 */
 .upload-dropzone-wrap :deep(.van-uploader__preview) {
+  width: 100%;
+  margin: 0;
+  position: relative;
   border-radius: 12px;
   overflow: hidden;
+}
+.upload-dropzone-wrap :deep(.van-uploader__preview-image) {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.upload-dropzone-wrap :deep(.van-uploader__preview-image .van-image__img) {
+  max-width: 100%;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+/* 非图片文件：居中图标 + 文件名卡片，撑满宽度 */
+.upload-dropzone-wrap :deep(.van-uploader__file) {
+  width: 100%;
+  border-radius: 8px;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  box-sizing: border-box;
+  gap: 8px;
+}
+.upload-dropzone-wrap :deep(.van-uploader__file-icon) {
+  font-size: 28px;
+  color: var(--van-gray-6, #646566);
+}
+.upload-dropzone-wrap :deep(.van-uploader__file-name) {
+  font-size: 13px;
+  color: var(--van-gray-7, #323233);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .upload-dropzone-wrap :deep(.van-uploader__preview-delete) {
   top: 4px;
   right: 4px;
   width: 24px;
   height: 24px;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
+  background: transparent;
+  color: #ffffff;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  /* 仅保留 X 的阴影，让其在浅/深背景上都清晰可见 */
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
 }
 
 /* 底部：取消 + 确认上传，间距 12px */
