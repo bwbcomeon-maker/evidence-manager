@@ -17,9 +17,11 @@ import com.bwbcomeon.evidence.entity.Project;
 import com.bwbcomeon.evidence.entity.ProjectArchiveApplication;
 import com.bwbcomeon.evidence.entity.SysUser;
 import com.bwbcomeon.evidence.exception.BusinessException;
+import com.bwbcomeon.evidence.mapper.EvidenceItemMapper;
 import com.bwbcomeon.evidence.mapper.AuthProjectAclMapper;
 import com.bwbcomeon.evidence.mapper.ProjectArchiveApplicationMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
+import com.bwbcomeon.evidence.mapper.ProjectStageMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,7 +55,10 @@ public class ProjectService {
     private static final String STATUS_ACTIVE = "active";
     private static final String STATUS_ARCHIVED = "archived";
     private static final String STATUS_RETURNED = "returned";
-    private static final DateTimeFormatter CREATED_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String STATUS_VOIDED = "voided";
+    private static final String STATUS_STAGE_COMPLETED = "COMPLETED";
+    /** 项目创建时间：返回 ISO-8601 带时区（UTC），由前端按本地时区解析展示，与用户系统时间一致 */
+    private static final DateTimeFormatter CREATED_AT_ISO = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     @Autowired
     private ProjectMapper projectMapper;
@@ -66,6 +71,12 @@ public class ProjectService {
 
     @Autowired
     private SysUserMapper sysUserMapper;
+
+    @Autowired
+    private EvidenceItemMapper evidenceItemMapper;
+
+    @Autowired
+    private ProjectStageMapper projectStageMapper;
 
     @Autowired
     private EvidenceService evidenceService;
@@ -89,7 +100,10 @@ public class ProjectService {
             throw new BusinessException(403, "仅 SYSTEM_ADMIN 或 PMO 可导入项目");
         }
         ProjectImportResult result = new ProjectImportResult();
-        List<ProjectImportResult.RowResult> details = new ArrayList<>();
+        List<ProjectImportResult.RowError> errors = new ArrayList<>();
+        int inserted = 0;
+        int updated = 0;
+        int skipped = 0;
         try (Workbook wb = new XSSFWorkbook(inputStream)) {
             Sheet sheet = wb.getSheetAt(0);
             int lastRow = Math.min(sheet.getLastRowNum(), IMPORT_MAX_ROWS);
@@ -100,7 +114,7 @@ public class ProjectService {
                 String name = getCellString(row, 1);
                 String description = getCellString(row, 2);
                 if (code == null || code.isBlank()) {
-                    details.add(new ProjectImportResult.RowResult(rowNum, "", false, "项目令号为空"));
+                    errors.add(new ProjectImportResult.RowError(rowNum, "", "项目令号为空"));
                     continue;
                 }
                 code = code.trim();
@@ -109,11 +123,17 @@ public class ProjectService {
                 try {
                     Project existing = projectMapper.selectByCode(code);
                     if (existing != null) {
+                        String existingName = existing.getName() != null ? existing.getName().trim() : "";
+                        String existingDesc = existing.getDescription() != null ? existing.getDescription().trim() : "";
+                        if (existingName.equals(nameVal) && existingDesc.equals(descVal)) {
+                            skipped++;
+                            continue;
+                        }
                         existing.setName(nameVal);
                         existing.setDescription(descVal);
                         existing.setUpdatedAt(OffsetDateTime.now());
                         projectMapper.update(existing);
-                        details.add(new ProjectImportResult.RowResult(rowNum, code, true, "已更新"));
+                        updated++;
                     } else {
                         Project project = new Project();
                         project.setCode(code);
@@ -123,16 +143,17 @@ public class ProjectService {
                         project.setCreatedByUserId(operatorUserId);
                         projectMapper.insert(project);
                         // 批量导入的项目不自动添加操作人为成员，成员需后续在成员管理中分配
-                        details.add(new ProjectImportResult.RowResult(rowNum, code, true, "已新建"));
+                        inserted++;
                     }
                 } catch (Exception e) {
-                    details.add(new ProjectImportResult.RowResult(rowNum, code, false, e.getMessage() != null ? e.getMessage() : "导入失败"));
+                    errors.add(new ProjectImportResult.RowError(rowNum, code, e.getMessage() != null ? e.getMessage() : "导入失败"));
                 }
             }
-            result.setTotal(details.size());
-            result.setSuccessCount((int) details.stream().filter(ProjectImportResult.RowResult::isSuccess).count());
-            result.setFailCount(result.getTotal() - result.getSuccessCount());
-            result.setDetails(details);
+            result.setTotal(lastRow);
+            result.setInserted(inserted);
+            result.setUpdated(updated);
+            result.setSkipped(skipped);
+            result.setErrors(errors);
         } catch (Exception e) {
             throw new BusinessException(400, "解析 Excel 失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
         }
@@ -295,26 +316,80 @@ public class ProjectService {
     }
 
     /**
-     * 更新项目「是否含采购」（需具备管理成员权限：SYSTEM_ADMIN/PMO/项目创建人/ACL owner）
-     * @param hasProcurement 为 null 时不更新，仅返回详情
+     * 更新项目基本信息（名称、描述、是否含采购）。
+     * 仅允许修改基础展示字段，严禁通过该接口修改项目令号 code 与状态 status。
      */
     @Transactional(rollbackFor = Exception.class)
-    public ProjectVO updateHasProcurement(Long projectId, Boolean hasProcurement, Long currentUserId, String roleCode) {
+    public ProjectVO updateProjectBasicInfo(
+            Long projectId,
+            String name,
+            String description,
+            Boolean hasProcurement,
+            Long currentUserId,
+            String roleCode) {
         permissionUtil.checkCanManageMembers(projectId, currentUserId, roleCode);
         List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
         if (!visibleIds.contains(projectId)) {
             throw new BusinessException(403, "无权限访问该项目");
         }
-        if (hasProcurement != null) {
-            Project project = projectMapper.selectById(projectId);
-            if (project == null) {
-                throw new BusinessException(404, "项目不存在");
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(404, "项目不存在");
+        }
+        String status = project.getStatus();
+        if (!STATUS_ACTIVE.equals(status) && !STATUS_RETURNED.equals(status)) {
+            throw new BusinessException(400, "项目当前状态为[" + status + "]，已锁定，无法修改项目基本信息");
+        }
+        boolean changed = false;
+        if (name != null) {
+            String normalizedName = name.trim();
+            if (normalizedName.isEmpty()) {
+                throw new BusinessException(400, "项目名称不能为空");
             }
+            project.setName(normalizedName);
+            changed = true;
+        }
+        if (description != null) {
+            String normalizedDescription = description.trim();
+            project.setDescription(normalizedDescription.isEmpty() ? null : normalizedDescription);
+            changed = true;
+        }
+        if (hasProcurement != null) {
             project.setHasProcurement(Boolean.TRUE.equals(hasProcurement));
+            changed = true;
+        }
+        if (changed) {
             project.setUpdatedAt(OffsetDateTime.now());
             projectMapper.update(project);
         }
         return getProjectDetail(projectId, currentUserId, roleCode);
+    }
+
+    /**
+     * 作废项目：仅允许对尚未产生业务数据的 active 项目执行。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void voidProject(Long projectId, Long currentUserId, String roleCode) {
+        permissionUtil.checkCanManageMembers(projectId, currentUserId, roleCode);
+        List<Long> visibleIds = evidenceService.getVisibleProjectIds(currentUserId, roleCode);
+        if (!visibleIds.contains(projectId)) {
+            throw new BusinessException(403, "无权限访问该项目");
+        }
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(404, "项目不存在");
+        }
+        if (!STATUS_ACTIVE.equals(project.getStatus())) {
+            throw new BusinessException(400, "仅进行中的项目可作废");
+        }
+        long evidenceCount = evidenceItemMapper.countByProjectId(projectId);
+        long completedStageCount = projectStageMapper.countByProjectIdAndStatus(projectId, STATUS_STAGE_COMPLETED);
+        if (evidenceCount > 0 || completedStageCount > 0) {
+            throw new BusinessException(400, "该项目已产生业务数据，无法直接作废，请走归档流程");
+        }
+        project.setStatus(STATUS_VOIDED);
+        project.setUpdatedAt(OffsetDateTime.now());
+        projectMapper.update(project);
     }
 
     /** 仅 ACL 中 role=owner 的用户（用于展示「项目经理」；无则视为未分配） */
@@ -406,6 +481,8 @@ public class ProjectService {
         project.setStatus(STATUS_ARCHIVED);
         project.setUpdatedAt(OffsetDateTime.now());
         projectMapper.update(project);
+        // 项目归档时，将该项目下所有阶段标记为已完成，避免详情页仍显示「进行中」
+        stageProgressService.markAllStagesCompleted(projectId);
         // 项目归档时，将该项目下所有草稿证据自动转为已归档（与项目一并归档）
         evidenceService.batchConvertDraftToArchivedOnProjectArchive(projectId);
         return ArchiveResult.ok();
@@ -589,7 +666,7 @@ public class ProjectService {
     private static ProjectVO toVO(Project p) {
         String createdAtStr = null;
         if (p.getCreatedAt() != null) {
-            createdAtStr = p.getCreatedAt().format(CREATED_AT_FORMAT);
+            createdAtStr = p.getCreatedAt().format(CREATED_AT_ISO);
         }
         ProjectVO vo = new ProjectVO();
         vo.setId(p.getId());

@@ -1,9 +1,10 @@
 <template>
   <div class="evidence-detail">
     <template v-if="evidence">
-      <!-- 1. 沉浸式图片预览区：约 35% 高度，深色剧场模式 -->
-      <div v-if="evidence.latestVersion" class="evidence-detail__hero">
-        <div class="evidence-detail__media-wrap">
+      <!-- 1. 图片预览区：与下方信息卡片同宽、居中，背景与页面一致（PC 无黑边） -->
+      <div v-if="evidence.latestVersion" class="evidence-detail__hero-outer">
+        <div class="evidence-detail__hero">
+          <div class="evidence-detail__media-wrap">
           <template v-if="previewType === 'image'">
             <img
               :src="mediaBoxUrl"
@@ -41,6 +42,7 @@
               <van-button class="btn-download-inline" icon="down" size="small" :loading="isDownloading" :disabled="isDownloading" @click="handleDownload">下载</van-button>
             </div>
           </template>
+          </div>
         </div>
       </div>
 
@@ -196,7 +198,6 @@ import {
   submitEvidence,
   deleteEvidence,
   invalidateEvidence,
-  BIZ_TYPE_LABELS,
   type EvidenceListItem
 } from '@/api/evidence'
 import { useAuthStore } from '@/stores/auth'
@@ -248,12 +249,6 @@ const previewOfficeUrl = computed(() => {
 })
 /** 用户列表（用于兜底：接口未返回 createdByDisplayName 时按 userId 解析展示名） */
 const userList = ref<AuthUserSimpleVO[]>([])
-
-/** 业务类型中文展示 */
-function bizTypeLabel(bizType: string | undefined) {
-  if (!bizType) return '—'
-  return BIZ_TYPE_LABELS[bizType] ?? bizType
-}
 
 /** 文件类型友好展示：将 MIME 转为可读名称，有文件名时附带扩展名 */
 function fileTypeDisplay(e: EvidenceListItem | null): string {
@@ -395,7 +390,14 @@ const hasInPagePreview = computed(() => ['image', 'video', 'pdf'].includes(previ
 function openImagePreview() {
   const url = mediaBoxUrl.value
   if (!url) return
-  showImagePreview({ images: [url], startPosition: 0 })
+  showImagePreview({
+    images: [url],
+    startPosition: 0,
+    closeable: true,
+    closeIcon: 'cross',
+    closeIconPosition: 'top-right',
+    closeOnClickOverlay: true
+  })
 }
 
 function onMediaBoxImageError() {
@@ -407,7 +409,6 @@ const metaItems = computed(() => {
   const e = evidence.value
   if (!e) return []
   const items: { label: string; value: string }[] = [
-    { label: '业务类型', value: bizTypeLabel(e.bizType) },
     { label: '备注', value: e.note || '—' },
     { label: '文件类型', value: fileTypeDisplay(e) }
   ]
@@ -801,16 +802,32 @@ onMounted(() => {
 .detail-loading {
   padding: 48px 0;
 }
-/* ---------- 1. 沉浸式图片预览区：约 35% 高度，深色剧场 ---------- */
+/* ---------- 1. 图片预览区：与下方信息卡片同宽、居中，背景与页面一致（PC 无黑边） ---------- */
+.evidence-detail__hero-outer {
+  width: 100%;
+}
+@media (min-width: 768px) {
+  .evidence-detail__hero-outer {
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+}
 .evidence-detail__hero {
   min-height: 35vh;
   max-height: 40vh;
-  background: #1c1c1e;
+  background: #f7f8fa;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   position: relative;
+}
+@media (min-width: 768px) {
+  .evidence-detail__hero {
+    margin: 0 16px;
+    border-radius: 12px;
+  }
 }
 .evidence-detail__media-wrap {
   width: 100%;
@@ -847,7 +864,7 @@ onMounted(() => {
   right: 12px;
   bottom: 12px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
 .evidence-detail__placehold,
@@ -858,12 +875,12 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  color: #646566;
   width: 100%;
   min-height: 35vh;
 }
 .evidence-detail__placehold--office {
-  color: rgba(255, 255, 255, 0.8);
+  color: #323233;
 }
 .evidence-detail__placehold-text {
   margin: 0;

@@ -45,6 +45,12 @@
         ORDER BY created_at DESC
     </select>
 
+    <select id="countByProjectId" resultType="long">
+        SELECT COUNT(1)
+        FROM evidence_item
+        WHERE project_id = #{projectId}
+    </select>
+
     <select id="selectByProjectIdAndEvidenceStatus" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>

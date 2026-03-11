@@ -1,13 +1,5 @@
 <template>
   <div class="batch-assign-page">
-    <van-nav-bar
-      title="批量分配项目"
-      left-arrow
-      left-text="返回"
-      fixed
-      placeholder
-      @click-left="onBack"
-    />
     <van-loading v-if="loading" class="loading" vertical>加载中...</van-loading>
     <template v-else-if="!canBatchAssign">
       <van-empty description="仅系统管理员或 PMO 可使用此功能" />
@@ -149,10 +141,6 @@ function toggleProject(id: number) {
   } else {
     selectedProjectIds.value = [...selectedProjectIds.value, id]
   }
-}
-
-function onBack() {
-  router.replace('/home')
 }
 
 function onUserSelect(u: AuthUserSimpleVO) {

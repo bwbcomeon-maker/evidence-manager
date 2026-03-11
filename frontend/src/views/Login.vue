@@ -324,11 +324,18 @@ const onSubmit = async () => {
   border: none;
 }
 .login-field--rounded :deep(.van-cell__value) {
-  padding-top: 4px;
-  padding-bottom: 4px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 .login-field--rounded :deep(.van-field__body) {
   background: transparent;
+  display: flex;
+  align-items: center;
+}
+.login-field--rounded :deep(.van-field__left-icon) {
+  display: flex;
+  align-items: center;
+  transform: translateY(1px);
 }
 .login-field--rounded :deep(.van-field__control) {
   background: transparent;

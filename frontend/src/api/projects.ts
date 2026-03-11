@@ -14,7 +14,7 @@ export interface ProjectVO {
   code: string
   name: string
   description: string
-  /** 项目状态：active | pending_approval | returned | archived */
+  /** 项目状态：active | pending_approval | returned | archived | voided */
   status: string
   createdAt?: string
   /** 项目创建人 sys_user.id */
@@ -105,12 +105,19 @@ export const getProjects = () =>
 export const getProjectDetail = (id: number) =>
   http.get<ApiResult<ProjectVO>>(`/projects/${id}`)
 
-/** 更新项目部分字段（如「是否含采购」），需具备管理成员权限 */
-export const updateProject = (projectId: number, body: { hasProcurement?: boolean }) =>
+/** 更新项目基本信息（名称/描述/是否含采购），需具备管理成员权限 */
+export const updateProject = (
+  projectId: number,
+  body: { name?: string; description?: string; hasProcurement?: boolean }
+) =>
   http.patch<ApiResult<ProjectVO>>(`/projects/${projectId}`, body)
 
 export const createProject = (body: CreateProjectBody) =>
   http.post<ApiResult<ProjectVO>>('/projects', body)
+
+/** 作废项目（仅进行中且未产生业务数据） */
+export const voidProject = (projectId: number) =>
+  http.post<ApiResult<null>>(`/projects/${projectId}/void`)
 
 // ---------- 阶段进度与归档（Phase 4，以 stage-progress 为唯一事实源） ----------
 
@@ -262,12 +269,13 @@ export function getStructuredErrorData(
   return { message: b.message ?? '请求失败', data: b.data }
 }
 
-/** 项目导入结果（最小版） */
+/** 项目导入结果 */
 export interface ProjectImportResult {
   total: number
-  successCount: number
-  failCount: number
-  details: { row: number; code: string; success: boolean; message: string }[]
+  inserted: number
+  updated: number
+  skipped: number
+  errors: { row: number; code: string; message: string }[]
 }
 
 /** 下载导入模板（同源请求，与 http baseURL 一致） */

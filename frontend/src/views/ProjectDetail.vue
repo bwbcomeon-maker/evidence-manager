@@ -56,6 +56,19 @@
             历次审批记录
             <van-icon name="arrow" class="detail-header-history-arrow" />
           </button>
+          <div class="detail-header-actions">
+            <van-button
+              v-if="showVoidProjectButton"
+              size="small"
+              type="danger"
+              plain
+              :loading="voidingProject"
+              class="detail-header-action-btn"
+              @click="handleVoidProject"
+            >
+              作废项目
+            </van-button>
+          </div>
         </div>
       </div>
 
@@ -72,13 +85,46 @@
           <template v-else-if="project">
             <!-- 信息列表区：左右布局，字段名置灰，数据加深，分割线 -->
             <div class="info-card">
+              <div v-if="canEditProjectBasicInfo" class="info-card-header">
+                <span class="info-card-title">基本信息</span>
+                <div class="info-card-actions">
+                  <template v-if="projectEditing">
+                    <van-button size="small" plain class="info-card-action-btn" @click="cancelEditProject">取消</van-button>
+                    <van-button size="small" type="primary" :loading="projectSaving" class="info-card-action-btn" @click="saveProjectBasicInfo">保存</van-button>
+                  </template>
+                  <van-button v-else size="small" plain class="info-card-action-btn" @click="startEditProject">编辑</van-button>
+                </div>
+              </div>
               <div class="info-row">
                 <span class="info-label">项目令号</span>
                 <span class="info-value">{{ project.code }}</span>
               </div>
-              <div class="info-row" v-if="project.description">
+              <div class="info-row">
+                <span class="info-label">项目名称</span>
+                <template v-if="projectEditing">
+                  <van-field
+                    v-model="editForm.name"
+                    class="info-field"
+                    maxlength="100"
+                    placeholder="请输入项目名称"
+                  />
+                </template>
+                <span v-else class="info-value">{{ project.name }}</span>
+              </div>
+              <div class="info-row" v-if="projectEditing || project.description">
                 <span class="info-label">项目描述</span>
-                <span class="info-value">{{ project.description }}</span>
+                <template v-if="projectEditing">
+                  <van-field
+                    v-model="editForm.description"
+                    class="info-field info-field--textarea"
+                    type="textarea"
+                    rows="2"
+                    maxlength="200"
+                    placeholder="选填"
+                    autosize
+                  />
+                </template>
+                <span v-else class="info-value">{{ project.description }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">项目状态</span>
@@ -86,7 +132,12 @@
               </div>
               <div class="info-row">
                 <span class="info-label">是否含采购</span>
-                <span class="info-value">{{ project.hasProcurement ? '是' : '否' }}</span>
+                <template v-if="projectEditing">
+                  <div class="info-switch-wrap">
+                    <van-switch v-model="editForm.hasProcurement" size="22" />
+                  </div>
+                </template>
+                <span v-else class="info-value">{{ project.hasProcurement ? '是' : '否' }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">项目创建人</span>
@@ -94,7 +145,7 @@
               </div>
               <div class="info-row">
                 <span class="info-label">创建时间</span>
-                <span class="info-value">{{ project.createdAt }}</span>
+                <span class="info-value">{{ formatDateTimeFull(project.createdAt) }}</span>
               </div>
             </div>
             <!-- 证据完成度（详情页独立卡片 + 底部留白） -->
@@ -611,67 +662,92 @@
     <van-dialog
       v-model:show="showUploadDialog"
       :title="uploadPhase === 'form' ? '上传证据' : '上传结果'"
-      :show-cancel-button="uploadPhase === 'form'"
+      :show-cancel-button="false"
       :show-confirm-button="uploadPhase === 'result'"
       confirm-button-text="关闭"
+      class="upload-dialog"
       @confirm="closeUploadDialog"
-      @cancel="resetUploadForm"
     >
       <!-- 阶段1：表单 -->
       <template v-if="uploadPhase === 'form'">
         <div class="upload-dialog-form">
-          <van-cell-group inset class="upload-dialog-cells">
-            <van-cell v-if="uploadContext" :title="'上传至'" :value="uploadContext.displayName" class="upload-context-cell" />
+          <!-- 上传至（只读） -->
+          <van-cell-group inset class="upload-dialog-cells upload-dialog-cells--target">
+            <van-cell v-if="uploadContext" title="上传至" :value="uploadContext.displayName" class="upload-context-cell" />
             <van-cell v-else title="提示" class="upload-hint-cell">
               <template #value>
                 <span class="upload-hint-text">请先在下方向某证据类型（如「启动现场照片」）点击展开，再点击该类型下的「上传」按钮</span>
               </template>
             </van-cell>
-            <van-field
-              v-model="uploadForm.name"
-              name="name"
-              label="证据标题"
-              placeholder="请输入证据标题"
-              :rules="[{ required: true, message: '请输入证据标题' }]"
-              class="upload-dialog-field"
-            />
-            <van-field
-              v-if="!uploadContext"
-              :model-value="bizTypeMap[uploadForm.type] || '其他'"
-              name="type"
-              label="业务类型"
-              placeholder="请选择业务类型"
-              is-link
-              readonly
-              class="upload-dialog-field"
-              @click="showBizTypePicker = true"
-            />
-            <van-field
-              v-model="uploadForm.remark"
-              name="remark"
-              label="备注"
-              type="textarea"
-              placeholder="请输入备注（可选）"
-              rows="3"
-              class="upload-dialog-field"
-            />
           </van-cell-group>
+
+          <!-- 文件上传区域（优先） -->
           <div class="upload-file-section">
             <van-uploader
               v-model="uploadFileList"
               :max-count="1"
               accept="*/*"
               :before-read="onUploaderBeforeRead"
+              :after-read="onUploaderAfterRead"
+              :preview-options="uploadPreviewOptions"
               class="upload-dropzone-wrap"
             >
-              <div class="upload-dropzone">
-                <van-icon name="upload-o" class="upload-dropzone-icon" />
-                <span class="upload-dropzone-text">{{ uploadFileList.length ? (uploadFileList[0]?.file?.name || '已选文件') : '点击或拖拽选择文件' }}</span>
-              </div>
+              <template #default>
+                <div v-if="!hasUploadFile" class="upload-dropzone">
+                  <van-icon name="photograph" class="upload-dropzone-icon" />
+                  <span class="upload-dropzone-text">点击或拖拽选择文件</span>
+                  <span class="upload-dropzone-hint">支持 jpg、png、pdf 等，图片不超过 5MB、文档不超过 50MB</span>
+                </div>
+              </template>
             </van-uploader>
           </div>
+
+          <!-- 证据标题、备注（选文件后激活） -->
+          <div class="upload-supplementary" :class="{ 'upload-supplementary--active': hasUploadFile }">
+            <van-cell-group inset class="upload-dialog-cells">
+              <van-field
+                v-model="uploadForm.name"
+                name="name"
+                label="证据标题"
+                placeholder="请输入证据标题"
+                :disabled="!hasUploadFile"
+                :rules="[{ required: true, message: '请输入证据标题' }]"
+                class="upload-dialog-field"
+              />
+              <van-field
+                v-model="uploadForm.remark"
+                name="remark"
+                label="备注"
+                type="textarea"
+                placeholder="请输入备注（可选）"
+                rows="3"
+                :disabled="!hasUploadFile"
+                class="upload-dialog-field"
+              />
+              <van-field
+                v-if="!uploadContext"
+                :model-value="bizTypeMap[uploadForm.type] || '其他'"
+                name="type"
+                label="业务类型"
+                placeholder="请选择业务类型"
+                is-link
+                readonly
+                class="upload-dialog-field"
+                @click="showBizTypePicker = true"
+              />
+            </van-cell-group>
+          </div>
+
           <div class="upload-dialog-footer-inner">
-            <van-button type="primary" block :loading="uploading" class="upload-confirm-btn" @click="handleUpload">
+            <van-button class="upload-cancel-btn" @click="onUploadCancel">取消</van-button>
+            <van-button
+              type="primary"
+              block
+              :loading="uploading"
+              :disabled="!hasUploadFile"
+              class="upload-confirm-btn"
+              @click="handleUpload"
+            >
               确认上传
             </van-button>
           </div>
@@ -851,6 +927,7 @@ import {
   archiveReject,
   getArchiveHistory,
   updateProject,
+  voidProject,
   getStructuredErrorData,
   type ProjectMemberVO,
   type StageProgressVO,
@@ -876,6 +953,7 @@ interface Project {
   description: string
   status: string
   createdAt: string
+  createdByDisplayName?: string
   /** 是否含采购（项目启动阶段「项目前期产品比测报告」勾选后为必填） */
   hasProcurement?: boolean
   permissions?: { canUpload?: boolean; canInvalidate?: boolean; canManageMembers?: boolean }
@@ -895,6 +973,14 @@ const project = ref<Project | null>(null)
 const projectLoading = ref(false)
 const projectError = ref('')
 const activeTab = ref(0)
+const projectEditing = ref(false)
+const projectSaving = ref(false)
+const voidingProject = ref(false)
+const editForm = ref({
+  name: '',
+  description: '',
+  hasProcurement: false
+})
 
 // 阶段进度（stage-progress 唯一事实源）
 const stageProgress = ref<StageProgressVO | null>(null)
@@ -1161,6 +1247,14 @@ const uploadForm = ref({
   remark: ''
 })
 const uploadFileList = ref<UploaderFileListItem[]>([])
+/** 上传缩略图点击全屏预览时的配置：显示关闭按钮、点击遮罩关闭 */
+const uploadPreviewOptions = {
+  closeable: true,
+  closeIconPosition: 'top-right' as const,
+  closeOnClickOverlay: true
+}
+/** 是否已选择文件（用于激活证据标题/备注与确认按钮） */
+const hasUploadFile = computed(() => uploadFileList.value.length > 0)
 const showBizTypePicker = ref(false)
 const showInvalidateReasonDialog = ref(false)
 const invalidateReasonText = ref('')
@@ -1191,6 +1285,7 @@ const statusBadgeClass = computed(() => {
   if (s === 'pending_approval') return 'badge--pending'
   if (s === 'returned') return 'badge--returned'
   if (s === 'archived') return 'badge--archived'
+  if (s === 'voided') return 'badge--voided'
   return 'badge--archived'
 })
 
@@ -1201,13 +1296,24 @@ const statusBadgeText = computed(() => {
   if (s === 'pending_approval') return '待审批'
   if (s === 'returned') return '已退回'
   if (s === 'archived') return '已归档'
+  if (s === 'voided') return '已作废'
   return s || '—'
+})
+
+const canEditProjectBasicInfo = computed(() => {
+  const status = project.value?.status
+  return project.value?.canManageMembers === true && (status === 'active' || status === 'returned')
+})
+const showVoidProjectButton = computed(() => {
+  return project.value?.status === 'active' &&
+    project.value?.canManageMembers === true &&
+    (stageProgress.value?.overallCompletionPercent ?? -1) === 0
 })
 
 /** 是否允许点击「申请归档」：门禁通过、非已归档且非待审批；returned 时须先处理完所有不符合项 */
 const canArchiveForApply = computed(() => {
   const status = project.value?.status
-  if (status === 'archived' || status === 'pending_approval') return false
+  if (status === 'archived' || status === 'pending_approval' || status === 'voided') return false
   if (status === 'returned' && !isAllResolved.value) return false
   return !!stageProgress.value?.canArchive
 })
@@ -1216,6 +1322,7 @@ const canArchiveForApply = computed(() => {
 const canUploadAndEdit = computed(() => {
   const can = project.value?.permissions?.canUpload === true || project.value?.canUpload === true
   if (!can) return false
+  if (project.value?.status === 'voided') return false
   // 项目已归档：仅 PMO / SYSTEM_ADMIN 可编辑，其它角色只读
   if (project.value?.status === 'archived' && !isPMOOrAdmin.value) return false
   if (project.value?.status === 'pending_approval' && isPM.value) return false
@@ -1404,20 +1511,88 @@ const getFileTypeText = (contentType: string) => {
   return '文件'
 }
 
-/** 切换「是否含采购」后请求后端并刷新 */
-async function onHasProcurementChange(value: boolean) {
+function startEditProject() {
+  if (!project.value || !canEditProjectBasicInfo.value) return
+  editForm.value = {
+    name: project.value.name || '',
+    description: project.value.description || '',
+    hasProcurement: !!project.value.hasProcurement
+  }
+  projectEditing.value = true
+}
+
+function cancelEditProject() {
+  projectEditing.value = false
+}
+
+async function saveProjectBasicInfo() {
   if (!projectId.value || !project.value) return
+  const name = editForm.value.name.trim()
+  if (!name) {
+    showToast('请输入项目名称')
+    return
+  }
+  projectSaving.value = true
   try {
-    const res = await updateProject(projectId.value, { hasProcurement: value })
+    const res = await updateProject(projectId.value, {
+      name,
+      description: editForm.value.description.trim(),
+      hasProcurement: editForm.value.hasProcurement
+    })
     if (res?.code === 0 && res.data) {
-      project.value.hasProcurement = res.data.hasProcurement ?? false
-      showSuccessToast(value ? '已设为含采购' : '已设为不含采购')
+      const p = res.data
+      project.value = {
+        ...project.value,
+        name: p.name ?? name,
+        description: p.description ?? '',
+        hasProcurement: p.hasProcurement ?? false,
+        status: p.status ?? project.value.status,
+        createdAt: p.createdAt ?? project.value.createdAt,
+        createdByDisplayName: p.createdByDisplayName ?? project.value.createdByDisplayName,
+        permissions: p.permissions ?? project.value.permissions,
+        canInvalidate: p.canInvalidate ?? project.value.canInvalidate,
+        canManageMembers: p.canManageMembers ?? project.value.canManageMembers,
+        canUpload: p.canUpload ?? p.permissions?.canUpload ?? project.value.canUpload,
+        currentPmUserId: p.currentPmUserId ?? project.value.currentPmUserId,
+        currentPmDisplayName: p.currentPmDisplayName ?? project.value.currentPmDisplayName,
+        rejectComment: (p as { rejectComment?: string }).rejectComment ?? project.value.rejectComment
+      }
+      projectEditing.value = false
+      showSuccessToast('项目基本信息已更新')
       loadStageProgress()
     } else {
-      showToast(res?.message || '更新失败')
+      showToast(res?.message || '保存失败')
     }
   } catch (e: unknown) {
-    showToast(getFriendlyErrorMessage(e, '更新失败'))
+    showToast(getFriendlyErrorMessage(e, '保存失败'))
+  } finally {
+    projectSaving.value = false
+  }
+}
+
+async function handleVoidProject() {
+  if (!projectId.value || !showVoidProjectButton.value || voidingProject.value) return
+  try {
+    await showConfirmDialog({
+      title: '确认作废项目',
+      message: '作废后该项目将不可用，确认作废？'
+    })
+  } catch {
+    return
+  }
+  voidingProject.value = true
+  try {
+    const res = await voidProject(projectId.value)
+    if (res?.code === 0) {
+      showSuccessToast('项目已作废')
+      router.replace('/projects')
+    } else {
+      showToast(res?.message || '作废失败')
+    }
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '作废失败'))
+  } finally {
+    voidingProject.value = false
   }
 }
 
@@ -1446,6 +1621,12 @@ const loadProject = async () => {
         createdByDisplayName: p.createdByDisplayName,
         rejectComment: (p as { rejectComment?: string }).rejectComment
       }
+      editForm.value = {
+        name: p.name ?? '',
+        description: p.description ?? '',
+        hasProcurement: p.hasProcurement ?? false
+      }
+      projectEditing.value = false
       loadMembers()
     } else {
       projectError.value = res.message || '加载失败'
@@ -1641,6 +1822,15 @@ function onUploaderBeforeRead(file: File | File[]): boolean {
     return false
   }
   return true
+}
+
+/** 选择文件后：若证据标题为空，则用文件名（去扩展名）自动填充 */
+function onUploaderAfterRead(file: UploaderFileListItem | UploaderFileListItem[]) {
+  if (uploadForm.value.name?.trim()) return
+  const first = Array.isArray(file) ? file[0] : file
+  const rawName = (first?.file as File | undefined)?.name
+  if (!rawName) return
+  uploadForm.value.name = rawName.replace(/\.[^.]+$/, '')
 }
 
 // 上传证据（阶段驱动：必须从某模板项「上传」带入 stageId + evidenceTypeCode）
@@ -1876,6 +2066,12 @@ const resetUploadForm = () => {
     remark: ''
   }
   uploadFileList.value = []
+}
+
+/** 上传弹窗内点击「取消」：重置表单并关闭弹窗 */
+function onUploadCancel() {
+  resetUploadForm()
+  showUploadDialog.value = false
 }
 
 // 阶段进度加载
@@ -2174,6 +2370,7 @@ async function doArchive(): Promise<boolean> {
 function getArchiveDisabledMessage(): string {
   const status = project.value?.status
   if (status === 'archived') return '项目已归档'
+  if (status === 'voided') return '项目已作废'
   if (status === 'pending_approval') return '归档申请审批中，请等待审批结果'
   if (status === 'returned') {
     if (!isAllResolved.value) return '请先处理所有不符合项后再重新申请归档'
@@ -2635,6 +2832,10 @@ onMounted(() => {
   background: #ebedf0;
   color: var(--app-text-secondary);
 }
+.detail-header-badge.badge--voided {
+  background: #f0f1f5;
+  color: #909399;
+}
 .detail-header-badge.badge--pending {
   background: rgba(237, 106, 12, 0.1);
   color: #ed6a0c;
@@ -2683,9 +2884,21 @@ onMounted(() => {
   color: #969799;
 }
 .detail-header-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid #f0f0f0;
+}
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-header-action-btn {
+  flex-shrink: 0;
 }
 .detail-header-history-btn {
   display: inline-flex;
@@ -2768,6 +2981,26 @@ onMounted(() => {
   margin-bottom: 16px;
   padding: 4px 0;
 }
+.info-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 8px;
+}
+.info-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #323233;
+}
+.info-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.info-card-action-btn {
+  flex-shrink: 0;
+}
 .info-row {
   display: flex;
   align-items: center;
@@ -2799,6 +3032,25 @@ onMounted(() => {
   font-weight: 500;
   color: #323233;
 }
+.info-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.info-field:deep(.van-field__body) {
+  align-items: center;
+}
+.info-field:deep(.van-field__control) {
+  text-align: left;
+}
+.info-field--textarea:deep(.van-field__body) {
+  align-items: flex-start;
+}
+.info-switch-wrap {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+}
 .info-badge {
   padding: 2px 10px;
   border-radius: 16px;
@@ -2812,6 +3064,10 @@ onMounted(() => {
 .info-badge.badge--archived {
   background: #ebedf0;
   color: var(--app-text-secondary);
+}
+.info-badge.badge--voided {
+  background: #f0f1f5;
+  color: #909399;
 }
 .info-badge.badge--pending {
   background: rgba(237, 106, 12, 0.1);
@@ -2894,11 +3150,40 @@ onMounted(() => {
 .evidence-section .stage-title-row .van-tag--warning { background: rgba(237, 106, 12, 0.12); color: #ed6a0c; }
 .evidence-section .stage-title-row .van-tag--default { background: rgba(0, 0, 0, 0.06); color: #646566; }
 
-/* 上传弹窗：圆角输入框 #f5f7fa */
+/* 上传弹窗：标题加粗 18px + 下方分割线 */
+.upload-dialog.van-dialog :deep(.van-dialog__header) {
+  font-weight: 700;
+  font-size: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--van-gray-2, #ebedf0);
+}
+
+.upload-dialog-form {
+  padding: 20px;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom, 0));
+}
+
+/* 上传至：右侧值主题蓝 */
+.upload-dialog-form .upload-context-cell :deep(.van-cell__value) {
+  color: var(--van-primary-color);
+}
+
+/* 表单卡片：轻阴影 */
+.upload-dialog-form .upload-dialog-cells {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.upload-dialog-form .upload-dialog-cells--target {
+  margin-bottom: 12px;
+}
 .upload-dialog-form :deep(.upload-dialog-field .van-cell) {
   background: #f5f7fa;
   border-radius: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+}
+.upload-dialog-form :deep(.upload-dialog-field:last-child .van-cell) {
+  margin-bottom: 0;
 }
 .upload-dialog-form :deep(.upload-dialog-field .van-field__control) {
   background: transparent;
@@ -2906,10 +3191,32 @@ onMounted(() => {
 .upload-dialog-form :deep(.upload-dialog-cells .van-cell::after) {
   display: none;
 }
+.upload-dialog-form :deep(.van-field__control::placeholder) {
+  color: #C8C9CC;
+}
 
+/* 证据标题/备注：未选文件时置灰，选文件后激活并过渡 */
+.upload-supplementary {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.upload-supplementary--active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 文件上传区域：140px、虚线 #C0C4CC、圆角 12px */
 .upload-file-section {
   padding: 0;
-  margin: 16px 0;
+  margin: 20px 0;
+}
+/* 预览缩略图 + 占位区域整体水平居中 */
+.upload-dropzone-wrap :deep(.van-uploader) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 .upload-dropzone-wrap :deep(.van-uploader__upload) {
   width: 100%;
@@ -2919,10 +3226,11 @@ onMounted(() => {
   background: transparent;
 }
 .upload-dropzone {
-  min-height: 100px;
-  padding: 20px 16px;
-  background: #f7f8fa;
-  border: 2px dashed #dcdfe6;
+  min-height: 140px;
+  height: 140px;
+  padding: 16px;
+  background: #fafafa;
+  border: 2px dashed #C0C4CC;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -2937,25 +3245,63 @@ onMounted(() => {
   background: rgba(25, 137, 250, 0.04);
 }
 .upload-dropzone-icon {
-  font-size: 32px;
-  color: var(--van-gray-5);
+  font-size: 36px;
+  color: #909399;
 }
 .upload-dropzone-text {
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--van-gray-7, #323233);
+}
+.upload-dropzone-hint {
+  font-size: 12px;
+  color: #C8C9CC;
+  margin-top: 4px;
+}
+/* 选择文件后：预览区圆角与删除按钮 */
+.upload-dropzone-wrap :deep(.van-uploader__preview) {
+  border-radius: 12px;
+  overflow: hidden;
+}
+.upload-dropzone-wrap :deep(.van-uploader__preview-delete) {
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+
+/* 底部：取消 + 确认上传，间距 12px */
+.upload-dialog-footer-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0 0;
+}
+.upload-cancel-btn {
+  flex-shrink: 0;
   color: var(--van-gray-6);
+  border: none;
+  background: transparent;
 }
 .upload-confirm-btn {
+  flex: 1;
+  border-radius: 22px;
+  box-shadow: 0 2px 12px rgba(25, 137, 250, 0.25);
   background: linear-gradient(135deg, #1989fa 0%, #0d6efd 100%) !important;
   border: none !important;
   font-weight: 600 !important;
   transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
-.upload-confirm-btn:hover {
+.upload-confirm-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(25, 137, 250, 0.35) !important;
 }
 .upload-confirm-btn:active {
   transform: translateY(0);
+}
+.upload-confirm-btn:disabled {
+  opacity: 0.6;
 }
 
 /* 证据列表 cell：自定义整行布局，右侧操作区紧贴右边缘无留白 */
@@ -3030,10 +3376,6 @@ onMounted(() => {
   .evidence-list-cell .cell-actions .download-btn :deep(.van-button__text) {
     display: none;
   }
-}
-
-.upload-dialog-footer-inner {
-  padding: 12px 16px 16px;
 }
 
 .upload-result-block {

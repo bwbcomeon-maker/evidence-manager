@@ -23,6 +23,11 @@ public interface EvidenceItemMapper {
     List<EvidenceItem> selectByProjectId(@Param("projectId") Long projectId);
 
     /**
+     * 统计项目下是否已产生证据数据（任意状态均计入，用于项目作废门禁）
+     */
+    long countByProjectId(@Param("projectId") Long projectId);
+
+    /**
      * 根据项目ID和证据状态查询证据列表
      */
     List<EvidenceItem> selectByProjectIdAndEvidenceStatus(@Param("projectId") Long projectId, @Param("evidenceStatus") String evidenceStatus);

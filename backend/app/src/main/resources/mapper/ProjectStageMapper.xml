@@ -19,6 +19,13 @@
         ORDER BY stage_id
     </select>
 
+    <select id="countByProjectIdAndStatus" resultType="long">
+        SELECT COUNT(1)
+        FROM project_stage
+        WHERE project_id = #{projectId}
+          AND status = #{status}
+    </select>
+
     <select id="selectByProjectIdAndStageId" resultMap="BaseResultMap">
         SELECT id, project_id, stage_id, status, completed_at, created_at, updated_at
         FROM project_stage

@@ -10,6 +10,8 @@ import java.util.List;
 public interface ProjectStageMapper {
     List<ProjectStage> selectByProjectId(@Param("projectId") Long projectId);
 
+    long countByProjectIdAndStatus(@Param("projectId") Long projectId, @Param("status") String status);
+
     ProjectStage selectByProjectIdAndStageId(@Param("projectId") Long projectId, @Param("stageId") Long stageId);
 
     int insert(ProjectStage projectStage);

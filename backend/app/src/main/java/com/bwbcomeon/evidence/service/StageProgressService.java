@@ -286,6 +286,17 @@ public class StageProgressService {
         return result;
     }
 
+    /**
+     * 将项目下所有阶段标记为已完成（项目归档时调用，保证已归档项目下各阶段展示为「已完成」）
+     */
+    public void markAllStagesCompleted(Long projectId) {
+        List<ProjectStage> list = projectStageMapper.selectByProjectId(projectId);
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+        for (ProjectStage ps : list) {
+            projectStageMapper.updateStatus(projectId, ps.getStageId(), STATUS_COMPLETED, now);
+        }
+    }
+
     /** 确保项目存在 5 条 project_stage 记录（懒初始化） */
     public void ensureProjectStages(Long projectId) {
         List<ProjectStage> existing = projectStageMapper.selectByProjectId(projectId);

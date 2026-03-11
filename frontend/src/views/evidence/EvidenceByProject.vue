@@ -19,9 +19,22 @@
                 <h3 class="project-card-title" :title="project.name">{{ project.name }}</h3>
                 <span
                   class="project-card-badge"
-                  :class="project.status === 'active' ? 'badge--active' : 'badge--archived'"
+                  :class="{
+                    'badge--active': project.status === 'active',
+                    'badge--pending': project.status === 'pending_approval',
+                    'badge--returned': project.status === 'returned',
+                    'badge--archived': project.status === 'archived'
+                  }"
                 >
-                  {{ project.status === 'active' ? '进行中' : '已归档' }}
+                  {{
+                    project.status === 'active'
+                      ? '进行中'
+                      : project.status === 'pending_approval'
+                        ? '待审批'
+                        : project.status === 'returned'
+                          ? '已退回'
+                          : '已归档'
+                  }}
                 </span>
               </div>
               <div v-if="project.description" class="project-desc">{{ project.description }}</div>
@@ -159,6 +172,14 @@ onMounted(() => {
 .badge--active {
   background: rgba(0, 122, 255, 0.12);
   color: var(--app-primary);
+}
+.badge--pending {
+  background: rgba(250, 173, 20, 0.12);
+  color: #faad14;
+}
+.badge--returned {
+  background: rgba(255, 85, 85, 0.12);
+  color: #ff5555;
 }
 .badge--archived {
   background: #ebedf0;

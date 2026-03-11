@@ -113,9 +113,9 @@ public class ProjectController {
     }
 
     /**
-     * 更新项目部分字段（如「是否含采购」）
+     * 更新项目基本信息（名称、描述、是否含采购）
      * PATCH /api/projects/{projectId}
-     * 请求体：{ hasProcurement?: boolean }，需具备管理成员权限
+     * 请求体：{ name?: string, description?: string, hasProcurement?: boolean }，需具备管理成员权限
      */
     @PatchMapping("/{projectId}")
     public Result<ProjectVO> updateProject(
@@ -126,9 +126,30 @@ public class ProjectController {
         if (user == null) {
             return Result.error(401, "未登录");
         }
-        ProjectVO vo = projectService.updateHasProcurement(
-                projectId, body.getHasProcurement(), user.getId(), user.getRoleCode());
+        ProjectVO vo = projectService.updateProjectBasicInfo(
+                projectId,
+                body.getName(),
+                body.getDescription(),
+                body.getHasProcurement(),
+                user.getId(),
+                user.getRoleCode());
         return Result.success(vo);
+    }
+
+    /**
+     * 作废项目（仅允许无业务数据的 active 项目）
+     * POST /api/projects/{projectId}/void
+     */
+    @PostMapping("/{projectId}/void")
+    public Result<Void> voidProject(
+            HttpServletRequest request,
+            @PathVariable Long projectId) {
+        AuthUserVO user = (AuthUserVO) request.getAttribute(AuthInterceptor.REQUEST_CURRENT_USER);
+        if (user == null) {
+            return Result.error(401, "未登录");
+        }
+        projectService.voidProject(projectId, user.getId(), user.getRoleCode());
+        return Result.success(null);
     }
 
     /**

@@ -9,6 +9,9 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
+import java.awt.font.FontRenderContext;
+import java.awt.font.TextLayout;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -93,15 +96,19 @@ public class ImageWatermarkService {
             int x = Math.max(padding, width - maxLineWidth - padding);
             int y = Math.max(padding + fm.getAscent(), height - blockHeight - padding + fm.getAscent());
 
-            // 阴影 + 半透明白字，提升复杂背景下可读性
+            // 深色描边 + 白色填充，保证浅色/深色背景下都清晰可辨；整体透明度 0.35，不过度遮挡内容
+            float globalAlpha = 0.35f;
+            g2.setComposite(AlphaComposite.SrcOver.derive(globalAlpha));
+            g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            FontRenderContext frc = g2.getFontRenderContext();
             for (int i = 0; i < lines.size(); i++) {
                 int yy = y + i * lineHeight;
-                g2.setComposite(AlphaComposite.SrcOver.derive(0.28f));
-                g2.setColor(Color.BLACK);
-                g2.drawString(lines.get(i), x + 1, yy + 1);
-                g2.setComposite(AlphaComposite.SrcOver.derive(0.50f));
-                g2.setColor(Color.WHITE);
-                g2.drawString(lines.get(i), x, yy);
+                TextLayout layout = new TextLayout(lines.get(i), font, frc);
+                Shape outline = layout.getOutline(AffineTransform.getTranslateInstance(x, yy));
+                g2.setColor(new Color(0, 0, 0, 153)); // rgba(0,0,0,0.6)
+                g2.draw(outline);
+                g2.setColor(new Color(255, 255, 255, 230)); // rgba(255,255,255,0.9)
+                g2.fill(outline);
             }
         } finally {
             g2.dispose();

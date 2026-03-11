@@ -5,7 +5,7 @@
       <div class="unified-header">
         <van-search
           v-model="searchKeyword"
-          placeholder="请输入项目名称或项目编号"
+          placeholder="请输入项目名称或项目令号"
           shape="round"
           background="transparent"
           input-align="left"
@@ -215,10 +215,10 @@
         </van-field>
         <van-button block type="primary" :loading="importLoading" :disabled="!importFile" @click="onImportSubmit">上传导入</van-button>
         <div v-if="importResult" class="import-result">
-          <p>共 {{ importResult.total }} 行，成功 {{ importResult.successCount }}，失败 {{ importResult.failCount }}</p>
-          <div v-if="importResult.details?.length" class="import-details">
-            <div v-for="d in importResult.details" :key="d.row" class="detail-row" :class="{ fail: !d.success }">
-              第{{ d.row }}行 {{ d.code }} {{ d.success ? '✓' : '✗' }} {{ d.message }}
+          <p>共 {{ importResult.total }} 行，新增 {{ importResult.inserted }}，更新 {{ importResult.updated }}，跳过 {{ importResult.skipped }}</p>
+          <div v-if="importResult.errors?.length" class="import-details">
+            <div v-for="d in importResult.errors" :key="`${d.row}-${d.code}`" class="detail-row fail">
+              第{{ d.row }}行 {{ d.code || '—' }} ✗ {{ d.message }}
             </div>
           </div>
         </div>
@@ -242,6 +242,7 @@ interface Project {
   code: string
   name: string
   description: string
+  /** active | pending_approval | returned | archived | voided */
   status: string
   currentPmDisplayName?: string
   createdByDisplayName?: string
@@ -282,6 +283,7 @@ function projectStatusText(status: string): string {
   if (status === 'pending_approval') return '待审批'
   if (status === 'returned') return '已退回'
   if (status === 'archived') return '已归档'
+  if (status === 'voided') return '已作废'
   return status || '—'
 }
 
@@ -306,6 +308,7 @@ function projectStatusTagType(status: string): 'primary' | 'success' | 'warning'
   if (status === 'pending_approval') return 'warning'
   if (status === 'returned') return 'danger'
   if (status === 'archived') return 'default'
+  if (status === 'voided') return 'default'
   return 'default'
 }
 
@@ -315,6 +318,7 @@ function projectStatusBadgeClass(status: string): string {
   if (status === 'pending_approval') return 'badge--pending'
   if (status === 'returned') return 'badge--returned'
   if (status === 'archived') return 'badge--archived'
+  if (status === 'voided') return 'badge--archived'
   return 'badge--archived'
 }
 
@@ -342,7 +346,8 @@ const statusOptions = [
   { text: '进行中', value: 'active' },
   { text: '待审批', value: 'pending_approval' },
   { text: '已退回', value: 'returned' },
-  { text: '已归档', value: 'archived' }
+  { text: '已归档', value: 'archived' },
+  { text: '已作废', value: 'voided' }
 ]
 
 const SEARCH_DEBOUNCE_MS = 500
@@ -433,8 +438,9 @@ async function onImportSubmit() {
     const res = await importProjects(importFile.value)
     if (res.code === 0 && res.data) {
       importResult.value = res.data
-      showToast(res.data.failCount === 0 ? '导入完成' : `成功 ${res.data.successCount}，失败 ${res.data.failCount}`)
-      if (res.data.successCount > 0) loadProjects()
+      const summary = `成功导入！新增 ${res.data.inserted} 个，更新覆盖 ${res.data.updated} 个已有项目`
+      showToast(res.data.errors?.length ? `${summary}，失败 ${res.data.errors.length} 个` : summary)
+      if (res.data.inserted > 0 || res.data.updated > 0) loadProjects()
     } else {
       showToast(res.message || '导入失败')
     }
