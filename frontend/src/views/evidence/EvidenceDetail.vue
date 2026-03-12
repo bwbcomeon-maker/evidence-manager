@@ -101,6 +101,7 @@
             {{ hasLocalReject ? '修改标记' : '标记不符合' }}
           </van-button>
           <van-button v-if="canMarkReject && hasLocalReject" class="btn-secondary action-btn" plain @click="clearMarkRejectFromDetail">取消标记</van-button>
+          <p class="evidence-detail__download-hint">在微信内可点击右上角「…」用浏览器打开后下载，文件会保存到相册或系统「文件」</p>
         </div>
       </div>
 
@@ -1038,6 +1039,13 @@ onMounted(() => {
   gap: 12px;
   justify-content: flex-start;
   padding: 0 0 24px;
+}
+.evidence-detail__download-hint {
+  width: 100%;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #969799;
+  line-height: 1.4;
 }
 @media (min-width: 768px) {
   .evidence-detail__actions {

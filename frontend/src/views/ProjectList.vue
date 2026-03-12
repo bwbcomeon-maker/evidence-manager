@@ -105,7 +105,7 @@
                       round
                       size="medium"
                       :type="projectStatusTagType(project.status)"
-                      class="project-card-tag"
+                      :class="['project-card-tag', project.status === 'archived' ? 'project-card-tag--archived' : '']"
                     >
                       {{ projectStatusText(project.status) }}
                     </van-tag>
@@ -822,6 +822,10 @@ function handleTodoCardClick(status: 'returned' | 'pending_approval') {
 .project-card-tag.van-tag--default {
   background: rgba(0, 0, 0, 0.06);
   color: #646566;
+}
+.project-card-tag--archived {
+  background: #E8F8EE !important;
+  color: #07C160 !important;
 }
 .project-card-pending-dot {
   margin-left: 2px;
