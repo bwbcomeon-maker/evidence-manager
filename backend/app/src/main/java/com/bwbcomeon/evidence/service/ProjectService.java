@@ -93,7 +93,8 @@ public class ProjectService {
     private static final int IMPORT_MAX_ROWS = 500;
 
     /**
-     * PMO Excel 批量导入项目（最小版）：模板列 项目令号、项目名称、项目描述；按 code upsert；仅 SYSTEM_ADMIN/PMO 可调。
+     * PMO Excel 批量导入项目：模板列 项目令号、项目名称、项目描述、是否含采购（第4列可选，空则默认 true）。
+     * 按 code upsert；仅 SYSTEM_ADMIN/PMO 可调。项目名称必填；导入的新项目不自动添加成员。
      */
     public ProjectImportResult importProjectsFromExcel(InputStream inputStream, Long operatorUserId, String roleCode) {
         if (roleCode == null || (!"SYSTEM_ADMIN".equals(roleCode) && !"PMO".equals(roleCode))) {
@@ -113,36 +114,35 @@ public class ProjectService {
                 String code = getCellString(row, 0);
                 String name = getCellString(row, 1);
                 String description = getCellString(row, 2);
+                String hasProcurementRaw = getCellString(row, 3);
                 if (code == null || code.isBlank()) {
                     errors.add(new ProjectImportResult.RowError(rowNum, "", "项目令号为空"));
                     continue;
                 }
                 code = code.trim();
-                String nameVal = name != null ? name.trim() : "";
-                String descVal = description != null ? description.trim() : "";
                 try {
                     Project existing = projectMapper.selectByCode(code);
                     if (existing != null) {
-                        String existingName = existing.getName() != null ? existing.getName().trim() : "";
-                        String existingDesc = existing.getDescription() != null ? existing.getDescription().trim() : "";
-                        if (existingName.equals(nameVal) && existingDesc.equals(descVal)) {
-                            skipped++;
+                        // 已存在相同项目令号时，以系统中项目为准，不做任何字段更新，本行计为“跳过”
+                        skipped++;
+                    } else {
+                        String nameVal = name != null ? name.trim() : "";
+                        if (nameVal.isEmpty()) {
+                            errors.add(new ProjectImportResult.RowError(rowNum, code, "项目名称为空"));
                             continue;
                         }
-                        existing.setName(nameVal);
-                        existing.setDescription(descVal);
-                        existing.setUpdatedAt(OffsetDateTime.now());
-                        projectMapper.update(existing);
-                        updated++;
-                    } else {
+                        String descVal = description != null ? description.trim() : "";
+                        boolean hasFourthColumn = hasProcurementRaw != null && !hasProcurementRaw.isBlank();
+                        Boolean hasProcurementParsed = parseHasProcurementFromExcel(hasProcurementRaw);
+                        boolean hasProcurementVal = Boolean.TRUE.equals(hasProcurementParsed);
                         Project project = new Project();
                         project.setCode(code);
                         project.setName(nameVal);
                         project.setDescription(descVal);
+                        project.setHasProcurement(hasFourthColumn ? hasProcurementVal : true);
                         project.setStatus(STATUS_ACTIVE);
                         project.setCreatedByUserId(operatorUserId);
                         projectMapper.insert(project);
-                        // 批量导入的项目不自动添加操作人为成员，成员需后续在成员管理中分配
                         inserted++;
                     }
                 } catch (Exception e) {
@@ -158,6 +158,16 @@ public class ProjectService {
             throw new BusinessException(400, "解析 Excel 失败: " + (e.getMessage() != null ? e.getMessage() : "未知错误"));
         }
         return result;
+    }
+
+    /**
+     * 解析 Excel 中「是否含采购」单元格：是/1/Y/true -> true，否/0/N/false -> false，空或未识别 -> true（与单项目默认一致）。
+     */
+    private static boolean parseHasProcurementFromExcel(String raw) {
+        if (raw == null || raw.isBlank()) return true;
+        String s = raw.trim().toLowerCase();
+        if ("否".equals(raw.trim()) || "0".equals(s) || "n".equals(s) || "false".equals(s)) return false;
+        return true;
     }
 
     private static String getCellString(Row row, int col) {

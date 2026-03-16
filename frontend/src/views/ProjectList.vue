@@ -206,7 +206,7 @@
     <van-popup v-model:show="showImport" position="bottom" round :style="{ padding: '16px', maxHeight: '80vh' }">
       <div class="import-form">
         <h3 class="form-title">批量导入项目</h3>
-        <p class="import-tip">仅 系统管理员 / PMO 可导入。模板列：项目令号、项目名称、项目描述。</p>
+        <p class="import-tip">仅 系统管理员 / PMO 可导入。模板列：项目令号、项目名称、项目描述、是否含采购（第4列可选，不填默认含采购）；项目令号与项目名称必填。</p>
         <a :href="importTemplateUrl" target="_blank" rel="noopener" class="download-link">下载模板</a>
         <van-field name="file" label="选择文件">
           <template #input>

@@ -181,7 +181,7 @@ public class ProjectController {
     }
 
     /**
-     * 下载项目导入模板（xlsx，表头：项目令号、项目名称、项目描述）
+     * 下载项目导入模板（xlsx，表头：项目令号、项目名称、项目描述、是否含采购；第4列可选，不填默认含采购）
      * GET /api/projects/import/template
      */
     @GetMapping("/import/template")
@@ -192,10 +192,12 @@ public class ProjectController {
             header.createCell(0).setCellValue("项目令号");
             header.createCell(1).setCellValue("项目名称");
             header.createCell(2).setCellValue("项目描述");
+            header.createCell(3).setCellValue("是否含采购");
             Row example = sheet.createRow(1);
             example.createCell(0).setCellValue("PROJ-001");
             example.createCell(1).setCellValue("示例项目");
             example.createCell(2).setCellValue("示例描述");
+            example.createCell(3).setCellValue("是");
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             wb.write(out);
             HttpHeaders headers = new HttpHeaders();
@@ -210,7 +212,7 @@ public class ProjectController {
 
     /**
      * PMO Excel 批量导入项目（仅 SYSTEM_ADMIN/PMO）
-     * POST /api/projects/import  body: multipart file (xlsx)，模板列：项目令号、项目名称、项目描述
+     * POST /api/projects/import  body: multipart file (xlsx)，模板列：项目令号、项目名称、项目描述、是否含采购（第4列可选）
      */
     @PostMapping("/import")
     public Result<ProjectImportResult> importProjects(

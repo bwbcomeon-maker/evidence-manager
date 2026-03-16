@@ -8,6 +8,7 @@ import com.bwbcomeon.evidence.exception.BusinessException;
 import com.bwbcomeon.evidence.exception.UnauthorizedException;
 import com.bwbcomeon.evidence.mapper.AuditLogMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
+import com.bwbcomeon.evidence.security.ConcurrentSessionRegistry;
 import com.bwbcomeon.evidence.util.WebUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -27,11 +28,15 @@ public class AuthService {
 
     private final SysUserMapper sysUserMapper;
     private final AuditLogMapper auditLogMapper;
+    private final ConcurrentSessionRegistry sessionRegistry;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public AuthService(SysUserMapper sysUserMapper, AuditLogMapper auditLogMapper) {
+    public AuthService(SysUserMapper sysUserMapper,
+                       AuditLogMapper auditLogMapper,
+                       ConcurrentSessionRegistry sessionRegistry) {
         this.sysUserMapper = sysUserMapper;
         this.auditLogMapper = auditLogMapper;
+        this.sessionRegistry = sessionRegistry;
     }
 
     /**
@@ -58,8 +63,17 @@ public class AuthService {
             throw new UnauthorizedException("用户名或密码错误");
         }
 
+        HttpSession currentSession = request.getSession(false);
+        if (currentSession != null) {
+            currentSession.invalidate();
+        }
+
         HttpSession session = request.getSession(true);
         session.setAttribute(SESSION_LOGIN_USER_ID, user.getId());
+        HttpSession previousSession = sessionRegistry.register(user.getId(), session);
+        if (previousSession != null) {
+            previousSession.invalidate();
+        }
 
         user.setLastLoginAt(LocalDateTime.now());
         user.setLastLoginIp(ip);
@@ -82,6 +96,7 @@ public class AuthService {
         String userAgent = WebUtils.getUserAgent(request);
 
         if (session != null) {
+            sessionRegistry.unregister(session.getId());
             session.invalidate();
         }
 
