@@ -8,7 +8,7 @@
 
 1. 按 [docs/db/reset-v1-safe.md](../db/reset-v1-safe.md) 执行：
    - 备份 → 停服务 → 执行 `db/scripts/reset_v1_safe.sql` → 执行 `db/scripts/admin_recover.sql` → 启动服务
-2. 打开登录页，使用 **用户名：admin，密码：Admin@12345** 登录。
+2. 打开登录页，使用 **用户名：admin，密码：执行恢复脚本时传入的 ADMIN_PASSWORD** 登录。
 3. **预期**：登录成功，进入首页；底部/「我的」中可见「用户管理」入口（仅 SYSTEM_ADMIN 可见）。
 4. **失败排查**：查后端日志是否有 403/401；查 DB：`SELECT id, username, role_code, enabled FROM sys_user WHERE username='admin';` 与 `SELECT id, username FROM auth_user WHERE username='admin';` 应各有一条。
 
@@ -21,11 +21,11 @@
 
 | 登录账号 | 姓名/备注   | 角色（系统级） | 密码（建议统一便于测试） |
 |----------|-------------|----------------|---------------------------|
-| pmo1     | PMO测试     | **PMO（治理）** | Init@12345                |
-| auditor1 | 审计只读    | **审计（只读入口）** | Init@12345                |
-| u_owner  | 项目负责人  | 普通用户（如「项目查看」等，项目内权限在 C3/C4 成员管理中赋 owner） | Init@12345 |
-| u_editor | 项目编辑    | 普通用户       | Init@12345                |
-| u_viewer | 项目查看    | 普通用户       | Init@12345                |
+| pmo1     | PMO测试     | **PMO（治理）** | 自定义强密码（建议统一但勿使用默认口令） |
+| auditor1 | 审计只读    | **审计（只读入口）** | 自定义强密码（建议统一但勿使用默认口令） |
+| u_owner  | 项目负责人  | 普通用户（如「项目查看」等，项目内权限在 C3/C4 成员管理中赋 owner） | 自定义强密码（建议统一但勿使用默认口令） |
+| u_editor | 项目编辑    | 普通用户       | 自定义强密码（建议统一但勿使用默认口令） |
+| u_viewer | 项目查看    | 普通用户       | 自定义强密码（建议统一但勿使用默认口令） |
 
 **说明**：V1 项目内权限只看「项目 created_by + auth_project_acl」，与 sys_user.role_code 的 PROJECT_* 无关。用户管理里角色选 PMO/AUDITOR 或任选一普通角色即可；**项目内的 owner/editor/viewer 在 C3/C4 的「成员管理」中分配**。
 
@@ -150,7 +150,7 @@ curl -s -o /dev/null -w "%{http_code}" -X POST "http://localhost:8080/api/eviden
 
 | 步骤 | 页面/入口           | 操作要点                     | 预期 UI/接口              | 失败时排查                           |
 |------|---------------------|------------------------------|---------------------------|--------------------------------------|
-| C0   | 登录页              | admin / Admin@12345          | 登录成功，见用户管理      | sys_user、auth_user 是否有 admin     |
+| C0   | 登录页              | admin / 执行恢复脚本时传入的 ADMIN_PASSWORD | 登录成功，见用户管理 | sys_user、auth_user 是否有 admin     |
 | C1   | 用户管理            | 新增 5 用户，分配角色        | 列表可见，角色正确        | 接口 message、VALID_ROLE_CODES       |
 | C2   | 项目 → 新建项目     | P-V1-001                     | 创建成功                  | 403 权限、400 令号重复                |
 | C3   | 项目详情 → 成员管理 | 先 u_owner=负责人，再 u_editor=负责人 | 唯一负责人               | auth_project_acl 中 role=owner 仅 1 条 |

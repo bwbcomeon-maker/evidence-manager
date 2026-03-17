@@ -6,7 +6,6 @@ import com.bwbcomeon.evidence.dto.EvidenceListItemVO;
 import com.bwbcomeon.evidence.dto.EvidenceSearchResultVO;
 import com.bwbcomeon.evidence.dto.Result;
 import com.bwbcomeon.evidence.dto.VersionDownloadResult;
-import com.bwbcomeon.evidence.exception.ForbiddenException;
 import com.bwbcomeon.evidence.exception.UnauthorizedException;
 import com.bwbcomeon.evidence.service.AuthService;
 import com.bwbcomeon.evidence.service.EvidenceService;
@@ -184,11 +183,12 @@ public class EvidenceVersionController {
         
         // 构建响应头：预览时使用 inline 以便 iframe 内展示（Word/Excel/PPT 等）
         HttpHeaders headers = new HttpHeaders();
-        boolean inline = Boolean.TRUE.equals(preview);
+        boolean inline = Boolean.TRUE.equals(preview) && result.isInlinePreviewAllowed();
         String disposition = inline
                 ? "inline; filename=\"" + filename + "\"; filename*=UTF-8''" + encodedFilename
                 : "attachment; filename=\"" + filename + "\"; filename*=UTF-8''" + encodedFilename;
         headers.add(HttpHeaders.CONTENT_DISPOSITION, disposition);
+        headers.add("X-Content-Type-Options", "nosniff");
         
         // 设置Content-Type
         if (contentType != null && !contentType.isEmpty()) {

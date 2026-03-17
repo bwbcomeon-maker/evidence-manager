@@ -38,7 +38,7 @@
             :after-read="afterRead"
             :before-read="onBeforeRead"
             :max-count="1"
-            accept="*/*"
+            :accept="UPLOAD_ACCEPT"
             :disabled="!!evidenceId"
           >
             <van-button icon="plus" type="primary" plain :disabled="!!evidenceId">
@@ -110,7 +110,7 @@ import {
   type EvidenceListItem
 } from '@/api/evidence'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType } from '@/utils/evidenceStatus'
-import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
+import { validateFileSize, isImageFile, UPLOAD_ACCEPT } from '@/utils/uploadFileLimit'
 import { compressImageIfNeeded } from '@/utils/imageCompress'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 

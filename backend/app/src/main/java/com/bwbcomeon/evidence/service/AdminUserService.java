@@ -10,10 +10,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 /**
@@ -35,9 +35,12 @@ public class AdminUserService {
     public static final Set<String> VALID_ROLE_CODES = Set.of(
             "SYSTEM_ADMIN", "PMO", "AUDITOR", "USER"
     );
-    private static final String DEFAULT_PASSWORD = "Init@12345";
     private static final String CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final String ADMIN_USERNAME = "admin";
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_PASSWORD_LENGTH = 72;
+    private static final int RESET_PASSWORD_LENGTH = 16;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final SysUserMapper sysUserMapper;
     private final AuthService authService;
@@ -105,7 +108,7 @@ public class AdminUserService {
     }
 
     /**
-     * 新增用户，写 audit USER_CREATE
+     * 新增用户，写 audit USER_CREATE。密码必填，不再允许固定默认密码。
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminUserListItemVO create(HttpServletRequest request, AdminUserCreateRequest req) {
@@ -119,9 +122,7 @@ public class AdminUserService {
             throw new BusinessException(400, "登录账号已存在");
         }
 
-        String plainPassword = (req.getPassword() != null && !req.getPassword().isBlank())
-                ? req.getPassword() : DEFAULT_PASSWORD;
-        String passwordHash = passwordEncoder.encode(plainPassword);
+        String passwordHash = encodePassword(req.getPassword());
 
         SysUser user = new SysUser();
         user.setUsername(username);
@@ -203,7 +204,7 @@ public class AdminUserService {
     }
 
     /**
-     * 重置密码为固定 123456，返回明文供前端展示，写 audit USER_RESET_PWD
+     * 重置密码为随机强密码，返回明文供前端展示，写 audit USER_RESET_PWD。
      * 禁止操作自己（含 admin 不能重置自己密码，应走自助改密）
      */
     @Transactional(rollbackFor = Exception.class)
@@ -214,7 +215,7 @@ public class AdminUserService {
         }
         assertNotAdminSelfOperation(request, user);
         assertNotSelfOperation(request, user);
-        String newPassword = "123456";
+        String newPassword = randomPassword(RESET_PASSWORD_LENGTH);
         String hash = passwordEncoder.encode(newPassword);
         sysUserMapper.resetPassword(id, hash);
         authService.recordAudit(request, "USER_RESET_PWD", true, currentUserId(request),
@@ -254,12 +255,24 @@ public class AdminUserService {
         );
     }
 
-    private static String randomPassword(int minLen, int maxLen) {
-        ThreadLocalRandom r = ThreadLocalRandom.current();
-        int len = r.nextInt(minLen, maxLen + 1);
+    private String encodePassword(String rawPassword) {
+        String password = rawPassword != null ? rawPassword.trim() : "";
+        if (password.isEmpty()) {
+            throw new BusinessException(400, "密码不能为空");
+        }
+        if (password.length() < MIN_PASSWORD_LENGTH) {
+            throw new BusinessException(400, "密码至少需要 8 位");
+        }
+        if (password.length() > MAX_PASSWORD_LENGTH) {
+            throw new BusinessException(400, "密码过长");
+        }
+        return passwordEncoder.encode(password);
+    }
+
+    private static String randomPassword(int len) {
         StringBuilder sb = new StringBuilder(len);
         for (int i = 0; i < len; i++) {
-            sb.append(CHARS.charAt(r.nextInt(CHARS.length())));
+            sb.append(CHARS.charAt(SECURE_RANDOM.nextInt(CHARS.length())));
         }
         return sb.toString();
     }

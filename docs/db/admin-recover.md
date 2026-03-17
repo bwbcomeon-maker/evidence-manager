@@ -6,17 +6,17 @@
 
 ## 一、执行 reset 后的恢复（常规）
 
-在按 [reset-v1-safe.md](./reset-v1-safe.md) 执行 `reset_v1_safe.sql` 清空数据后，需执行 **`db/scripts/admin_recover.sql`** 重新插入 admin，才能登录。
+在按 [reset-v1-safe.md](./reset-v1-safe.md) 执行 `reset_v1_safe.sql` 清空数据后，需执行 **`db/scripts/admin_recover.sql`** 恢复 `admin`，才能登录。
 
 **执行顺序**：停服务 → `reset_v1_safe.sql` → **`admin_recover.sql`** → 启动服务。
 
 **命令示例**：
 
 ```bash
-psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
+psql -h localhost -U <DB_USER> -d <DB_NAME> -v ADMIN_PASSWORD='<强密码>' -f db/scripts/admin_recover.sql
 ```
 
-**恢复后登录**：用户名 `admin`，密码 `Admin@12345`。
+**恢复后登录**：用户名 `admin`，密码为执行脚本时传入的 `ADMIN_PASSWORD`。
 
 ---
 
@@ -29,8 +29,8 @@ psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
 **作用**：
 
 - 将 `sys_user` 中 `username='admin'` 的记录置为：`enabled = true`、`is_deleted = false`、`role_code = 'SYSTEM_ADMIN'`。
-- 若 admin 在 `sys_user` 中不存在（例如被逻辑删除后又被物理清理），则插入一条与 V4 一致的 admin 记录，密码 `Admin@12345`。
-- 若 `auth_user` 中缺少 `username='admin'`，则插入一条，保证项目成员选择器等可正常使用。
+- 若 admin 在 `sys_user` 中不存在（例如被逻辑删除后又被物理清理），则插入一条 admin 记录，密码取自执行脚本时传入的 `ADMIN_PASSWORD`。
+- 当前系统已删除 `auth_user` 表，因此恢复脚本仅操作 `sys_user`。
 
 **执行方式**：
 
@@ -38,11 +38,11 @@ psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
 2. 在项目根目录执行：
 
 ```bash
-psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover_dev.sql
+psql -h localhost -U <DB_USER> -d <DB_NAME> -v ADMIN_PASSWORD='<强密码>' -f db/scripts/admin_recover_dev.sql
 ```
 
 3. 启动后端服务。
-4. 使用 **admin / Admin@12345** 登录验证。
+4. 使用 **admin / 你传入的 ADMIN_PASSWORD** 登录验证。
 
 **注意**：
 
@@ -60,9 +60,3 @@ SELECT id, username, enabled, is_deleted, role_code FROM sys_user WHERE username
 ```
 
 预期：`enabled = true`，`is_deleted = false`，`role_code = 'SYSTEM_ADMIN'`。
-
-```sql
-SELECT id, username, is_active FROM auth_user WHERE username = 'admin';
-```
-
-预期：至少一条记录，`is_active = true`。

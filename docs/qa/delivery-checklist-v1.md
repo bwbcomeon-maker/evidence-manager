@@ -9,7 +9,7 @@
 | 类型     | 路径 | 说明 |
 |----------|------|------|
 | 清空脚本 | `db/scripts/reset_v1_safe.sql` | 仅清空业务表+用户表数据，不动 flyway_schema_history、不改表结构 |
-| 恢复脚本 | `db/scripts/admin_recover.sql` | 清空后插入唯一超级管理员（admin / Admin@12345） |
+| 恢复脚本 | `db/scripts/admin_recover.sql` | 清空后恢复唯一超级管理员（admin，密码由执行脚本时传入） |
 | 可选脚本 | `db/scripts/seeds_auth_user_after_reset.sql` | C1 创建 5 个测试用户后执行，补齐 auth_user 供成员选择器使用 |
 | 执行说明 | `docs/db/reset-v1-safe.md` | 备份、停服务、psql 命令、校验 SQL、超级管理员账号说明 |
 | 人工测试 SOP | `docs/qa/v1-permission-manual-test.md` | V1 权限模型全流程人工测试步骤与预期（C0～C8） |
@@ -39,7 +39,7 @@ psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/reset_v1_safe.sql
 ### 步骤 4：执行 admin 恢复脚本
 
 ```bash
-psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
+psql -h localhost -U <DB_USER> -d <DB_NAME> -v ADMIN_PASSWORD='<强密码>' -f db/scripts/admin_recover.sql
 ```
 
 ### 步骤 5：启动后端服务
@@ -48,7 +48,7 @@ psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
 
 ### 步骤 6：确认 admin 可登录（C0）
 
-- 打开登录页，**用户名：admin，密码：Admin@12345**
+- 打开登录页，**用户名：admin，密码：执行恢复脚本时传入的 ADMIN_PASSWORD**
 - 预期：登录成功，可见「用户管理」入口
 
 ### 步骤 7：按 SOP 执行 C1～C8 全流程验证
@@ -76,7 +76,7 @@ psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
 | 项目   | 值            |
 |--------|----------------|
 | 用户名 | `admin`       |
-| 密码   | `Admin@12345` |
+| 密码   | 执行 `admin_recover.sql` 时传入的 `ADMIN_PASSWORD` |
 | 角色   | SYSTEM_ADMIN  |
 
 ---

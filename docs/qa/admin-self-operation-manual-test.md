@@ -13,7 +13,7 @@
 
 ## 一、admin 登录 → 用户管理 → 自己这一行
 
-1. 使用 **admin / Admin@12345** 登录，进入「用户管理」。
+1. 使用 **admin / 执行恢复脚本时传入的 ADMIN_PASSWORD** 登录，进入「用户管理」。
 2. 在列表中找到 **admin** 这一行。
 3. **预期**：
    - 该行显示「当前登录」或类似标识。
@@ -84,7 +84,7 @@
 1. 在用户管理中用 admin 将自己禁用（若前端已防呆，可通过接口调用禁用自己，或直接在数据库将 admin 的 `enabled` 置为 false）。
 2. 确认 admin 无法登录。
 3. 按 [docs/db/admin-recover.md](../db/admin-recover.md) 执行 **admin_recover_dev.sql**。
-4. 重启后端，使用 admin / Admin@12345 登录。
+4. 重启后端，使用 admin / 执行恢复脚本时传入的 ADMIN_PASSWORD 登录。
 5. **预期**：登录成功，且用户管理中 admin 行为仍符合「一」中描述（自己只读、无危险操作按钮）。
 
 ---

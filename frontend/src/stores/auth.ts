@@ -36,11 +36,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    try {
-      await apiLogout()
-    } finally {
+    const res = await apiLogout() as { code: number; message?: string }
+    if (res?.code === 0) {
       clearUser()
+      return true
     }
+    return false
   }
 
   return {

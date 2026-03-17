@@ -13,5 +13,6 @@ public class VersionDownloadResult {
     private Resource resource;
     private String filename;
     private String contentType;
+    private boolean inlinePreviewAllowed;
 }
 

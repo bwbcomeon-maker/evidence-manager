@@ -6,12 +6,18 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+\if :{?ADMIN_PASSWORD}
+\else
+\echo 'ERROR: 请使用 -v ADMIN_PASSWORD=<强密码> 传入管理员密码'
+\quit 1
+\endif
+
 -- 1. sys_user：将 username='admin' 置为启用、未删除、角色为 SYSTEM_ADMIN
 --    若记录存在则只更新状态；若不存在则插入（与 admin_recover.sql 一致）
 INSERT INTO sys_user (username, password_hash, real_name, role_code, enabled, is_deleted)
 VALUES (
   'admin',
-  crypt('Admin@12345', gen_salt('bf', 10)),
+  crypt(:'ADMIN_PASSWORD', gen_salt('bf', 10)),
   '系统管理员',
   'SYSTEM_ADMIN',
   true,
@@ -33,4 +39,4 @@ VALUES (
 )
 ON CONFLICT (username) DO NOTHING;
 
--- 执行后请用 admin / Admin@12345 登录验证。
+-- 执行后请使用 admin 与传入的 ADMIN_PASSWORD 登录验证。

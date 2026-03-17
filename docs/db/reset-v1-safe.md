@@ -81,11 +81,11 @@ psql -h localhost -U <DB_USER> -d <DB_NAME> -f db/scripts/admin_recover.sql
 | 项目     | 值            |
 |----------|---------------|
 | **用户名** | `admin`       |
-| **密码**   | `Admin@12345` |
+| **密码**   | 执行 `admin_recover.sql` 时传入的 `ADMIN_PASSWORD` |
 | **角色**   | SYSTEM_ADMIN  |
 
-- 来源：V4 迁移中初始 admin 的密码规则为 `crypt('Admin@12345', gen_salt('bf', 10))`；`admin_recover.sql` 与之一致，保证清空后仍可登录。
-- 若需修改密码，可在用户管理（admin 登录后）自行修改，或改 `admin_recover.sql` 中 `crypt('...', ...)` 后重新执行该脚本（注意会与现有 admin 冲突时使用 ON CONFLICT DO NOTHING，仅首次执行会插入）。
+- `admin_recover.sql` 不再内置固定密码；执行脚本时必须通过 `-v ADMIN_PASSWORD='<强密码>'` 传入。
+- 若需修改密码，可在用户管理（admin 登录后）自行修改，或以新的 `ADMIN_PASSWORD` 重新执行恢复脚本。
 
 ---
 

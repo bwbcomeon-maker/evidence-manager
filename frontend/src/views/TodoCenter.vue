@@ -254,15 +254,15 @@ async function onTodoClick(item: TodoItemVO) {
   }
   let markReadOk = false
   try {
-    await markTodoRead(id)
+    const res = await markTodoRead(id) as { code: number; message?: string }
+    if (res.code !== 0) {
+      showToast(res.message || '标记已读失败')
+      return
+    }
     markReadOk = true
   } catch (e) {
     // 显式提示标记已读失败的原因
     showToast(getFriendlyErrorMessage(e, '标记已读失败'))
-    if (path) {
-      const toPath = path.startsWith('/') ? path : '/' + path
-      router.push(toPath)
-    }
     return
   }
   if (path) {

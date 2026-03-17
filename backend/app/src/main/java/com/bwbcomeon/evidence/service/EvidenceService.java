@@ -28,6 +28,7 @@ import com.bwbcomeon.evidence.mapper.ProjectArchiveApplicationMapper;
 import com.bwbcomeon.evidence.mapper.ProjectMapper;
 import com.bwbcomeon.evidence.mapper.StageEvidenceTemplateMapper;
 import com.bwbcomeon.evidence.mapper.SysUserMapper;
+import com.bwbcomeon.evidence.security.EvidenceFileSecurityPolicy;
 import com.bwbcomeon.evidence.util.FileStorageUtil;
 import com.bwbcomeon.evidence.util.PermissionUtil;
 import org.slf4j.Logger;
@@ -106,6 +107,9 @@ public class EvidenceService {
     @Autowired
     private ImageWatermarkService imageWatermarkService;
 
+    @Autowired
+    private EvidenceFileSecurityPolicy evidenceFileSecurityPolicy;
+
     /**
      * 项目已归档时，仅 PMO / SYSTEM_ADMIN 允许修改证据；其他角色只读。
      */
@@ -152,6 +156,10 @@ public class EvidenceService {
         if (evidenceTypeCode == null || evidenceTypeCode.trim().isEmpty()) {
             throw new BusinessException(400, "evidenceTypeCode is required");
         }
+        String safeOriginalFilename = fileStorageUtil.sanitizeClientFilename(file.getOriginalFilename());
+        EvidenceFileSecurityPolicy.ValidatedUploadFile validatedFile =
+                evidenceFileSecurityPolicy.validateUpload(file, safeOriginalFilename);
+        String normalizedContentType = validatedFile.contentType();
 
         // 2. 权限校验：editor/owner 或 SYSTEM_ADMIN 可上传，viewer 不可；已归档项目仅 PMO/系统管理员可修改
         checkProjectNotArchivedOrIsPMO(projectId, roleCode);
@@ -170,7 +178,7 @@ public class EvidenceService {
             evidenceItem.setProjectId(projectId);
             evidenceItem.setTitle(name);
             evidenceItem.setNote(remark);
-            evidenceItem.setContentType(file.getContentType());
+            evidenceItem.setContentType(normalizedContentType);
             evidenceItem.setSizeBytes(file.getSize());
             evidenceItem.setEvidenceStatus("DRAFT");
             evidenceItem.setStageId(stageId);
@@ -192,8 +200,9 @@ public class EvidenceService {
             logger.info("Created evidence record with id: {}", evidenceId);
 
             // 保存原图
-            objectKey = fileStorageUtil.saveFile(projectId, evidenceId, file);
-            savedFilePath = fileStorageUtil.getSavedFilePath(projectId, evidenceId, file);
+            String storedFilename = fileStorageUtil.buildStoredFilename(safeOriginalFilename);
+            objectKey = fileStorageUtil.saveFile(projectId, evidenceId, file, storedFilename);
+            savedFilePath = fileStorageUtil.getSavedFilePath(objectKey);
             etag = fileStorageUtil.calculateETag(file);
 
             // 更新evidence记录的objectKey和etag
@@ -206,15 +215,12 @@ public class EvidenceService {
 
             // 4. 创建版本记录（首次上传固定version_no=1）
             // 获取原始文件名
-            String originalFilename = file.getOriginalFilename();
-            if (originalFilename == null || originalFilename.isEmpty()) {
-                originalFilename = "file_" + System.currentTimeMillis();
-            }
+            String originalFilename = safeOriginalFilename;
 
             // 仅图片生成水印派生图（失败不阻断上传）
             String watermarkedFilePath = null;
             String watermarkedFilename = null;
-            if (watermarkEnabled && imageWatermarkService.isSupportedImage(file.getContentType(), originalFilename)) {
+            if (watermarkEnabled && imageWatermarkService.isSupportedImage(normalizedContentType, originalFilename)) {
                 try {
                     byte[] originalBytes = file.getBytes();
                     Project project = projectMapper.selectById(projectId);
@@ -225,7 +231,7 @@ public class EvidenceService {
                             projectDisplay, uploaderDisplay, OffsetDateTime.now()
                     );
                     ImageWatermarkService.WatermarkResult wm = imageWatermarkService.generateWatermarkedImage(
-                            originalBytes, file.getContentType(), originalFilename, ctx
+                            originalBytes, normalizedContentType, originalFilename, ctx
                     );
                     watermarkedFilename = wm.filename();
                     watermarkedFilePath = fileStorageUtil.saveDerivedFile(
@@ -248,7 +254,7 @@ public class EvidenceService {
             evidenceVersion.setWatermarkedFilePath(watermarkedFilePath);
             evidenceVersion.setWatermarkedFilename(watermarkedFilename);
             evidenceVersion.setFileSize(file.getSize());
-            evidenceVersion.setContentType(file.getContentType());
+            evidenceVersion.setContentType(normalizedContentType);
             evidenceVersion.setUploaderUserId(userId);
             evidenceVersion.setRemark(remark);
             evidenceVersion.setCreatedAt(OffsetDateTime.now());
@@ -920,7 +926,12 @@ public class EvidenceService {
             logger.info("Download version file: versionId={}, variant={}, resolvedPath={}, filename={}",
                     versionId, resolvedVariant, filePath, filename);
 
-            return new VersionDownloadResult(resource, filename, version.getContentType());
+            return new VersionDownloadResult(
+                    resource,
+                    filename,
+                    version.getContentType(),
+                    evidenceFileSecurityPolicy.isInlinePreviewAllowed(version.getContentType(), filename)
+            );
         } catch (IOException e) {
             logger.error("Failed to create resource for file: {}", fullPath, e);
             throw new BusinessException(500, "Failed to read file: " + e.getMessage());

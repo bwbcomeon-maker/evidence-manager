@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -22,6 +23,7 @@ import java.util.UUID;
 @Component
 public class FileStorageUtil {
     private static final Logger logger = LoggerFactory.getLogger(FileStorageUtil.class);
+    private static final String DEFAULT_FILENAME_PREFIX = "file_";
 
     @Value("${file.upload.base-path:./data/uploads}")
     private String basePath;
@@ -35,30 +37,11 @@ public class FileStorageUtil {
      * @return 文件相对路径（用于保存到数据库的object_key字段）
      * @throws IOException 文件保存失败
      */
-    public String saveFile(Long projectId, Long evidenceId, MultipartFile file) throws IOException {
-        // 构建文件存储路径：./data/uploads/{projectId}/{evidenceId}/{originalFilename}
-        Path projectDir = Paths.get(basePath, String.valueOf(projectId), String.valueOf(evidenceId));
-        
-        // 确保目录存在
-        Files.createDirectories(projectDir);
-        
-        // 获取原始文件名
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || originalFilename.isEmpty()) {
-            originalFilename = "file_" + System.currentTimeMillis();
-        }
-        
-        // 构建完整文件路径
-        Path filePath = projectDir.resolve(originalFilename);
-        
-        // 保存文件
+    public String saveFile(Long projectId, Long evidenceId, MultipartFile file, String storedFilename) throws IOException {
+        Path filePath = resolveSafeStoragePath(projectId, evidenceId, storedFilename);
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-        
         logger.info("File saved: {}", filePath.toAbsolutePath());
-        
-        // 返回相对路径（相对于basePath）
-        // 格式：{projectId}/{evidenceId}/{originalFilename}
-        return String.format("%d/%d/%s", projectId, evidenceId, originalFilename);
+        return String.format("%d/%d/%s", projectId, evidenceId, filePath.getFileName());
     }
 
     /**
@@ -67,16 +50,39 @@ public class FileStorageUtil {
      * @return 相对路径：{projectId}/{evidenceId}/{filename}
      */
     public String saveDerivedFile(Long projectId, Long evidenceId, String filename, InputStream inputStream) throws IOException {
-        Path projectDir = Paths.get(basePath, String.valueOf(projectId), String.valueOf(evidenceId));
-        Files.createDirectories(projectDir);
-        Path filePath = projectDir.resolve(filename);
+        Path filePath = resolveSafeStoragePath(projectId, evidenceId, filename);
         Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
         logger.info("Derived file saved: {}", filePath.toAbsolutePath());
-        return String.format("%d/%d/%s", projectId, evidenceId, filename);
+        return String.format("%d/%d/%s", projectId, evidenceId, filePath.getFileName());
     }
 
     public Path resolveRelativePath(String relativePath) {
         return Paths.get(basePath, relativePath).normalize();
+    }
+
+    /**
+     * 将客户端上传文件名净化为仅可展示/响应头安全使用的文件名，不保留路径信息。
+     */
+    public String sanitizeClientFilename(String originalFilename) {
+        String raw = originalFilename == null ? "" : originalFilename.trim().replace('\\', '/');
+        int idx = raw.lastIndexOf('/');
+        String basename = idx >= 0 ? raw.substring(idx + 1) : raw;
+        basename = basename.replaceAll("[\\r\\n\\t\\x00-\\x1f\\x7f]+", "_");
+        basename = basename.replace("\"", "_").replace("'", "_").replace(";", "_");
+        basename = basename.replaceAll("\\s+", " ").trim();
+        if (basename.isBlank() || ".".equals(basename) || "..".equals(basename)) {
+            basename = DEFAULT_FILENAME_PREFIX + System.currentTimeMillis();
+        }
+        return basename;
+    }
+
+    /**
+     * 生成实际落盘文件名：使用 UUID 避免碰撞，仅保留安全扩展名。
+     */
+    public String buildStoredFilename(String sanitizedDisplayFilename) {
+        String ext = fileExtension(sanitizedDisplayFilename);
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        return ext.isEmpty() ? uuid : uuid + "." + ext.toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -112,13 +118,8 @@ public class FileStorageUtil {
      * @param file 上传的文件
      * @return 文件的完整路径
      */
-    public Path getSavedFilePath(Long projectId, Long evidenceId, MultipartFile file) {
-        Path projectDir = Paths.get(basePath, String.valueOf(projectId), String.valueOf(evidenceId));
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || originalFilename.isEmpty()) {
-            originalFilename = "file_" + System.currentTimeMillis();
-        }
-        return projectDir.resolve(originalFilename);
+    public Path getSavedFilePath(String relativePath) {
+        return resolveRelativePath(relativePath);
     }
 
     /**
@@ -135,5 +136,23 @@ public class FileStorageUtil {
         } catch (IOException e) {
             logger.warn("Failed to delete file: {}", filePath, e);
         }
+    }
+
+    private Path resolveSafeStoragePath(Long projectId, Long evidenceId, String filename) throws IOException {
+        Path projectDir = Paths.get(basePath, String.valueOf(projectId), String.valueOf(evidenceId)).normalize();
+        Files.createDirectories(projectDir);
+        String safeFilename = sanitizeClientFilename(filename);
+        Path filePath = projectDir.resolve(safeFilename).normalize();
+        if (!filePath.startsWith(projectDir)) {
+            throw new IOException("Invalid storage path");
+        }
+        return filePath;
+    }
+
+    private static String fileExtension(String filename) {
+        if (filename == null) return "";
+        int dot = filename.lastIndexOf('.');
+        if (dot <= 0 || dot == filename.length() - 1) return "";
+        return filename.substring(dot + 1);
     }
 }

@@ -68,6 +68,9 @@ public interface SysUserMapper {
     /** 统计指定角色且未删除的用户数（用于“不能删除唯一管理员”校验） */
     long countByRoleCodeAndNotDeleted(@Param("roleCode") String roleCode);
 
+    /** 统计指定角色且启用、未删除的用户数（用于安全引导创建首管） */
+    long countEnabledByRoleCodeAndNotDeleted(@Param("roleCode") String roleCode);
+
     /** 查询角色在给定列表内的用户ID（用于归档待办发给 PMO/管理员） */
     List<Long> selectIdsByRoleCodeIn(@Param("roleCodes") List<String> roleCodes);
 }

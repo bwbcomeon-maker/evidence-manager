@@ -20,7 +20,7 @@ export interface PageResult<T> {
 
 export interface CreateUserBody {
   username: string
-  password?: string
+  password: string
   realName?: string
   phone?: string
   email?: string

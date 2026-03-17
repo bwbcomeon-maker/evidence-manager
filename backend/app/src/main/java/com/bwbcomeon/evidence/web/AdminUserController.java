@@ -19,7 +19,7 @@ public class AdminUserController {
 
     /**
      * POST /api/admin/users 新增用户
-     * 入参：username(必填), password(可选默认Init@12345), realName, phone, email, roleCode(必填), enabled
+     * 入参：username(必填), password(必填，至少8位), realName, phone, email, roleCode(必填), enabled
      */
     @PostMapping
     public Result<AdminUserListItemVO> create(HttpServletRequest request, @RequestBody AdminUserCreateRequest body) {

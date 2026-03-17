@@ -69,7 +69,7 @@
               </van-field>
             </div>
             <van-cell center class="remember-cell">
-              <van-checkbox v-model="rememberMe" shape="square">记住用户名和密码</van-checkbox>
+              <van-checkbox v-model="rememberMe" shape="square">记住登录账号</van-checkbox>
             </van-cell>
             <div class="submit-wrap">
               <van-button size="large" round block type="primary" native-type="submit" :loading="loading" class="login-btn">
@@ -146,13 +146,15 @@ async function openQrPopup() {
 
 const REMEMBER_KEY = 'evidence_login_remember'
 
-function loadRemembered(): { username: string; password: string } | null {
+function loadRemembered(): { username: string } | null {
   try {
     const raw = localStorage.getItem(REMEMBER_KEY)
     if (!raw) return null
     const obj = JSON.parse(raw) as { username?: string; password?: string }
-    if (obj && typeof obj.username === 'string' && typeof obj.password === 'string') {
-      return { username: obj.username, password: obj.password }
+    if (obj && typeof obj.username === 'string') {
+      // 兼容清理旧版本中曾错误持久化的密码字段
+      if ('password' in obj) saveRemembered(obj.username)
+      return { username: obj.username }
     }
   } catch {
     // ignore
@@ -160,9 +162,9 @@ function loadRemembered(): { username: string; password: string } | null {
   return null
 }
 
-function saveRemembered(u: string, p: string) {
+function saveRemembered(u: string) {
   try {
-    localStorage.setItem(REMEMBER_KEY, JSON.stringify({ username: u, password: p }))
+    localStorage.setItem(REMEMBER_KEY, JSON.stringify({ username: u }))
   } catch {
     // ignore
   }
@@ -189,7 +191,6 @@ onMounted(() => {
   const saved = loadRemembered()
   if (saved) {
     username.value = saved.username
-    password.value = saved.password
     rememberMe.value = true
   }
 })
@@ -200,7 +201,7 @@ const onSubmit = async () => {
     const res = await login({ username: username.value, password: password.value }) as { code: number; message?: string; data?: { id: number; username: string; realName: string; roleCode: string; enabled: boolean } }
     if (res.code === 0) {
       if (rememberMe.value) {
-        saveRemembered(username.value, password.value)
+        saveRemembered(username.value)
       } else {
         clearRemembered()
       }

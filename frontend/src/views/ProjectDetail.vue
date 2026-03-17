@@ -585,7 +585,7 @@
     <input
       ref="replaceFileInputRef"
       type="file"
-      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+      :accept="UPLOAD_ACCEPT"
       class="replace-file-input-hidden"
       @change="onReplaceFileSelect"
     />
@@ -698,7 +698,7 @@
             <van-uploader
               v-model="uploadFileList"
               :max-count="1"
-              accept="*/*"
+              :accept="UPLOAD_ACCEPT"
               :before-read="onUploaderBeforeRead"
               :after-read="onUploaderAfterRead"
               :preview-options="uploadPreviewOptions"
@@ -953,7 +953,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useArchiveRejectDraftStore } from '@/stores/archiveRejectDraft'
 import { showConfirmDialog } from 'vant'
 import { getEffectiveEvidenceStatus, mapStatusToText, statusTagType as evidenceStatusTagType } from '@/utils/evidenceStatus'
-import { validateFileSize, isImageFile } from '@/utils/uploadFileLimit'
+import { validateFileSize, isImageFile, UPLOAD_ACCEPT } from '@/utils/uploadFileLimit'
 import { compressImageIfNeeded } from '@/utils/imageCompress'
 import { getFriendlyErrorMessage } from '@/utils/errorMessage'
 import { formatDateTimeFull } from '@/utils/format'
@@ -2662,6 +2662,10 @@ async function handleArchive() {
   if (!projectId.value || !stageProgress.value?.canArchive || project.value?.status === 'archived') return
   try {
     const draftRes = await getEvidenceList(projectId.value, { evidenceStatus: 'DRAFT' })
+    if (draftRes?.code !== 0) {
+      showToast(draftRes?.message || '获取证据列表失败')
+      return
+    }
     const drafts = (draftRes?.data ?? []) as EvidenceListItem[]
     if (drafts.length > 0) {
       draftListForArchive.value = drafts

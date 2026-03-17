@@ -1,0 +1,17 @@
+.git
+.github
+.cursor
+.idea
+.vscode
+
+**/node_modules
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/.DS_Store
+
+backend/app/target
+backend/app/data
+frontend/.vite
+tmp

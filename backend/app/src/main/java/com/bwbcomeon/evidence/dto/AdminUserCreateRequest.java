@@ -9,7 +9,7 @@ import lombok.Data;
 public class AdminUserCreateRequest {
     /** 登录账号（必填，唯一） */
     private String username;
-    /** 密码（可选，不传默认 Init@12345） */
+    /** 密码（必填，至少 8 位） */
     private String password;
     /** 姓名 */
     private String realName;

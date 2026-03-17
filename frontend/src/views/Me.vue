@@ -192,7 +192,11 @@ async function onChangePwdConfirm(action: string): Promise<boolean> {
       showToast('密码已修改，请重新登录')
       resetChangePwdForm()
       showChangePwd.value = false
-      await auth.logout()
+      const logoutOk = await auth.logout()
+      if (!logoutOk) {
+        showToast('密码已修改，但退出登录失败，请手动重新登录')
+        return true
+      }
       router.replace('/login')
       return true
     }
@@ -210,8 +214,16 @@ async function onChangePwdConfirm(action: string): Promise<boolean> {
 }
 
 async function onLogout() {
-  await auth.logout()
-  router.replace('/login')
+  try {
+    const ok = await auth.logout()
+    if (!ok) {
+      showToast('退出登录失败，请稍后重试')
+      return
+    }
+    router.replace('/login')
+  } catch (e: unknown) {
+    showToast(getFriendlyErrorMessage(e, '退出登录失败'))
+  }
 }
 </script>
 

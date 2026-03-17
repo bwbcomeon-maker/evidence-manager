@@ -160,6 +160,13 @@
           AND (is_deleted = false OR is_deleted IS NULL)
     </select>
 
+    <select id="countEnabledByRoleCodeAndNotDeleted" resultType="long">
+        SELECT COUNT(1) FROM sys_user
+        WHERE role_code = #{roleCode}
+          AND enabled = true
+          AND (is_deleted = false OR is_deleted IS NULL)
+    </select>
+
     <select id="selectIdsByRoleCodeIn" resultType="long">
         SELECT id FROM sys_user
         WHERE (is_deleted = false OR is_deleted IS NULL)

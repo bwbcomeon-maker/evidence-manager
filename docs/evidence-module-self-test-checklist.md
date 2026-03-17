@@ -92,7 +92,7 @@
 
 **具体 SQL**：见 `backend/app/init-evidence-test-data.sql`。  
 **执行顺序**：先跑完 Flyway 迁移（V1～V4）及 `init-dev-data.sql`（可选），再执行 `init-evidence-test-data.sql`。  
-**账号**：admin 密码见 V4（如 `Admin@12345`）；owner1/editor1/viewer1/auditor1 密码均为 `Test@12345`。  
+**账号**：admin 密码请使用环境中实际配置的管理员密码；owner1/editor1/viewer1/auditor1 请使用你在测试数据中自定义的强密码。  
 **说明**：首次执行前请确保 `auth_user` 中不存在 admin/owner1/editor1/viewer1/auditor1（否则与脚本中固定 UUID 不一致会影响「我上传的证据」）；重复执行会因 ON CONFLICT 跳过。
 
 ---

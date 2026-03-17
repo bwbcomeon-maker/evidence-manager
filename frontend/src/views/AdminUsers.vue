@@ -77,7 +77,8 @@
             type="password"
             name="password"
             label="密码"
-            placeholder="不填则默认 Init@12345"
+            placeholder="请输入至少 8 位初始密码"
+            :rules="[{ required: true, message: '请输入初始密码' }]"
           />
           <van-field v-model="form.realName" name="realName" label="姓名" placeholder="请输入" :disabled="isEditingSelf" />
           <van-field v-model="form.phone" name="phone" label="手机号" placeholder="请输入" :disabled="isEditingSelf" />
@@ -299,18 +300,26 @@ async function onFormSubmit() {
         roleCode: form.roleCode,
         enabled: form.enabled
       }
-      await updateAdminUser(editingId.value, body)
+      const res = await updateAdminUser(editingId.value, body) as { code: number; message?: string }
+      if (res.code !== 0) {
+        showToast(res.message || '保存失败')
+        return
+      }
       showToast('保存成功')
     } else {
-      await createAdminUser({
+      const res = await createAdminUser({
         username: form.username,
-        password: form.password || undefined,
+        password: form.password,
         realName: form.realName,
         phone: form.phone,
         email: form.email,
         roleCode: form.roleCode,
         enabled: form.enabled
-      })
+      }) as { code: number; message?: string }
+      if (res.code !== 0) {
+        showToast(res.message || '新增失败')
+        return
+      }
       showToast('新增成功')
     }
     showFormPopup.value = false
@@ -324,7 +333,11 @@ async function onFormSubmit() {
 
 async function toggleEnable(u: AdminUserItem, enabled: boolean) {
   try {
-    await setAdminUserEnabled(u.id, enabled)
+    const res = await setAdminUserEnabled(u.id, enabled) as { code: number; message?: string }
+    if (res.code !== 0) {
+      showToast(res.message || '操作失败')
+      return
+    }
     u.enabled = enabled
     showToast(enabled ? '已启用' : '已禁用')
   } catch (e: unknown) {
@@ -366,7 +379,11 @@ function confirmDelete(u: AdminUserItem) {
 async function doDelete() {
   if (!deleteTarget.value) return
   try {
-    await deleteAdminUser(deleteTarget.value.id)
+    const res = await deleteAdminUser(deleteTarget.value.id) as { code: number; message?: string }
+    if (res.code !== 0) {
+      showToast(res.message || '删除失败')
+      return
+    }
     showToast('已删除')
     deleteTarget.value = null
     loadFirstPage()

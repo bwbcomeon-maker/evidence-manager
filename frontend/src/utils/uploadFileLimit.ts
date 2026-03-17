@@ -5,13 +5,32 @@
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024   // 5MB
 export const DOCUMENT_MAX_BYTES = 50 * 1024 * 1024 // 50MB
 
+export const UPLOAD_ACCEPT = 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip'
+
 /** 图片类 MIME 前缀 */
 const IMAGE_TYPE_PREFIX = 'image/'
 
 /** 常见图片扩展名（用于无 type 时兜底） */
 const IMAGE_EXT = new Set(
-  ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'heic', 'heif'].map((e) => e.toLowerCase())
+  ['jpg', 'jpeg', 'png', 'webp'].map((e) => e.toLowerCase())
 )
+
+const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip'])
+
+const ALLOWED_MIME_EXACT = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip',
+  'application/x-zip-compressed'
+])
 
 /**
  * 判断是否为图片类文件（按 MIME 或扩展名）
@@ -22,6 +41,19 @@ export function isImageFile(file: File): boolean {
   const name = (file.name || '').toLowerCase()
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
   return IMAGE_EXT.has(ext)
+}
+
+export function validateAllowedFileType(file: File): { ok: true } | { ok: false; message: string } {
+  const type = (file.type || '').toLowerCase()
+  const name = (file.name || '').toLowerCase()
+  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
+  if (ALLOWED_EXT.has(ext) && (!type || ALLOWED_MIME_EXACT.has(type) || isImageFile(file))) {
+    return { ok: true }
+  }
+  return {
+    ok: false,
+    message: '仅支持 jpg、jpeg、png、webp、pdf、doc、docx、xls、xlsx、ppt、pptx、zip 文件'
+  }
 }
 
 /**
@@ -35,6 +67,8 @@ export function getFileSizeLimitBytes(file: File): number {
  * 校验文件大小，返回 { ok, message }
  */
 export function validateFileSize(file: File): { ok: true } | { ok: false; message: string } {
+  const typeCheck = validateAllowedFileType(file)
+  if (!typeCheck.ok) return typeCheck
   const limit = getFileSizeLimitBytes(file)
   const size = file.size ?? 0
   if (size <= limit) return { ok: true }
